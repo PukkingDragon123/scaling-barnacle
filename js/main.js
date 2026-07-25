@@ -1,4 +1,4 @@
-// ---- input, game state, title screen, main loop ------------------------------
+// ---- input (keyboard + mouse + touch), game state, title, main loop ----------
 'use strict';
 
 let G = null;
@@ -18,9 +18,6 @@ const Input = {
   endFrame() { this.pressed.clear(); this.mouse.clicked = false; this.wheelDelta = 0; },
 };
 
-// Fit the canvas to whatever box it's placed in (fullscreen wrapper, or an
-// in-flow container when the game is embedded in a page). Snap to half-integer
-// scales when upscaling so pixels stay crisp.
 // The element that defines the space available to the canvas. When the game is
 // embedded, a [data-fit] ancestor can own the sizing so the frame around the
 // canvas is free to shrink-wrap it (its own width can't be the input, or the
@@ -57,15 +54,15 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => { Input.keys[e.code] = false; });
 
-function toCanvas(e) {
+function toCanvasXY(clientX, clientY) {
   const r = canvas.getBoundingClientRect();
   return {
-    x: clamp((e.clientX - r.left) / r.width * W, 0, W),
-    y: clamp((e.clientY - r.top) / r.height * H, 0, H),
+    x: clamp((clientX - r.left) / r.width * W, 0, W),
+    y: clamp((clientY - r.top) / r.height * H, 0, H),
   };
 }
 window.addEventListener('mousemove', (e) => {
-  const p = toCanvas(e);
+  const p = toCanvasXY(e.clientX, e.clientY);
   Input.mouse.x = p.x; Input.mouse.y = p.y;
 });
 window.addEventListener('mousedown', (e) => {
@@ -76,10 +73,134 @@ window.addEventListener('mouseup', (e) => { if (e.button === 0) Input.mouse.down
 window.addEventListener('wheel', (e) => { Input.wheelDelta += Math.sign(e.deltaY); }, { passive: true });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
-// ---- game manager --------------------------------------------------------------
+// ---- touch controls ------------------------------------------------------------
+const TouchUI = {
+  enabled: false,
+  pointerId: null,
+  held: new Map(),   // touch identifier -> button
+  buttons: [],
+
+  layout() {
+    const b = [];
+    if (!G || !Game.scene || Game.scene === TitleScene) return b;
+    if (Game.helpOpen || Shop.open) return b;
+    const sc = Game.scene;
+    if (sc === WorldScene || sc === HouseScene) {
+      b.push({ x: 8, y: H - 52, w: 44, h: 44, key: 'ArrowLeft', icon: 'left' });
+      b.push({ x: 58, y: H - 52, w: 44, h: 44, key: 'ArrowRight', icon: 'right' });
+      b.push({ x: W - 52, y: H - 52, w: 44, h: 44, tap: 'KeyE', icon: 'act' });
+      b.push({ x: W - 26, y: 24, w: 20, h: 18, tap: 'KeyH', icon: 'help' });
+    } else if (sc === DiveScene) {
+      b.push({ x: W - 46, y: H - 122, w: 40, h: 40, key: 'KeyW', icon: 'up' });
+      b.push({ x: W - 46, y: H - 76, w: 40, h: 40, key: 'KeyS', icon: 'down' });
+      b.push({ x: 8, y: 34, w: 62, h: 20, tap: 'KeyQ', icon: 'surface' });
+    }
+    return b;
+  },
+
+  // buttons are rebuilt every frame, so match by identity (icon), not reference
+  isHeld(btn) {
+    for (const v of this.held.values()) if (v.icon === btn.icon) return true;
+    return false;
+  },
+
+  draw(c) {
+    if (!this.enabled) return;
+    for (const b of this.buttons) {
+      const held = this.isHeld(b);
+      if (b.icon === 'surface') {
+        uiPanel(c, b.x, b.y, b.w, b.h, held ? 0.98 : 0.7);
+        text(c, 'SURFACE', b.x + b.w / 2 + 4, b.y + 6, { size: 7, color: held ? '#ffe66e' : '#bfe8f5', align: 'center' });
+        c.fillStyle = held ? '#ffe66e' : '#bfe8f5';
+        c.beginPath();
+        c.moveTo(b.x + 7, b.y + 13); c.lineTo(b.x + 10.5, b.y + 7); c.lineTo(b.x + 14, b.y + 13);
+        c.closePath(); c.fill();
+        continue;
+      }
+      if (b.icon === 'help') {
+        uiPanel(c, b.x, b.y, b.w, b.h, held ? 0.98 : 0.6);
+        text(c, '?', b.x + b.w / 2, b.y + 4, { size: 9, color: '#efe0bc', align: 'center' });
+        continue;
+      }
+      const cx = b.x + b.w / 2, cy = b.y + b.h / 2, r = b.w / 2 - 2;
+      c.fillStyle = held ? 'rgba(240,220,170,0.4)' : 'rgba(14,20,28,0.5)';
+      c.beginPath(); c.arc(cx, cy, r, 0, TAU); c.fill();
+      c.strokeStyle = 'rgba(230,200,150,0.55)'; c.lineWidth = 1;
+      c.beginPath(); c.arc(cx, cy, r, 0, TAU); c.stroke();
+      c.fillStyle = held ? '#1a1108' : '#efe0bc';
+      if (b.icon === 'left' || b.icon === 'right') {
+        const d = b.icon === 'right' ? 1 : -1;
+        c.beginPath();
+        c.moveTo(cx + 6 * d, cy); c.lineTo(cx - 4 * d, cy - 7); c.lineTo(cx - 4 * d, cy + 7);
+        c.closePath(); c.fill();
+      } else if (b.icon === 'up' || b.icon === 'down') {
+        const d = b.icon === 'down' ? 1 : -1;
+        c.beginPath();
+        c.moveTo(cx, cy + 6 * d); c.lineTo(cx - 7, cy - 4 * d); c.lineTo(cx + 7, cy - 4 * d);
+        c.closePath(); c.fill();
+      } else if (b.icon === 'act') {
+        // paw print
+        c.beginPath(); c.ellipse(cx, cy + 3, 6, 4.5, 0, 0, TAU); c.fill();
+        for (let i = -1; i <= 1; i++) {
+          c.beginPath(); c.arc(cx + i * 5.5, cy - 4 + Math.abs(i) * 1.5, 2.2, 0, TAU); c.fill();
+        }
+      }
+    }
+  },
+};
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  SND.init(); SND.resume();
+  TouchUI.enabled = true;
+  for (const t of e.changedTouches) {
+    const p = toCanvasXY(t.clientX, t.clientY);
+    const btn = TouchUI.buttons.find(b => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h);
+    if (btn) {
+      TouchUI.held.set(t.identifier, btn);
+      if (btn.key) Input.keys[btn.key] = true;
+      if (btn.tap) Input.pressed.add(btn.tap);
+    } else if (TouchUI.pointerId === null) {
+      TouchUI.pointerId = t.identifier;
+      Input.mouse.x = p.x; Input.mouse.y = p.y;
+      Input.mouse.lastX = p.x; Input.mouse.lastY = p.y;
+      Input.mouse.down = true; Input.mouse.clicked = true;
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier === TouchUI.pointerId) {
+      const p = toCanvasXY(t.clientX, t.clientY);
+      Input.mouse.x = p.x; Input.mouse.y = p.y;
+    }
+  }
+}, { passive: false });
+
+function touchEnd(e) {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    const btn = TouchUI.held.get(t.identifier);
+    if (btn) {
+      TouchUI.held.delete(t.identifier);
+      if (btn.key && !TouchUI.isHeld(btn)) Input.keys[btn.key] = false;   // isHeld matches by icon
+    }
+    if (t.identifier === TouchUI.pointerId) {
+      TouchUI.pointerId = null;
+      Input.mouse.down = false;
+    }
+  }
+}
+canvas.addEventListener('touchend', touchEnd, { passive: false });
+canvas.addEventListener('touchcancel', touchEnd, { passive: false });
+
+// ---- game manager ---------------------------------------------------------------
 const Game = {
   scene: null, fade: 1, fadeDir: -1, pending: null,
   toasts: [], time: 0, saveT: 25, helpOpen: false,
+  rotHinted: false,
 
   go(scene, arg) {
     this.pending = { scene, arg };
@@ -171,63 +292,87 @@ const Game = {
   },
 
   drawHUD(c) {
-    // hearts
+    // left panel: hearts over coin purse
+    const pw = Math.max(G.maxHearts * 9 + 12, 58);
+    uiPanel(c, 4, 4, pw, 27, 0.8);
     for (let i = 0; i < G.maxHearts; i++) {
       const kind = G.hearts >= i + 1 ? 'full' : (G.hearts >= i + 0.5 ? 'half' : 'empty');
-      drawHeart(c, 8 + i * 9, 7, kind);
+      drawHeart(c, 9 + i * 9, 8, kind);
     }
-    text(c, `$${G.money}`, 8, 16, { size: 9, color: '#ffe66e' });
-    text(c, `Day ${G.day}`, W - 10, 7, { size: 8, color: '#e8eef2', align: 'right' });
-    // little sun/moon clock icon
-    const nite = isNight(G.clock);
-    c.fillStyle = nite ? '#dfe4ee' : '#ffe66e';
-    c.beginPath(); c.arc(W - 58, 11, 4, 0, TAU); c.fill();
-    if (nite) { c.fillStyle = '#141c3a'; c.beginPath(); c.arc(W - 56, 10, 3.2, 0, TAU); c.fill(); }
-    if (this.scene !== DiveScene)
-      text(c, '[H] help', W - 10, 18, { size: 6, color: 'rgba(220,230,240,0.55)', align: 'right' });
+    drawSpr(c, SPR.coin, 8, 16.5);
+    text(c, `${G.money}`, 18, 17, { size: 8, color: '#ffe66e' });
+    // right panel: day + sun/moon dial
+    uiPanel(c, W - 68, 4, 64, 18, 0.8);
+    text(c, `Day ${G.day}`, W - 9, 9, { size: 8, color: '#efe0bc', align: 'right' });
+    // dial: dot travels an arc across a tiny horizon
+    const dx = W - 57, dy = 16, dr = 7;
+    c.fillStyle = 'rgba(230,200,150,0.4)';
+    c.fillRect(dx - dr, dy, dr * 2, PIX);
+    const day = G.clock > 0.06 && G.clock < 0.66;
+    const tt = day ? (G.clock - 0.06) / 0.6 : clamp((G.clock >= 0.66 ? G.clock - 0.66 : G.clock + 0.34) / 0.4, 0, 1);
+    const a = Math.PI + tt * Math.PI;
+    c.fillStyle = day ? '#ffe66e' : '#dfe4ee';
+    c.fillRect(dx + Math.cos(a) * dr - 1, dy + Math.sin(a) * dr - 1, 2, 2);
+    if (this.scene !== DiveScene && !TouchUI.enabled)
+      text(c, '[H] help', W - 9, 24, { size: 6, color: 'rgba(220,230,240,0.55)', align: 'right' });
   },
 
   drawToasts(c) {
     for (let i = 0; i < this.toasts.length; i++) {
       const t = this.toasts[this.toasts.length - 1 - i];
       const a = clamp(t.t, 0, 1);
-      const y = H - 16 - i * 12;
+      const y = H - 18 - i * 14;
       c.globalAlpha = a;
-      const w = textWidth(c, t.msg, 7) + 10;
-      rrect(c, W / 2 - w / 2, y - 2, w, 11, 'rgba(8,14,22,0.85)', 'rgba(90,140,160,0.5)');
-      text(c, t.msg, W / 2, y, { size: 7, color: '#e8f2f8', align: 'center' });
+      const w = textWidth(c, t.msg, 7) + 14;
+      uiPanel(c, W / 2 - w / 2, y - 3, w, 13, 0.9);
+      text(c, t.msg, W / 2, y, { size: 7, color: '#f4e8cc', align: 'center' });
       c.globalAlpha = 1;
     }
   },
 
   drawHelp(c) {
-    c.fillStyle = 'rgba(4,8,14,0.82)';
+    c.fillStyle = 'rgba(4,7,11,0.8)';
     c.fillRect(0, 0, W, H);
-    rrect(c, 60, 24, W - 120, H - 48, '#101a24', '#3c505e');
-    text(c, "OTTO'S FIELD GUIDE", W / 2, 34, { size: 11, color: '#ffe6b0', align: 'center' });
-    const lines = [
+    uiPanel(c, 52, 20, W - 104, H - 40, 0.97);
+    text(c, "~ OTTO'S FIELD GUIDE ~", W / 2, 30, { size: 11, color: '#ffe6b0', align: 'center' });
+    const touch = TouchUI.enabled;
+    const lines = touch ? [
       ['ON THE SURFACE', '#5ad2f0'],
-      ['  A/D or arrows ... walk        E ... interact', '#c8d4dc'],
-      ['  Sell shells on the laptop; a drone pays on pickup.', '#c8d4dc'],
-      ['  Sleep in bed: heal up, clams regrow, day advances.', '#c8d4dc'],
+      ['  Arrow buttons walk. The paw button interacts.', '#d8ccb4'],
+      ['  Sell shells on the laptop; a drone pays on pickup.', '#d8ccb4'],
+      ['  Sleep in bed: heal up, clams regrow, day advances.', '#d8ccb4'],
       ['UNDER THE SEA', '#5ad2f0'],
-      ['  Hold LEFT MOUSE ... scrape    W/S or wheel ... swim', '#c8d4dc'],
-      ['  Q ... surface   Watch the O2 bar!', '#c8d4dc'],
-      ['  Purple urchins sting -- don\'t scrape them barehanded.', '#c8d4dc'],
-      ['  A red "!" means a barracuda -- move your paw away!', '#c8d4dc'],
+      ['  Hold your paw on shells to scrape them loose.', '#d8ccb4'],
+      ['  Right-side arrows swim. SURFACE before O2 runs out!', '#d8ccb4'],
+      ['  Purple urchins sting -- don\'t scrape them barehanded.', '#d8ccb4'],
+      ['  A red "!" means a barracuda -- lift your paw away!', '#d8ccb4'],
       ['  If the water goes quiet... DON\'T. MOVE.', '#e8434c'],
       ['', '#fff'],
-      ['  M ... mute      H ... close this guide', '#7a94a4'],
+      ['  Tap anywhere to close this guide.', '#8a9484'],
+    ] : [
+      ['ON THE SURFACE', '#5ad2f0'],
+      ['  A/D or arrows ... walk        E ... interact', '#d8ccb4'],
+      ['  Sell shells on the laptop; a drone pays on pickup.', '#d8ccb4'],
+      ['  Sleep in bed: heal up, clams regrow, day advances.', '#d8ccb4'],
+      ['UNDER THE SEA', '#5ad2f0'],
+      ['  Hold LEFT MOUSE ... scrape    W/S or wheel ... swim', '#d8ccb4'],
+      ['  Q ... surface   Watch the O2 bar!', '#d8ccb4'],
+      ['  Purple urchins sting -- don\'t scrape them barehanded.', '#d8ccb4'],
+      ['  A red "!" means a barracuda -- move your paw away!', '#d8ccb4'],
+      ['  If the water goes quiet... DON\'T. MOVE.', '#e8434c'],
+      ['', '#fff'],
+      ['  M ... mute      H ... close this guide', '#8a9484'],
     ];
-    let y = 52;
+    let y = 48;
     for (const [ln, col] of lines) {
-      text(c, ln, 74, y, { size: 7, color: col });
-      y += 13;
+      text(c, ln, 66, y, { size: 7, color: col });
+      y += 13.5;
     }
   },
 
   drawCursor(c) {
     const m = Input.mouse;
+    if (TouchUI.enabled) return;
     const custom = this.scene && this.scene.customCursor && !Shop.open && !this.helpOpen;
     if (custom) return; // dive scene draws its own scraper-paw
     if (m.idleT > 3 && !Shop.open && this.scene !== TitleScene && !this.helpOpen) return;
@@ -271,21 +416,37 @@ const TitleScene = {
   },
 
   draw(c) {
-    // dusk sky
-    let g = c.createLinearGradient(0, 0, 0, 150);
-    g.addColorStop(0, '#2c2148');
-    g.addColorStop(1, '#e88a4e');
-    c.fillStyle = g; c.fillRect(0, 0, W, 150);
-    c.fillStyle = '#f5d9a0';
-    c.beginPath(); c.arc(W / 2, 130, 26, 0, TAU); c.fill();
-    // sea
-    g = c.createLinearGradient(0, 150, 0, H);
-    g.addColorStop(0, '#3a5a72');
-    g.addColorStop(1, '#0e2334');
-    c.fillStyle = g; c.fillRect(0, 150, W, H - 150);
+    // banded sunset sky
+    bandedFill(c, 0, 0, W, 150, hexRGB('#241b40'), hexRGB('#f09a52'), 14);
+    // sun with halo rings
+    c.fillStyle = 'rgba(255,220,150,0.18)';
+    c.beginPath(); c.arc(W / 2, 128, 38, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(255,224,160,0.3)';
+    c.beginPath(); c.arc(W / 2, 128, 31, 0, TAU); c.fill();
+    c.fillStyle = '#f8dca2';
+    c.beginPath(); c.arc(W / 2, 128, 25, 0, TAU); c.fill();
+    c.fillStyle = '#fdf2cc';
+    c.beginPath(); c.arc(W / 2 - 5, 122, 12, 0, TAU); c.fill();
+    // clouds drifting past, faint so they never fight the title
+    for (let i = 0; i < 2; i++) {
+      const cl = SPR.clouds[i];
+      const cx = ((this.time * (3 + i * 2) + i * 260) % (W + 160)) - 80;
+      c.globalAlpha = 0.32;
+      drawSpr(c, cl, cx, 18 + i * 108);
+      c.globalAlpha = 1;
+    }
+    // banded sea
+    bandedFill(c, 0, 150, W, H - 150, hexRGB('#3f5f78'), hexRGB('#0b1d2c'), 11);
+    // sun glint path
+    c.fillStyle = 'rgba(255,214,150,0.3)';
+    for (let y = 152; y < H; y += 4) {
+      const w2 = 16 + (y - 150) * 0.5;
+      c.fillRect(W / 2 - w2 / 2 + Math.sin(y * 0.5 + this.time * 2) * 4, y, w2, 1);
+    }
+    // wave dashes
     for (let row = 0; row < 8; row++) {
       const y = 156 + row * 13;
-      c.fillStyle = `rgba(255,220,170,${0.14 - row * 0.012})`;
+      c.fillStyle = `rgba(255,220,170,${0.15 - row * 0.014})`;
       for (let x = -20; x < W + 20; x += 30) {
         const ox = Math.sin(this.time * 1.3 + row * 2 + x * 0.05) * 9;
         c.fillRect(Math.round(x + ox), y, 14, 1);
@@ -301,26 +462,44 @@ const TitleScene = {
       c.fillStyle = 'rgba(255,255,255,0.2)';
       c.fillRect(this.fin.x - 12, 186, 22, 1);
     }
+    // drifting shells
+    for (let i = 0; i < 3; i++) {
+      const icons = [SPR.icons.clam, SPR.icons.mussel, SPR.icons.oyster];
+      const bx = 60 + i * 160 + Math.sin(this.time * 0.7 + i * 2) * 8;
+      const by = 228 + Math.sin(this.time * 1.2 + i * 2.6) * 3;
+      c.globalAlpha = 0.85;
+      drawSpr(c, icons[i], bx, by);
+      c.globalAlpha = 1;
+    }
     // otter on a buoy
     const bob = Math.sin(this.time * 1.5) * 3;
+    c.fillStyle = '#8a2620';
+    c.beginPath(); c.arc(W / 2, 209 + bob, 13, 0, TAU); c.fill();
     c.fillStyle = '#c8352a';
-    c.beginPath(); c.arc(W / 2, 208 + bob, 13, 0, TAU); c.fill();
+    c.beginPath(); c.arc(W / 2 - 1, 208 + bob, 11.5, 0, TAU); c.fill();
     c.fillStyle = '#f2ede2';
     c.fillRect(W / 2 - 12, 203 + bob, 24, 4);
-    c.drawImage(SPR.otterR[0], W / 2 - 8, 182 + bob);
-    // title
+    c.fillStyle = 'rgba(0,0,0,0.25)';
+    c.beginPath(); c.ellipse(W / 2, 222 + bob * 0.4, 15, 3, 0, 0, TAU); c.fill();
+    const blink = (this.time % 3.4) < 0.14;
+    drawSpr(c, SPR.otterR[blink ? 3 : 0], W / 2 - 8, 190 + bob);
+    // title with layered drop shadow
     const wob = Math.sin(this.time * 2) * 2;
-    text(c, "MR. OTTO'S", W / 2, 44 + wob, { size: 26, color: '#ffe6b0', align: 'center' });
-    text(c, 'CLAM FARM', W / 2, 74 - wob, { size: 30, color: '#5ad2f0', align: 'center' });
-    text(c, 'a cozy clam-scraping sim ... mostly cozy', W / 2, 112, { size: 8, color: '#e8c8a0', align: 'center' });
+    text(c, "MR. OTTO'S", W / 2 + 2, 40 + wob + 2, { size: 26, color: 'rgba(30,12,24,0.8)', align: 'center', shadow: false });
+    text(c, "MR. OTTO'S", W / 2, 40 + wob, { size: 26, color: '#ffe6b0', align: 'center', shadow: false });
+    text(c, 'CLAM FARM', W / 2 + 3, 70 - wob + 3, { size: 32, color: 'rgba(20,30,50,0.85)', align: 'center', shadow: false });
+    text(c, 'CLAM FARM', W / 2, 70 - wob, { size: 32, color: '#5ad2f0', align: 'center', shadow: false });
+    text(c, 'a cozy clam-scraping sim ... mostly cozy', W / 2, 112, { size: 8, color: '#f4d4a8', align: 'center' });
     // prompt
     if (Math.sin(this.time * 4) > -0.3) {
-      const label = Game.hasSave() ? 'Press ENTER to continue' : 'Press ENTER to start';
-      text(c, label, W / 2, 236, { size: 10, color: '#fff', align: 'center' });
+      const label = TouchUI.enabled || matchMedia('(pointer: coarse)').matches
+        ? 'TAP to ' + (Game.hasSave() ? 'continue' : 'start')
+        : (Game.hasSave() ? 'Press ENTER to continue' : 'Press ENTER to start');
+      text(c, label, W / 2, 240, { size: 10, color: '#fff', align: 'center' });
     }
     if (Game.hasSave())
-      text(c, '[N] new game', W / 2, 252, { size: 7, color: '#9aacb8', align: 'center' });
-    text(c, '[M] mute', 8, H - 12, { size: 6, color: '#8a94a0' });
+      text(c, '[N] new game', W / 2, 255, { size: 7, color: '#c8b49a', align: 'center' });
+    text(c, '[M] mute', 8, H - 12, { size: 6, color: '#a89478' });
   },
 };
 
@@ -337,6 +516,9 @@ function frame(now) {
   m.lastX = m.x; m.lastY = m.y;
   m.idleT = dist > 0.5 ? 0 : m.idleT + dt;
 
+  // touch button layout must exist before events land between frames
+  TouchUI.buttons = TouchUI.layout();
+
   // global keys
   if (Input.p('KeyM')) {
     const muted = SND.toggleMute();
@@ -345,10 +527,16 @@ function frame(now) {
   if (G && Game.scene !== TitleScene && !Shop.open && Input.p('KeyH'))
     Game.helpOpen = !Game.helpOpen;
 
+  // one-time landscape hint on phones
+  if (TouchUI.enabled && !Game.rotHinted && window.innerHeight > window.innerWidth) {
+    Game.rotHinted = true;
+    Game.toast('Tip: rotate your phone for a bigger view!');
+  }
+
   // updates
   if (Game.fadeDir === 0) {
     if (Game.helpOpen) {
-      if (Input.p('Escape')) Game.helpOpen = false;
+      if (Input.p('Escape') || Input.mouse.clicked) Game.helpOpen = false;
     } else if (Shop.open) {
       Shop.update(dt);
     } else if (Game.scene) {
@@ -359,12 +547,15 @@ function frame(now) {
   Game.updateFade(dt);
   SND.update(G ? G.musicOn : true);
 
-  // draw
+  // draw — everything in logical 480x270 units at DPX texel density
+  ctx.save();
+  ctx.scale(DPX, DPX);
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
   if (Game.scene) Game.scene.draw(ctx);
   if (Shop.open) Shop.draw(ctx);
   if (G && Game.scene !== TitleScene) Game.drawHUD(ctx);
+  TouchUI.draw(ctx);
   Game.drawToasts(ctx);
   if (Game.helpOpen) Game.drawHelp(ctx);
   if (Game.fade > 0) {
@@ -372,6 +563,7 @@ function frame(now) {
     ctx.fillRect(0, 0, W, H);
   }
   Game.drawCursor(ctx);
+  ctx.restore();
 
   Input.endFrame();
   requestAnimationFrame(frame);

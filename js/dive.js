@@ -58,8 +58,13 @@ const DiveScene = {
     SND.splash();
     if (!G.flags.seenDive) {
       G.flags.seenDive = true;
-      Game.toast('Hold LEFT MOUSE on shells to scrape them off!');
-      Game.toast('W/S or wheel: swim.  [Q] surface.  Watch your O2!');
+      if (TouchUI.enabled) {
+        Game.toast('Hold your paw on shells to scrape them off!');
+        Game.toast('Right-side arrows: swim.  SURFACE before O2 runs out!');
+      } else {
+        Game.toast('Hold LEFT MOUSE on shells to scrape them off!');
+        Game.toast('W/S or wheel: swim.  [Q] surface.  Watch your O2!');
+      }
     }
     if (this.p === 2 && !G.flags.seenDeep) {
       G.flags.seenDeep = true;
@@ -110,48 +115,79 @@ const DiveScene = {
 
   buildWall() {
     const depth = PILINGS[this.p].depth;
-    const cw = this.WALL_W + 24;
+    const cwL = this.WALL_W + 24;   // logical width; canvas is DPX-dense
     const cv = document.createElement('canvas');
-    cv.width = cw; cv.height = depth;
+    cv.width = cwL * DPX; cv.height = depth * DPX;
     const c = cv.getContext('2d');
+    c.scale(DPX, DPX);
     const rng = mulberry32(G.seeds[this.p] * 31 + 7);
-    // wood base
+    // wood base with per-plank tones (grain runs vertically on a piling)
     c.fillStyle = '#42311f';
-    c.fillRect(0, 0, cw, depth);
-    // vertical plank seams
-    for (let x = 12; x < cw - 12; x += 34) {
-      c.fillStyle = '#332516';
+    c.fillRect(0, 0, cwL, depth);
+    for (let x = 12; x < cwL - 12; x += 34) {
+      c.fillStyle = ['#453322', '#3d2d1c', '#48361f'][Math.floor(rng() * 3)];
+      c.fillRect(x + 2, 0, 32, depth);
+      c.fillStyle = '#2c1f10';
       c.fillRect(x, 0, 2, depth);
     }
-    // wood grain
-    for (let i = 0; i < depth * 0.6; i++) {
-      c.fillStyle = rng() < 0.5 ? 'rgba(90,66,40,0.5)' : 'rgba(40,28,16,0.5)';
-      c.fillRect(12 + rng() * (cw - 24), rng() * depth, 1 + rng() * 8, 1);
+    // long vertical grain streaks
+    for (let i = 0; i < depth * 1.2; i++) {
+      c.fillStyle = rng() < 0.5 ? 'rgba(96,72,44,0.45)' : 'rgba(40,28,16,0.45)';
+      c.fillRect(12 + rng() * (cwL - 24), rng() * depth, PIX, 3 + rng() * 14);
     }
-    // cross beams
+    // knots with check-cracks below
+    for (let i = 0; i < depth / 30; i++) {
+      const kx = 18 + rng() * (cwL - 36), ky = rng() * depth;
+      c.strokeStyle = 'rgba(26,18,10,0.8)'; c.lineWidth = PIX * 2;
+      c.beginPath(); c.ellipse(kx, ky, 2.5, 1.6, 0.3, 0, TAU); c.stroke();
+      c.beginPath(); c.moveTo(kx, ky + 2); c.lineTo(kx + rng() * 4 - 2, ky + 6 + rng() * 7); c.stroke();
+    }
+    // cross beams with bolts + rust streaks
     for (let y = 100; y < depth; y += 150) {
       c.fillStyle = '#2c2013';
-      c.fillRect(6, y, cw - 12, 8);
+      c.fillRect(6, y, cwL - 12, 9);
       c.fillStyle = '#4c3a24';
-      c.fillRect(6, y, cw - 12, 2);
+      c.fillRect(6, y, cwL - 12, 2);
+      c.fillStyle = 'rgba(0,0,0,0.4)';
+      c.fillRect(6, y + 8, cwL - 12, 1);
+      for (let bx = 24; bx < cwL - 16; bx += 44) {
+        c.fillStyle = '#6a5a48';
+        c.beginPath(); c.arc(bx, y + 4.5, 1.6, 0, TAU); c.fill();
+        c.fillStyle = '#8a7458';
+        c.fillRect(bx - 0.5, y + 3.5, 1, 1);
+        c.fillStyle = 'rgba(140,80,40,0.4)';
+        c.fillRect(bx - 1, y + 9, 2, 8 + rng() * 12);
+      }
     }
-    // algae blotches (greener near top, darker deep)
-    for (let i = 0; i < depth / 4; i++) {
-      const y = rng() * depth, d = y / depth;
-      c.fillStyle = `rgba(${40 - d * 20},${90 - d * 50},${50 - d * 30},${0.25 + rng() * 0.3})`;
-      const w = 3 + rng() * 12;
-      c.fillRect(12 + rng() * (cw - 24 - w), y, w, 2 + rng() * 4);
+    // algae blotches (greener near the sunlit top)
+    for (let i = 0; i < depth / 2.2; i++) {
+      const ay = rng() * depth, d = ay / depth;
+      c.fillStyle = `rgba(${44 - d * 24},${104 - d * 60},${56 - d * 34},${0.2 + rng() * 0.3})`;
+      const w = 2 + rng() * 13;
+      c.fillRect(12 + rng() * (cwL - 24 - w), ay, w, 1.5 + rng() * 4);
+    }
+    // moss tufts hanging off the plank seams
+    for (let i = 0; i < depth / 26; i++) {
+      const my = rng() * depth;
+      const mx = 12 + Math.floor(rng() * 5) * 34 + rng() * 4;
+      c.fillStyle = 'rgba(60,120,70,0.5)';
+      c.beginPath(); c.ellipse(mx, my, 2 + rng() * 3, 1.5, 0, 0, TAU); c.fill();
+      c.fillRect(mx - 1, my, 1, 3 + rng() * 5);
     }
     // crust speckles
-    for (let i = 0; i < depth / 2; i++) {
-      c.fillStyle = rng() < 0.5 ? 'rgba(150,150,140,0.35)' : 'rgba(200,195,180,0.22)';
-      c.fillRect(12 + rng() * (cw - 24), rng() * depth, 2, 2);
+    for (let i = 0; i < depth; i++) {
+      c.fillStyle = rng() < 0.5 ? 'rgba(150,150,140,0.3)' : 'rgba(205,200,185,0.2)';
+      c.fillRect(12 + rng() * (cwL - 24), rng() * depth, 1, 1);
     }
-    // dark edges
-    c.fillStyle = 'rgba(0,0,0,0.55)';
+    // rounded-off dark edges
+    c.fillStyle = 'rgba(0,0,0,0.5)';
     c.fillRect(0, 0, 12, depth);
-    c.fillRect(cw - 12, 0, 12, depth);
+    c.fillRect(cwL - 12, 0, 12, depth);
+    c.fillStyle = 'rgba(0,0,0,0.22)';
+    c.fillRect(12, 0, 5, depth);
+    c.fillRect(cwL - 17, 0, 5, depth);
     this.wallCanvas = cv;
+    this.wallCtx = c;   // kept for stamping scrape scars
   },
 
   // ---- helpers --------------------------------------------------------------
@@ -223,17 +259,44 @@ const DiveScene = {
       SND.chime(); this.bannerSet('* PEARL! *'); G.stats.pearls++;
     }
     const col = ITEMS[drop].color;
-    for (let i = 0; i < 9; i++) {
+    // spinning shell chunks + dust + a pop ring
+    for (let i = 0; i < 10; i++) {
       this.particles.push({
         x: n.x + rand(-3, 3), y: n.y + rand(-3, 3),
-        vx: rand(-55, 55), vy: rand(-70, 20), t: rand(0.4, 0.9),
-        col: Math.random() < 0.3 ? '#fff' : col, s: irand(1, 2),
+        vx: rand(-60, 60), vy: rand(-80, 15), t: rand(0.4, 0.9),
+        col: Math.random() < 0.3 ? '#fff' : col, s: rand(1, 2.4),
+        rot: rand(TAU), vr: rand(-9, 9), chunk: true,
       });
+    }
+    for (let i = 0; i < 4; i++) {
+      this.particles.push({
+        x: n.x + rand(-4, 4), y: n.y + rand(-4, 4),
+        vx: rand(-20, 20), vy: rand(-30, 5), t: rand(0.3, 0.6),
+        col: 'rgba(210,200,180,0.7)', s: 1,
+      });
+    }
+    this.particles.push({ x: n.x, y: n.y, t: 0.35, ring: true, r: 2, vr: 52, col: 'rgba(255,255,255,0.8)' });
+    // stamp a freshly-scraped scar into the piling wood
+    if (this.wallCtx) {
+      const sx = n.x - (this.WALL_X - 12), sy = n.y;
+      const c = this.wallCtx;
+      c.fillStyle = 'rgba(126,98,60,0.92)';
+      c.beginPath(); c.ellipse(sx, sy, n.r * 0.8, n.r * 0.6, 0, 0, TAU); c.fill();
+      c.strokeStyle = 'rgba(58,42,24,0.85)'; c.lineWidth = PIX * 2;
+      c.beginPath(); c.ellipse(sx, sy, n.r * 0.8, n.r * 0.6, 0, 0, TAU); c.stroke();
+      c.fillStyle = 'rgba(150,150,140,0.55)';
+      for (let i = 0; i < 5; i++) {
+        const a = rand(TAU);
+        c.fillRect(sx + Math.cos(a) * n.r * 0.72, sy + Math.sin(a) * n.r * 0.5, 1, 1);
+      }
+      c.fillStyle = 'rgba(96,72,44,0.5)';
+      c.fillRect(sx - PIX, sy - n.r * 0.4, PIX, n.r * 0.8);
     }
     this.floaters.push({ x: n.x, y: n.y - 8, t: 1, txt: '+' + ITEMS[drop].name, col: '#fff' });
     for (const it of gained) {
-      this.flyIcons.push({ img: SPR.icons[it], x: n.x, y: n.y - this.camY, t: 0 });
+      this.flyIcons.push({ img: SPR.icons[it], x: n.x, y: n.y - this.camY, t: 0, rot: rand(-0.4, 0.4), vr: rand(-5, 5) });
     }
+    if (navigator.vibrate) { try { navigator.vibrate(this.combo >= 5 ? 22 : 12); } catch (e) {} }
     this.slowT = 0.06;
     this.shakeT = Math.max(this.shakeT, 0.05);
   },
@@ -415,11 +478,11 @@ const DiveScene = {
       }
     }
 
-    // scraping
+    // scraping — hold to grind; a quick tap also lands one hit (mobile-friendly)
     this.scrapeT -= dt;
     const scr = SCRAPERS[G.gear.scraper];
     const mx = Input.mouse.x, my = Input.mouse.y + this.camY;
-    if (Input.mouse.down && !(this.shark && this.shark.state === 'stare')) {
+    if ((Input.mouse.down || Input.mouse.clicked) && !(this.shark && this.shark.state === 'stare')) {
       if (this.scrapeT <= 0) {
         const n = this.nodeAt(mx, my);
         if (n) {
@@ -429,7 +492,7 @@ const DiveScene = {
               n.hp -= 1; n.shake = 1;
               SND.scrape();
               if (n.hp <= 0) {
-                if (this.bagCount >= BAGS[G.gear.bag].cap) { n.hp = 1; this.msgSet('Bag full! Surface with [Q]'); }
+                if (this.bagCount >= BAGS[G.gear.bag].cap) { n.hp = 1; this.msgSet(TouchUI.enabled ? 'Bag full! Tap SURFACE' : 'Bag full! Surface with [Q]'); }
                 else this.popNode(n);
               }
             } else {
@@ -441,7 +504,7 @@ const DiveScene = {
             }
           } else if (this.bagCount >= BAGS[G.gear.bag].cap) {
             this.scrapeT = 0.4;
-            this.msgSet('Bag full! Surface with [Q]');
+            this.msgSet(TouchUI.enabled ? 'Bag full! Tap SURFACE' : 'Bag full! Surface with [Q]');
             SND.alarm();
           } else {
             this.scrapeT = scr.tick;
@@ -483,7 +546,9 @@ const DiveScene = {
         b.x = b.dir > 0 ? -50 : W + 50;
       } else if (b.state === 'dash') {
         b.x += b.dir * ((W + 120) / 0.55) * dt;
-        if (!b.hit && Math.abs(Input.mouse.x - b.x) < 26 && Math.abs(Input.mouse.y - b.y) < 20) {
+        // on touch, a lifted finger means the paw is pulled back — safe
+        const pawOut = Input.mouse.down || !TouchUI.enabled;
+        if (!b.hit && pawOut && Math.abs(Input.mouse.x - b.x) < 26 && Math.abs(Input.mouse.y - b.y) < 20) {
           b.hit = true;
           this.hurtPlayer(1);
           SND.bite();
@@ -510,8 +575,10 @@ const DiveScene = {
     // particles / floaters / icons / bubbles
     const dcam = this.camY - before;
     for (const pt of this.particles) {
+      if (pt.ring) { pt.r += pt.vr * eff; pt.t -= dt; continue; }
       pt.x += pt.vx * eff; pt.y += pt.vy * eff;
       pt.vy += 40 * eff; pt.vx *= (1 - eff * 1.5);
+      if (pt.chunk) pt.rot += pt.vr * eff;
       pt.t -= dt;
     }
     this.particles = this.particles.filter(pt => pt.t > 0);
@@ -560,93 +627,205 @@ const DiveScene = {
     const sx = n.x + (n.shake > 0 ? rand(-1.3, 1.3) : 0);
     const jy = sy + (n.shake > 0 ? rand(-1, 1) : 0);
     ctx.save();
-    ctx.translate(Math.round(sx), Math.round(jy));
+    ctx.translate(Math.round(sx * DPX) / DPX, Math.round(jy * DPX) / DPX);
     const rng = mulberry32(n.seed);
     const r = n.r;
+
+    // every node is GROWN ON the wood: drop shadow + encrusted attachment ring
+    ctx.fillStyle = 'rgba(0,0,0,0.32)';
+    ctx.beginPath(); ctx.ellipse(0.8, 1.4, r * 1.02, r * 0.78, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(134,128,114,0.55)';
+    ctx.beginPath(); ctx.ellipse(0, 0.6, r * 1.05, r * 0.82, 0, 0, TAU); ctx.fill();
+    for (let i = 0; i < 6; i++) {
+      const a = rng() * TAU;
+      ctx.fillStyle = i % 2 ? 'rgba(184,180,164,0.7)' : 'rgba(92,88,78,0.7)';
+      ctx.fillRect(Math.cos(a) * r * 0.95, 0.6 + Math.sin(a) * r * 0.72, 1, 1);
+    }
+
     if (n.kind === 'clam') {
-      const base = ['#c9a06a', '#d9b98a', '#b98f5c'][Math.floor(rng() * 3)];
-      ctx.fillStyle = '#5a3a20';
-      ctx.beginPath(); ctx.arc(0, 2, r, Math.PI, 0); ctx.closePath(); ctx.fill();
+      const tone = Math.floor(rng() * 3);
+      const base = ['#c9a06a', '#d9b98a', '#b98f5c'][tone];
+      const ridge = ['#8a6a3c', '#9a7a4c', '#7a5c30'][tone];
+      const sheen = ['#ecd8ac', '#f2e2bc', '#dcc494'][tone];
+      const fan = (s) => {
+        ctx.beginPath();
+        ctx.moveTo(0, r * 0.65 * s);
+        ctx.quadraticCurveTo(-r * 1.15 * s, r * 0.35 * s, -r * 0.85 * s, -r * 0.28 * s);
+        ctx.quadraticCurveTo(0, -r * 1.0 * s, r * 0.85 * s, -r * 0.28 * s);
+        ctx.quadraticCurveTo(r * 1.15 * s, r * 0.35 * s, 0, r * 0.65 * s);
+        ctx.closePath();
+      };
+      ctx.fillStyle = '#4a2f16';
+      fan(1); ctx.fill();
       ctx.fillStyle = base;
-      ctx.beginPath(); ctx.arc(0, 2, r - 1.5, Math.PI, 0); ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = 'rgba(90,58,32,0.8)'; ctx.lineWidth = 1;
-      for (let a = -2; a <= 2; a++) {
-        ctx.beginPath(); ctx.moveTo(0, 2);
-        ctx.lineTo(Math.sin(a * 0.4) * (r - 2), 2 - Math.cos(a * 0.4) * (r - 2));
+      fan(0.86); ctx.fill();
+      // concentric growth rings from the umbo
+      ctx.strokeStyle = `rgba(122,92,48,0.75)`; ctx.lineWidth = PIX * 2;
+      for (let g = 0.35; g < 0.85; g += 0.24) {
+        ctx.beginPath();
+        ctx.arc(0, r * 0.55, r * g, Math.PI * 1.12, Math.PI * 1.88);
         ctx.stroke();
       }
+      // radial ribs
+      ctx.strokeStyle = ridge; ctx.lineWidth = PIX * 2;
+      for (let a = -2; a <= 2; a++) {
+        ctx.beginPath(); ctx.moveTo(0, r * 0.5);
+        ctx.lineTo(Math.sin(a * 0.38) * r * 0.8, r * 0.5 - Math.cos(a * 0.38) * r * 1.25);
+        ctx.stroke();
+      }
+      // sheen + umbo knob
+      ctx.fillStyle = sheen;
+      ctx.fillRect(-r * 0.45, -r * 0.55, r * 0.32, PIX * 2);
+      ctx.fillStyle = '#4a2f16';
+      ctx.beginPath(); ctx.arc(0, r * 0.55, r * 0.18, 0, TAU); ctx.fill();
     } else if (n.kind === 'mussel') {
+      // byssus threads first — the little anchors that make it look attached
+      ctx.strokeStyle = 'rgba(214,202,170,0.65)'; ctx.lineWidth = PIX;
+      for (let i = 0; i < 3; i++) {
+        const a = rng() * 1.4 + 1.0;
+        ctx.beginPath(); ctx.moveTo(0, r * 0.25);
+        ctx.lineTo(Math.cos(a + Math.PI / 2) * r * 1.25, r * 0.4 + Math.sin(a) * r * 0.5);
+        ctx.stroke();
+      }
       ctx.save(); ctx.rotate(rng() * 0.9 - 0.45);
-      ctx.fillStyle = '#101830';
+      ctx.fillStyle = '#0b1020';
       ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.55, 0.6, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#2c3a6e';
-      ctx.beginPath(); ctx.ellipse(0, 0, r - 1.5, r * 0.55 - 1.5, 0.6, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#5a71b4';
-      ctx.fillRect(-r * 0.4, -r * 0.35, r * 0.5, 1.5);
+      ctx.fillStyle = '#26335e';
+      ctx.beginPath(); ctx.ellipse(0.2, 0.2, r - 1.2, r * 0.55 - 1.2, 0.6, 0, TAU); ctx.fill();
+      // growth bands along the shell
+      ctx.strokeStyle = 'rgba(10,14,28,0.7)'; ctx.lineWidth = PIX;
+      ctx.beginPath(); ctx.ellipse(0.6, 0.6, r * 0.62, r * 0.3, 0.6, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(1.0, 1.0, r * 0.34, r * 0.15, 0.6, 0, TAU); ctx.stroke();
+      // rim light along the top edge
+      ctx.strokeStyle = '#7c92cc'; ctx.lineWidth = PIX * 2;
+      ctx.beginPath(); ctx.ellipse(0, 0, r - 1.2, r * 0.55 - 1.2, 0.6, Math.PI * 1.15, Math.PI * 1.7); ctx.stroke();
       ctx.restore();
     } else if (n.kind === 'barnacle') {
+      // volcano cone with wall plates
       ctx.fillStyle = '#5c6462';
       ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
       ctx.fillStyle = '#a8b0ac';
-      ctx.beginPath(); ctx.arc(0, 0, r - 1.5, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#2c3432';
-      ctx.beginPath(); ctx.arc(0, 0.5, r * 0.4, 0, TAU); ctx.fill();
-      ctx.fillStyle = 'rgba(230,232,228,0.7)';
-      ctx.fillRect(-r * 0.5, -r * 0.6, 2, 1);
-    } else if (n.kind === 'oyster') {
-      ctx.fillStyle = '#3a423a';
-      ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.8, rng(), 0, TAU); ctx.fill();
-      ctx.fillStyle = '#6e7d6a';
-      ctx.beginPath(); ctx.ellipse(0, 0, r - 1.5, r * 0.8 - 1.5, rng(), 0, TAU); ctx.fill();
-      ctx.fillStyle = '#93a48c';
-      ctx.beginPath(); ctx.ellipse(-1, -1, r * 0.5, r * 0.35, rng(), 0, TAU); ctx.fill();
-      ctx.strokeStyle = 'rgba(40,50,40,0.8)';
-      ctx.beginPath(); ctx.moveTo(-r + 2, 1); ctx.lineTo(r - 2, 0); ctx.stroke();
-    } else if (n.kind === 'abalone') {
-      ctx.fillStyle = '#1e4a40';
-      ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.7, 0.3, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#3f8f7f';
-      ctx.beginPath(); ctx.ellipse(0, 0, r - 1.5, r * 0.7 - 1.5, 0.3, 0, TAU); ctx.fill();
-      const cols = ['#66c2a8', '#b48ac2', '#8fd0c0', '#d0c26e'];
+      ctx.beginPath(); ctx.arc(-0.3, -0.3, r - 1.2, 0, TAU); ctx.fill();
+      // radial plate seams
+      ctx.strokeStyle = 'rgba(74,84,80,0.8)'; ctx.lineWidth = PIX * 2;
       for (let i = 0; i < 6; i++) {
-        ctx.fillStyle = cols[Math.floor(rng() * cols.length)];
-        ctx.fillRect((rng() - 0.5) * r * 1.2, (rng() - 0.5) * r * 0.8, 1.5, 1.5);
+        const a = i / 6 * TAU + rng();
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * r * 0.45, Math.sin(a) * r * 0.45);
+        ctx.lineTo(Math.cos(a) * (r - 1), Math.sin(a) * (r - 1));
+        ctx.stroke();
       }
+      // crater with a hint of the critter inside
+      ctx.fillStyle = '#232b29';
+      ctx.beginPath(); ctx.ellipse(0, 0.4, r * 0.42, r * 0.34, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(200,180,140,0.5)';
+      ctx.fillRect(-1, 0, PIX * 2, PIX * 2);
+      // sunlit rim
+      ctx.strokeStyle = 'rgba(230,232,228,0.65)'; ctx.lineWidth = PIX * 2;
+      ctx.beginPath(); ctx.arc(-0.3, -0.3, r - 1.2, Math.PI * 1.1, Math.PI * 1.65); ctx.stroke();
+    } else if (n.kind === 'oyster') {
+      // layered ruffled shell
+      const rot = rng() * 0.8 - 0.4;
+      ctx.save(); ctx.rotate(rot);
+      const layers = [
+        [r * 1.0, r * 0.8, '#333d33'],
+        [r * 0.92, r * 0.72, '#5f6d5c'],
+        [r * 0.72, r * 0.56, '#78876f'],
+        [r * 0.5, r * 0.4, '#9aac90'],
+      ];
+      for (let i = 0; i < layers.length; i++) {
+        const [lx, ly, col] = layers[i];
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.ellipse(i * 0.5, i * 0.35, lx, ly, 0, 0, TAU); ctx.fill();
+      }
+      // ruffle chips on the lip
+      ctx.fillStyle = 'rgba(226,230,218,0.8)';
+      for (let i = 0; i < 4; i++) {
+        const a = rng() * Math.PI - Math.PI / 2;
+        ctx.fillRect(Math.cos(a) * r * 0.85, Math.sin(a) * r * 0.65, 1, 1);
+      }
+      ctx.strokeStyle = 'rgba(38,46,38,0.85)'; ctx.lineWidth = PIX * 2;
+      ctx.beginPath(); ctx.moveTo(-r * 0.8, 0.8); ctx.quadraticCurveTo(0, 1.8, r * 0.8, 0.4); ctx.stroke();
+      ctx.restore();
+    } else if (n.kind === 'abalone') {
+      const rot = 0.3;
+      ctx.save(); ctx.rotate(rot);
       ctx.fillStyle = '#14332c';
-      for (let i = 0; i < 4; i++) ctx.fillRect(-r * 0.5 + i * 3, -r * 0.35, 1, 1);
+      ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.7, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#3f8f7f';
+      ctx.beginPath(); ctx.ellipse(0.2, 0.2, r - 1.2, r * 0.7 - 1.2, 0, 0, TAU); ctx.fill();
+      // iridescent patches
+      const cols = ['#6cc9ad', '#b48ac2', '#93d4c2', '#d0c26e'];
+      for (let i = 0; i < 8; i++) {
+        ctx.fillStyle = cols[Math.floor(rng() * cols.length)];
+        ctx.fillRect((rng() - 0.5) * r * 1.3, (rng() - 0.5) * r * 0.85, 1.2, 1.2);
+      }
+      // moving mother-of-pearl shimmer
+      const shm = Math.sin(this.time * 1.4 + n.phase) * r * 0.5;
+      ctx.fillStyle = 'rgba(240,255,250,0.35)';
+      ctx.fillRect(shm - 1, -r * 0.45, 2, r * 0.9);
+      // row of respiratory holes along the upper edge
+      ctx.fillStyle = '#0e2620';
+      for (let i = 0; i < 4; i++)
+        ctx.beginPath(), ctx.arc(-r * 0.55 + i * r * 0.34, -r * 0.38, 0.8, 0, TAU), ctx.fill();
+      ctx.restore();
     } else if (n.kind === 'urchin') {
       const wig = Math.sin(this.time * 1.5 + n.phase) * 0.1;
-      ctx.strokeStyle = '#3a2354';
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 12; i++) {
-        const a = i / 12 * TAU + wig;
-        ctx.beginPath(); ctx.moveTo(Math.cos(a) * r * 0.5, Math.sin(a) * r * 0.5);
-        ctx.lineTo(Math.cos(a) * (r + 3), Math.sin(a) * (r + 3)); ctx.stroke();
+      // two-layer spikes: thick dark base, thin light tip
+      for (let i = 0; i < 14; i++) {
+        const a = i / 14 * TAU + wig + (i % 2) * 0.1;
+        const len = r + 2.5 + (i % 3);
+        ctx.strokeStyle = '#2c1a44'; ctx.lineWidth = PIX * 3;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * r * 0.4, Math.sin(a) * r * 0.4);
+        ctx.lineTo(Math.cos(a) * len * 0.75, Math.sin(a) * len * 0.75);
+        ctx.stroke();
+        ctx.strokeStyle = '#6a4a9e'; ctx.lineWidth = PIX;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * len * 0.7, Math.sin(a) * len * 0.7);
+        ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
+        ctx.stroke();
       }
-      ctx.fillStyle = '#2a1840';
-      ctx.beginPath(); ctx.arc(0, 0, r * 0.75, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#5a3a8a';
-      ctx.beginPath(); ctx.arc(-1, -1, r * 0.45, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#221238';
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.72, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#42285f';
+      ctx.beginPath(); ctx.arc(-0.8, -0.8, r * 0.5, 0, TAU); ctx.fill();
+      // dotted test pattern
+      ctx.fillStyle = 'rgba(150,110,200,0.6)';
+      for (let i = 0; i < 5; i++) {
+        const a = rng() * TAU;
+        ctx.fillRect(Math.cos(a) * r * 0.4, Math.sin(a) * r * 0.4, PIX * 2, PIX * 2);
+      }
       // hint of danger when hovered
       const dx = Input.mouse.x - n.x, dy = (Input.mouse.y + this.camY) - n.y;
       if (dx * dx + dy * dy < (r + 10) * (r + 10)) {
-        ctx.strokeStyle = 'rgba(232,60,60,0.5)';
+        ctx.strokeStyle = 'rgba(232,60,60,0.55)';
+        ctx.lineWidth = PIX * 2;
         ctx.beginPath(); ctx.arc(0, 0, r + 5, 0, TAU); ctx.stroke();
       }
     }
     // cracks
     if (n.hp < n.maxHp && n.kind !== 'urchin') {
       const frac = 1 - n.hp / n.maxHp;
-      ctx.strokeStyle = 'rgba(20,12,6,0.85)';
-      ctx.lineWidth = 1;
-      const cracks = Math.ceil(frac * 3);
+      ctx.strokeStyle = 'rgba(16,10,5,0.9)';
+      ctx.lineWidth = PIX * 2;
+      const cracks = Math.ceil(frac * 4);
       const crng = mulberry32(n.seed + 5);
       for (let i = 0; i < cracks; i++) {
         const a = crng() * TAU;
+        const midA = a + crng() * 0.5 - 0.25;
         ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * 2, Math.sin(a) * 2);
-        ctx.lineTo(Math.cos(a + crng() * 0.8) * r * 0.9, Math.sin(a + crng() * 0.8) * r * 0.9);
+        ctx.moveTo(Math.cos(a) * 1.5, Math.sin(a) * 1.5);
+        ctx.lineTo(Math.cos(midA) * r * 0.5, Math.sin(midA) * r * 0.5);
+        ctx.lineTo(Math.cos(midA + crng() * 0.6 - 0.3) * r * 0.9, Math.sin(midA + crng() * 0.6 - 0.3) * r * 0.9);
         ctx.stroke();
+      }
+      // loosened wobble: nearly-dead shells lean away from the wall
+      if (frac > 0.6) {
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = '#d8d0c0';
+        ctx.fillRect(-r * 0.3, -r - 1.5, r * 0.6, PIX * 2);
+        ctx.globalAlpha = 1;
       }
     }
     ctx.restore();
@@ -679,6 +858,13 @@ const DiveScene = {
     for (let i = 0; i < 3; i++) {
       ctx.beginPath(); ctx.moveTo(22 + i * 4, -8); ctx.lineTo(20 + i * 4, 8); ctx.stroke();
     }
+    // old scars across the snout — this one has survived worse than you
+    ctx.strokeStyle = 'rgba(178,188,192,0.5)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(34, -13); ctx.lineTo(41, -8);
+    ctx.moveTo(38, -14); ctx.lineTo(45, -9);
+    ctx.moveTo(52, 0); ctx.lineTo(58, -2);
+    ctx.stroke();
     // eye — the horror bit
     ctx.fillStyle = '#e8e4da';
     ctx.beginPath(); ctx.arc(44, -5, 3, 0, TAU); ctx.fill();
@@ -728,17 +914,35 @@ const DiveScene = {
     ctx.save();
     if (this.shakeT > 0) ctx.translate(irand(-2, 2), irand(-2, 2));
 
-    // background gradient by depth
+    // background: banded pixel gradient by depth
     const depthFrac = this.camY / (this.maxCam + 1);
     const night = isNight(G.clock) ? 0.55 : 0;
     const mixTop = clamp(depthFrac + night * 0.4, 0, 1);
-    const c1 = [lerp(26, 4, mixTop), lerp(106, 18, mixTop), lerp(138, 30, mixTop)];
-    const c2 = [lerp(12, 2, mixTop), lerp(60, 8, mixTop), lerp(88, 16, mixTop)];
-    const grd = ctx.createLinearGradient(0, 0, 0, H);
-    grd.addColorStop(0, `rgb(${c1.map(Math.round).join(',')})`);
-    grd.addColorStop(1, `rgb(${c2.map(Math.round).join(',')})`);
-    ctx.fillStyle = grd;
-    ctx.fillRect(0, 0, W, H);
+    const c1 = [lerp(26, 4, mixTop), lerp(106, 18, mixTop), lerp(138, 30, mixTop)].map(Math.round);
+    const c2 = [lerp(12, 2, mixTop), lerp(60, 8, mixTop), lerp(88, 16, mixTop)].map(Math.round);
+    bandedFill(ctx, 0, 0, W, H, c1, c2, 10, false);
+
+    // far silhouettes: rock spires + a distant kelp forest, gentle parallax
+    ctx.fillStyle = 'rgba(6,20,30,0.5)';
+    for (let i = 0; i < 3; i++) {
+      const bx = [50, 420, 120][i];
+      const topY = H - 40 - i * 30 + this.camY * 0.06 - (this.maxCam * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(bx - 26, H + 20);
+      ctx.lineTo(bx, topY + this.maxCam * 0.06 - this.camY * 0.02 + 60);
+      ctx.lineTo(bx + 22, H + 20);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.strokeStyle = 'rgba(10,34,30,0.45)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i++) {
+      const kx = 20 + i * 110 + (i % 2) * 30;
+      const sw = Math.sin(this.time * 0.7 + i * 1.7);
+      ctx.beginPath();
+      ctx.moveTo(kx, H + 10);
+      ctx.quadraticCurveTo(kx + sw * 10, H - 60 - this.camY * 0.03, kx + sw * 20, H - 130 - this.camY * 0.03);
+      ctx.stroke();
+    }
 
     // god rays near the surface
     if (this.camY < 180 && !night) {
@@ -750,6 +954,15 @@ const DiveScene = {
         ctx.beginPath();
         ctx.moveTo(x, -10); ctx.lineTo(x + 34, -10);
         ctx.lineTo(x + 90, H); ctx.lineTo(x + 40, H);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.globalAlpha = 0.16 * (1 - this.camY / 180);
+      ctx.fillStyle = '#e8f6fc';
+      for (let i = 0; i < 3; i++) {
+        const x = 90 + i * 150 + Math.sin(this.time * 0.5 + i * 2) * 22;
+        ctx.beginPath();
+        ctx.moveTo(x, -10); ctx.lineTo(x + 10, -10);
+        ctx.lineTo(x + 34, H); ctx.lineTo(x + 16, H);
         ctx.closePath(); ctx.fill();
       }
       ctx.restore();
@@ -772,11 +985,42 @@ const DiveScene = {
       ctx.restore();
     }
 
-    // the piling wall
+    // the piling wall (DPX-dense texture)
     if (this.wallCanvas) {
       ctx.drawImage(this.wallCanvas,
-        0, this.camY, this.wallCanvas.width, H,
-        this.WALL_X - 12, 0, this.wallCanvas.width, H);
+        0, this.camY * DPX, this.wallCanvas.width, H * DPX,
+        this.WALL_X - 12, 0, this.wallCanvas.width / DPX, H);
+    }
+
+    // kelp strands swaying along the piling edges
+    for (let i = 0; i < 6; i++) {
+      const left = i % 2 === 0;
+      const ax = left ? this.WALL_X - 10 : this.WALL_X + this.WALL_W + 10;
+      const anchorWorldY = 90 + i * 150;
+      const ay = anchorWorldY - this.camY;
+      if (ay < -120 || ay > H + 130) continue;
+      const segs = 12 + (i % 3) * 3;
+      ctx.strokeStyle = 'rgba(34,104,66,0.9)';
+      ctx.lineWidth = 2;
+      let px = ax, py = ay;
+      ctx.beginPath(); ctx.moveTo(px, py);
+      for (let s = 1; s <= segs; s++) {
+        const sway = Math.sin(this.time * 1.15 + i * 1.9 + s * 0.5) * s * 0.5;
+        const nx2 = ax + sway + (left ? -s * 0.25 : s * 0.25);
+        const ny2 = ay - s * 6.5;
+        ctx.lineTo(nx2, ny2);
+        // leaf nubs alternating sides
+        if (s % 2 === 0 && s > 2) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(56,140,88,0.85)';
+          ctx.beginPath();
+          ctx.ellipse(nx2 + (s % 4 === 0 ? 3 : -3), ny2, 3.2, 1.3, s % 4 === 0 ? 0.5 : -0.5, 0, TAU);
+          ctx.fill();
+          ctx.restore();
+        }
+        px = nx2; py = ny2;
+      }
+      ctx.stroke();
     }
 
     // nodes
@@ -789,9 +1033,23 @@ const DiveScene = {
 
     // particles (world space)
     for (const pt of this.particles) {
-      ctx.fillStyle = pt.col;
       ctx.globalAlpha = clamp(pt.t * 2, 0, 1);
-      ctx.fillRect(Math.round(pt.x), Math.round(pt.y - this.camY), pt.s, pt.s);
+      if (pt.ring) {
+        ctx.strokeStyle = pt.col; ctx.lineWidth = PIX * 2;
+        ctx.beginPath(); ctx.arc(pt.x, pt.y - this.camY, pt.r, 0, TAU); ctx.stroke();
+      } else if (pt.chunk) {
+        ctx.save();
+        ctx.translate(pt.x, pt.y - this.camY);
+        ctx.rotate(pt.rot);
+        ctx.fillStyle = pt.col;
+        ctx.fillRect(-pt.s / 2, -pt.s / 2, pt.s, pt.s * 0.7);
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.fillRect(-pt.s / 2, -pt.s / 2, pt.s, PIX);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = pt.col;
+        ctx.fillRect(Math.round(pt.x), Math.round(pt.y - this.camY), pt.s, pt.s);
+      }
     }
     ctx.globalAlpha = 1;
 
@@ -821,14 +1079,33 @@ const DiveScene = {
       ctx.save();
       ctx.translate(b.x, b.y);
       ctx.scale(b.dir, 1);
-      ctx.fillStyle = '#3c5a66';
-      ctx.beginPath(); ctx.ellipse(0, 0, 26, 5, 0, 0, TAU); ctx.fill();
+      // motion streaks
+      ctx.fillStyle = 'rgba(122,158,172,0.28)';
+      ctx.fillRect(-58, -2, 26, 1);
+      ctx.fillRect(-48, 1, 18, 1);
+      ctx.fillRect(-52, -4.5, 14, 1);
+      // body with belly sheen
+      ctx.fillStyle = '#33505c';
+      ctx.beginPath(); ctx.ellipse(0, 0, 27, 5.5, 0, 0, TAU); ctx.fill();
       ctx.fillStyle = '#5a7e8c';
-      ctx.beginPath(); ctx.ellipse(2, 1.5, 22, 2.5, 0, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(2, 1.5, 23, 3, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#8fb0ba';
+      ctx.beginPath(); ctx.ellipse(4, 2.4, 18, 1.4, 0, 0, TAU); ctx.fill();
+      // tail + fins
       ctx.fillStyle = '#20343c';
-      ctx.beginPath(); ctx.moveTo(-24, 0); ctx.lineTo(-34, -6); ctx.lineTo(-34, 6); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-25, 0); ctx.lineTo(-36, -7); ctx.lineTo(-33, 0); ctx.lineTo(-36, 7); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-4, -4.5); ctx.lineTo(2, -9); ctx.lineTo(7, -4.5); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(0, 4.5); ctx.lineTo(4, 8); ctx.lineTo(9, 4.5); ctx.closePath(); ctx.fill();
+      // toothy jaw + eye
+      ctx.strokeStyle = '#141f26'; ctx.lineWidth = PIX * 2;
+      ctx.beginPath(); ctx.moveTo(26, 1.5); ctx.lineTo(16, 3.5); ctx.stroke();
+      ctx.fillStyle = '#e8e4da';
+      ctx.fillRect(19, 1.5, 1, 1.5);
+      ctx.fillRect(22, 1.2, 1, 1.5);
       ctx.fillStyle = '#fff';
-      ctx.fillRect(20, -2, 2, 2);
+      ctx.fillRect(20, -2.5, 2, 2);
+      ctx.fillStyle = '#0a0f14';
+      ctx.fillRect(20.7, -2, 1, 1);
       ctx.restore();
     }
 
@@ -838,9 +1115,11 @@ const DiveScene = {
     if (dark > 0.02) {
       if (!this._darkCv) {
         this._darkCv = document.createElement('canvas');
-        this._darkCv.width = W; this._darkCv.height = H;
+        this._darkCv.width = W * DPX; this._darkCv.height = H * DPX;
+        this._darkCtx = this._darkCv.getContext('2d');
+        this._darkCtx.scale(DPX, DPX);
       }
-      const dc = this._darkCv.getContext('2d');
+      const dc = this._darkCtx;
       dc.clearRect(0, 0, W, H);
       dc.fillStyle = `rgba(2,6,10,${dark})`;
       dc.fillRect(0, 0, W, H);
@@ -853,7 +1132,7 @@ const DiveScene = {
         dc.beginPath(); dc.arc(Input.mouse.x, Input.mouse.y, 96, 0, TAU); dc.fill();
         dc.globalCompositeOperation = 'source-over';
       }
-      ctx.drawImage(this._darkCv, 0, 0);
+      ctx.drawImage(this._darkCv, 0, 0, W, H);
       if (G.gear.lamp) {
         ctx.fillStyle = 'rgba(255,240,190,0.06)';
         ctx.beginPath(); ctx.arc(Input.mouse.x, Input.mouse.y, 60, 0, TAU); ctx.fill();
@@ -867,32 +1146,66 @@ const DiveScene = {
       if (prog > 0.3) this.drawJaws(ctx, (prog - 0.3) / 0.25);
     }
 
-    // fly-to-bag icons
+    // fly-to-bag icons (arc, spin, and a little scale pop)
     for (const fi of this.flyIcons) {
       const t = fi.t;
-      const tx = W - 40, ty = H - 22;
+      const tx = W - 44, ty = H - 20;
       const x = lerp(fi.x, tx, t);
-      const y = lerp(fi.y, ty, t) - Math.sin(t * Math.PI) * 40;
-      ctx.drawImage(fi.img, Math.round(x - 4), Math.round(y - 4));
+      const y = lerp(fi.y, ty, t) - Math.sin(t * Math.PI) * 42;
+      const sc = 1 + Math.sin(t * Math.PI) * 0.35;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(fi.rot + t * fi.vr);
+      ctx.scale(sc, sc);
+      drawSpr(ctx, fi.img, -4, -4);
+      ctx.restore();
     }
 
     // ---- HUD -----------------------------------------------------------------
-    // O2
+    // O2 gauge in a driftwood capsule
     const o2Frac = clamp(this.air / this.airMax, 0, 1);
     const low = this.air <= 12;
-    text(ctx, 'O2', 10, H - 24, { size: 8, color: low && Math.sin(this.time * 10) > 0 ? '#ff5a4a' : '#bfe8f5' });
-    rrect(ctx, 28, H - 23, 74, 7, '#08141c', '#2c4654');
+    const o2Pulse = low && Math.sin(this.time * 10) > 0;
+    uiPanel(ctx, 6, H - 28, 108, 15, 0.85);
+    // bubble icon
+    ctx.strokeStyle = o2Pulse ? '#ff5a4a' : '#bfe8f5'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(15, H - 20.5, 3.5, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(18.5, H - 24, 1.4, 0, TAU); ctx.stroke();
+    rrect(ctx, 24, H - 24.5, 84, 8, '#08141c', '#2c4654');
     ctx.fillStyle = low ? '#e8434c' : '#5ad2f0';
-    ctx.fillRect(29, H - 22, Math.round(72 * o2Frac), 5);
-    // bag
+    ctx.fillRect(25, H - 23.5, 82 * o2Frac, 6);
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillRect(25, H - 23.5, 82 * o2Frac, 1.5);
+    // tick marks
+    ctx.fillStyle = 'rgba(8,20,28,0.7)';
+    for (let i = 1; i < 4; i++) ctx.fillRect(24 + i * 21, H - 24, PIX * 2, 7);
+    // bag: little net sack + count
     const cap = BAGS[G.gear.bag].cap;
-    const bagCol = this.bagCount >= cap ? '#ff5a4a' : '#ffe6b0';
-    const scale = this.bagPulse > 0 ? 1 : 0;
-    ctx.drawImage(SPR.icons.clam, W - 62, H - 24 - scale);
-    text(ctx, `${this.bagCount}/${cap}`, W - 50, H - 23 - scale, { size: 8, color: bagCol });
-    // depth
-    text(ctx, `${Math.round((this.camY + H * 0.5) / 12)}m`, W - 10, 30, { size: 8, color: '#9fc4d4', align: 'right' });
-    text(ctx, '[Q] surface', 10, H - 36, { size: 7, color: 'rgba(200,225,235,0.65)' });
+    const bagFull = this.bagCount >= cap;
+    const bp = this.bagPulse > 0 ? 1 + this.bagPulse * 1.2 : 1;
+    uiPanel(ctx, W - 74, H - 28, 68, 15, 0.85);
+    ctx.save();
+    ctx.translate(W - 63, H - 20);
+    ctx.scale(bp, bp);
+    ctx.fillStyle = '#8a7040';
+    ctx.beginPath(); ctx.moveTo(-4, -5); ctx.lineTo(4, -5); ctx.lineTo(5.5, 5); ctx.lineTo(-5.5, 5); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(40,28,12,0.8)'; ctx.lineWidth = PIX;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath(); ctx.moveTo(i * 3 - 1, -5); ctx.lineTo(i * 3.5 - 1, 5); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(-4.7, -1); ctx.lineTo(4.7, -1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-5.2, 2); ctx.lineTo(5.2, 2); ctx.stroke();
+    ctx.fillStyle = '#5a4526';
+    ctx.fillRect(-4.5, -6.5, 9, 2);
+    ctx.restore();
+    text(ctx, `${this.bagCount}/${cap}`, W - 52, H - 24, { size: 8, color: bagFull ? '#ff5a4a' : '#ffe6b0' });
+    // depth panel
+    uiPanel(ctx, W - 46, 26, 42, 13, 0.75);
+    text(ctx, `${Math.round((this.camY + H * 0.5) / 12)}m`, W - 9, 29, { size: 8, color: '#9fc4d4', align: 'right' });
+    ctx.fillStyle = '#5ad2f0';
+    ctx.beginPath(); ctx.moveTo(W - 41, 30); ctx.lineTo(W - 38, 35.5); ctx.lineTo(W - 35, 30); ctx.closePath(); ctx.fill();
+    if (!TouchUI.enabled)
+      text(ctx, '[Q] surface', 10, H - 38, { size: 7, color: 'rgba(200,225,235,0.65)' });
     // combo
     if (this.combo >= 3) {
       const cs = 9 + Math.min(this.combo, 15);

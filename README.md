@@ -12,10 +12,16 @@ and wait for the delivery drone... but the deep water is not always friendly.
 python3 -m http.server 8000   # then visit http://localhost:8000
 ```
 
+Works with **mouse + keyboard or pure touch** — on a phone, on-screen
+buttons appear automatically (hold the arrows to walk/swim, hold your paw
+on shells to scrape, tap the paw button to interact).
+
 | | |
 |---|---|
 | ![title](shots/title.png) | ![world](shots/world.png) |
-| ![dive](shots/dive.png) | ![shark](shots/shark.png) |
+| ![night](shots/night.png) | ![house](shots/house.png) |
+| ![dive](shots/dive.png) | ![deep](shots/deep.png) |
+| ![shark](shots/shark.png) | ![mobile](shots/mobile.png) |
 
 ## How to play
 
@@ -61,10 +67,12 @@ python3 -m http.server 8000   # then visit http://localhost:8000
 Progress autosaves to `localStorage`.
 
 ## Tech
-Vanilla JavaScript + Canvas at a 480x270 internal resolution (upscaled,
-pixelated). All sprites are hand-authored pixel grids or procedural canvas
-drawing; all audio (music included) is synthesized live with WebAudio —
-there are zero binary assets in the repo.
+Vanilla JavaScript + Canvas. Game logic runs in 480x270 logical units while
+the canvas renders at 960x540 ("hi-bit" pixel art: twice the hand-placed
+texel density, same chunky look). All sprites are hand-authored pixel grids
+or procedural canvas drawing; skies and seas are dithered color bands, not
+CSS gradients; all audio (music included) is synthesized live with
+WebAudio — there are zero binary assets in the game itself.
 
 | File | What's in it |
 |---|---|
