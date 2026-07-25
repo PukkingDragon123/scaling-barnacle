@@ -1,0 +1,270 @@
+<title>Mr. Otto's Clam Farm</title>
+<style>
+  /* A dive-console frame around the game. Deliberately single-theme: this is a
+     lit screen underwater, and a light ground would fight the canvas. */
+  :root {
+    --abyss:  #060d14;
+    --deep:   #0c1a24;
+    --panel:  #10222e;
+    --piling: #3a2c1a;
+    --biolume:#5ad2f0;
+    --shell:  #ffe6b0;
+    --alarm:  #e8434c;
+    --slate:  #7a94a4;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "Courier New", monospace;
+  }
+
+  body {
+    margin: 0;
+    background: var(--abyss);
+    color: var(--slate);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* caustic light from the surface, far above */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(120% 70% at 50% -10%, rgba(90, 210, 240, 0.16), transparent 60%),
+      radial-gradient(80% 50% at 50% 110%, rgba(6, 20, 30, 0.9), transparent 70%);
+  }
+
+  .page {
+    position: relative;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: clamp(28px, 6vw, 64px) clamp(16px, 4vw, 32px) 56px;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(22px, 4vw, 34px);
+  }
+
+  /* ---- masthead ---- */
+  .masthead { display: flex; flex-direction: column; gap: 6px; text-align: center; }
+
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.42em;
+    text-indent: 0.42em;
+    color: var(--shell);
+    opacity: 0.85;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(34px, 8vw, 64px);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-indent: 0.06em;
+    color: var(--biolume);
+    text-wrap: balance;
+    text-shadow: 0 0 26px rgba(90, 210, 240, 0.34);
+  }
+
+  .tagline { font-size: 13px; color: var(--slate); }
+  .tagline em { color: var(--shell); font-style: normal; }
+
+  /* ---- the viewport ----
+     .stage owns the available space; .viewport shrink-wraps the canvas so the
+     frame never has dead letterbox bars inside it. */
+  .stage {
+    --fit-inset: 24px;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-height: min(64vh, 560px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .viewport {
+    position: relative;
+    width: fit-content;
+    max-width: 100%;
+    padding: 10px;
+    background: linear-gradient(180deg, #45351f, var(--piling) 40%, #241a0e);
+    border-radius: 3px;
+    box-shadow:
+      0 0 0 1px rgba(90, 210, 240, 0.28),
+      0 30px 70px -20px rgba(0, 0, 0, 0.9),
+      inset 0 1px 0 rgba(255, 235, 190, 0.18);
+  }
+
+  .viewport::after {
+    content: "";
+    position: absolute;
+    inset: 6px;
+    border: 1px solid rgba(90, 210, 240, 0.22);
+    border-radius: 2px;
+    pointer-events: none;
+    animation: divelight 7s ease-in-out infinite;
+  }
+
+  @keyframes divelight {
+    0%, 100% { border-color: rgba(90, 210, 240, 0.16); }
+    50%      { border-color: rgba(90, 210, 240, 0.38); }
+  }
+
+  #wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    cursor: none;
+    background: #000;
+  }
+
+  .focusnote {
+    margin: 0;
+    font-size: 12px;
+    text-align: center;
+    color: var(--slate);
+    opacity: 0.75;
+  }
+
+  /* ---- key legend ---- */
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
+    gap: 14px;
+  }
+
+  .card {
+    background: var(--deep);
+    border: 1px solid rgba(90, 210, 240, 0.14);
+    border-radius: 3px;
+    padding: 18px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .card h2 {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.28em;
+    text-indent: 0.28em;
+    color: var(--biolume);
+  }
+
+  .card.hazard h2 { color: var(--alarm); }
+
+  dl { margin: 0; display: flex; flex-direction: column; gap: 9px; }
+  .row { display: flex; align-items: baseline; gap: 12px; }
+
+  dt { flex: 0 0 auto; }
+  dd { margin: 0; font-size: 13px; color: var(--slate); }
+
+  kbd {
+    display: inline-block;
+    min-width: 26px;
+    padding: 3px 7px;
+    background: var(--panel);
+    border: 1px solid rgba(90, 210, 240, 0.3);
+    border-bottom-width: 2px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--shell);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- warning ---- */
+  .warning {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 15px 20px;
+    background: linear-gradient(90deg, rgba(232, 67, 76, 0.12), rgba(232, 67, 76, 0.02));
+    border-left: 3px solid var(--alarm);
+    border-radius: 2px;
+  }
+
+  .warning strong { color: var(--alarm); letter-spacing: 0.08em; }
+  .warning span { font-size: 13px; }
+
+  footer {
+    font-size: 12px;
+    text-align: center;
+    color: var(--slate);
+    opacity: 0.7;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .viewport::after { animation: none; border-color: rgba(90, 210, 240, 0.28); }
+  }
+</style>
+
+<div class="page">
+  <header class="masthead">
+    <div class="eyebrow">Mr. Otto's</div>
+    <h1>Clam Farm</h1>
+    <p class="tagline">A cozy clam-scraping sim &mdash; <em>mostly</em> cozy.</p>
+  </header>
+
+  <div class="stage" data-fit>
+    <div class="viewport">
+      <div id="wrap"><canvas id="game" width="480" height="270"></canvas></div>
+    </div>
+  </div>
+
+  <p class="focusnote">Click the screen once to give it the keyboard, then press ENTER. Sound is synthesized live &mdash; press M to mute.</p>
+
+  <div class="legend">
+    <section class="card">
+      <h2>On the surface</h2>
+      <dl>
+        <div class="row"><dt><kbd>A</kbd> <kbd>D</kbd></dt><dd>Walk the bridge</dd></div>
+        <div class="row"><dt><kbd>E</kbd></dt><dd>Dive, use the laptop, sleep</dd></div>
+        <div class="row"><dt><kbd>H</kbd></dt><dd>Otto's field guide</dd></div>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h2>Under the sea</h2>
+      <dl>
+        <div class="row"><dt><kbd>Hold&nbsp;LMB</kbd></dt><dd>Scrape shells off the piling</dd></div>
+        <div class="row"><dt><kbd>W</kbd> <kbd>S</kbd></dt><dd>Swim down the piling</dd></div>
+        <div class="row"><dt><kbd>Q</kbd></dt><dd>Surface &mdash; before the O&#8322; runs out</dd></div>
+      </dl>
+    </section>
+
+    <section class="card hazard">
+      <h2>What bites</h2>
+      <dl>
+        <div class="row"><dt><kbd>&#9679;</kbd></dt><dd>Urchins sting bare paws</dd></div>
+        <div class="row"><dt><kbd>!</kbd></dt><dd>Barracuda inbound &mdash; move your paw</dd></div>
+        <div class="row"><dt><kbd>&#9651;</kbd></dt><dd>Oysters hide pearls</dd></div>
+      </dl>
+    </section>
+  </div>
+
+  <div class="warning">
+    <strong>DON'T MOVE</strong>
+    <span>If the fish scatter and the water goes quiet, the Gray One is watching. Freeze &mdash; moving or scraping is how divers get bitten.</span>
+  </div>
+
+  <footer>Sell your haul on ClamNet, wait for the drone, upgrade the bridge, decorate the house. Progress saves in your browser.</footer>
+</div>
+
+<script>
+<!--GAME_SCRIPT-->
+</script>

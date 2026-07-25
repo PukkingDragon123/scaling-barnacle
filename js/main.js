@@ -18,13 +18,37 @@ const Input = {
   endFrame() { this.pressed.clear(); this.mouse.clicked = false; this.wheelDelta = 0; },
 };
 
+// Fit the canvas to whatever box it's placed in (fullscreen wrapper, or an
+// in-flow container when the game is embedded in a page). Snap to half-integer
+// scales when upscaling so pixels stay crisp.
+// The element that defines the space available to the canvas. When the game is
+// embedded, a [data-fit] ancestor can own the sizing so the frame around the
+// canvas is free to shrink-wrap it (its own width can't be the input, or the
+// measurement would be circular). Optional --fit-inset accounts for that frame.
+function fitHost() {
+  return canvas.closest('[data-fit]') || canvas.parentElement;
+}
+
 function resize() {
-  const scaleRaw = Math.min(window.innerWidth / W, window.innerHeight / H);
-  const scale = scaleRaw >= 1 ? Math.max(1, Math.floor(scaleRaw * 2) / 2) : scaleRaw;
+  const host = fitHost();
+  let availW = window.innerWidth, availH = window.innerHeight;
+  if (host && host.clientWidth) {
+    const inset = parseFloat(getComputedStyle(host).getPropertyValue('--fit-inset')) || 0;
+    availW = host.clientWidth - inset;
+    availH = host.clientHeight - inset;
+  }
+  // Snap to half-integer scales when upscaling: pixel art stays crisp, and the
+  // shrink-wrapped frame means the leftover space costs nothing visually.
+  const scaleRaw = Math.min(availW / W, availH / H);
+  const scale = scaleRaw >= 1 ? Math.max(1, Math.floor(scaleRaw * 2) / 2) : Math.max(0.1, scaleRaw);
   canvas.style.width = `${W * scale}px`;
   canvas.style.height = `${H * scale}px`;
 }
 window.addEventListener('resize', resize);
+if (window.ResizeObserver) {
+  const host = fitHost();
+  if (host) new ResizeObserver(resize).observe(host);
+}
 
 window.addEventListener('keydown', (e) => {
   SND.init(); SND.resume();
