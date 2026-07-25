@@ -88,6 +88,7 @@ const Shop = {
         }
       };
       tier(SCRAPERS, G.gear.scraper, 'scraper', 'scraper');
+      tier(PRYBARS, G.gear.pry, 'pry', 'pry');
       tier(TANKS, G.gear.tank, 'tank', 'tank');
       tier(SUITS, G.gear.suit, 'suit', 'suit');
       tier(BAGS, G.gear.bag, 'bag', 'bag');

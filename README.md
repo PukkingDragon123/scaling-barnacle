@@ -21,7 +21,7 @@ on shells to scrape, tap the paw button to interact).
 | ![title](shots/title.png) | ![world](shots/world.png) |
 | ![night](shots/night.png) | ![house](shots/house.png) |
 | ![dive](shots/dive.png) | ![deep](shots/deep.png) |
-| ![shark](shots/shark.png) | ![mobile](shots/mobile.png) |
+| ![bench](shots/bench.png) | ![shark](shots/shark.png) |
 
 ## How to play
 
@@ -43,23 +43,31 @@ on shells to scrape, tap the paw button to interact).
 ### Under the sea (less cozy) — first-person dive mode
 | Input | Action |
 |---|---|
-| Hold **Left Mouse** | Scrape shells off the piling |
+| Hold **Left Mouse** | Scrape crust / **hold on an exposed shell to pry** |
+| Release in the green | Pop the shell loose (miss and it clamps down!) |
 | `W`/`S` or wheel | Swim up / down |
-| `Q` | Surface |
 
-- Watch the **O2 bar**. Snorkels don't last long — buy tanks.
-- Chain quick pops for **combos**; oysters sometimes hide **pearls**.
-- **Sea urchins** sting if you scrape them barehanded (Pry Gloves turn them
-  into valuable roe).
-- A red **`!`** at the screen edge means a **barracuda** is about to dash
-  across at your paw's height — move it!
+- **There is no surface button.** Swim all the way up and keep kicking —
+  and watch the **O2 bar** on the way.
+- Harvesting is a craft: **scrape** the crust off, then **pry** with a
+  timing minigame. Barnacles come off with the crust; abalone barely fit
+  in the green.
+- Beds only regrow **overnight**, and only partially — the shallows get
+  picked clean, so the good hauls are always a little deeper than you'd like.
+- **Sea urchins** sting, **jellyfish** numb your paw, **moray eels** lunge
+  from their dens when the eyes are glowing, and a red **`!`** means a
+  **barracuda** — lift your paw!
 - And if the fish scatter and the water goes quiet: **DON'T. MOVE.**
-  The Gray One is watching. Movement — or scraping — while it stares at you
-  ends very badly.
+
+### At the workbench (on the deck)
+- **Crack** clams, mussels and oysters — tap when the marker is centered.
+  Clean cracks yield meat (worth ~2x raw) and oysters hide **pearls**.
+- **Polish** abalone shells and pearls — rub until they gleam. A lustrous
+  pearl sells for a small fortune.
 
 ## Progression
-- **Gear:** scrapers (faster/stronger), air tanks, wetsuits, bigger bags,
-  a headlamp for the dark, pry gloves.
+- **Gear:** scrapers (faster/stronger), **pry bars** (wider sweet spot),
+  air tanks, wetsuits, bigger bags, a headlamp for the dark, pry gloves.
 - **Bridge:** extend it to the Mid Piling (oysters) and the Deep Piling
   (abalone and pearls — shark territory).
 - **House:** two upgrade tiers plus 8 decorations.

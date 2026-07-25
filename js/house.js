@@ -56,12 +56,9 @@ const HouseScene = {
         G.day++;
         G.clock = 0.28;
         G.hearts = G.maxHearts;
-        G.growth = G.growth.map((g, i) => {
-          if (g < 1) G.seeds[i]++;
-          return 1;
-        });
+        Game.newDayRegrow(true);
         Game.save();
-        Game.toast(`Day ${G.day} — a fresh crust of clams awaits!`);
+        Game.toast(`Day ${G.day} — the beds regrew overnight... some of them.`);
       }
       return;
     }
@@ -448,8 +445,8 @@ const HouseScene = {
     if (this.walkT > 0 && this.idleT < 0.1) frame = 1 + (Math.floor(this.walkT) % 2);
     else if ((this.time % 3.6) < 0.13) frame = 3;
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.beginPath(); ctx.ellipse(this.px, FLOOR + 0.5, 7, 1.6, 0, 0, TAU); ctx.fill();
-    drawSpr(ctx, frames[frame], this.px - 8, FLOOR - 13);
+    ctx.beginPath(); ctx.ellipse(this.px, FLOOR + 0.5, 6, 1.5, 0, 0, TAU); ctx.fill();
+    drawSpr(ctx, frames[frame], this.px - 6, FLOOR - 16.5);
 
     // prompt
     let best = null, bd = 26;

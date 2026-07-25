@@ -31,58 +31,63 @@ function flipSprite(img) {
   return cv;
 }
 
-// ---- Otto the otter (32x26 texels = 16x13 logical), facing right ------------
+// ---- Otto the otter: chibi biped with a scarf (24x36 texels = 12x18 logical),
+// 3/4 view facing right --------------------------------------------------------
 const OP = {
   'k': '#1a0f08', 'd': '#573a20', 'o': '#74512e', 'O': '#8f683c',
   'c': '#dcc094', 'C': '#efe0bc', 'p': '#c9856c', 'n': '#201409',
-  'w': '#f8f4ea', 'e': '#2a1a10',
+  'w': '#f8f4ea', 'e': '#2a1a10', 's': '#d0563c', 'S': '#e87a54',
 };
 
-function otterGrid(legRow1, legRow2, eyeOpen) {
-  const eye1 = eyeOpen ? 'kwk' : 'ooo';
-  const eye2 = eyeOpen ? 'kek' : 'kkk';
+function otterGrid(legA, legB, feet, eyeOpen) {
+  const eyeT = eyeOpen ? 'w' : 'o';
+  const eyeB = eyeOpen ? 'e' : 'k';
   return [
-    '...........kkkk.................',
-    '..........koppokkkkkkk..........',
-    '.........koooooooooooook........',
-    '........kooooooooooooooook......',
-    ('........kooooooooooo' + eye1 + 'ook......'),
-    ('........kooooooooooo' + eye2 + 'ook......'),
-    '........kooooooooooooccccck.....',
-    '.......koooooooooooccccccnnk....',
-    '.......kooooooooooocccccccnnk...',
-    '........koooooooooocccccck......',
-    '........kooooooooooccccck.......',
-    '.........koooooooocccck.........',
-    '.........kkooooooooookk.........',
-    '.......kkkoooooooooookk.........',
-    '.....kkooooooooooooooook........',
-    '....kooooooocccccccoooook.......',
-    '...koooooooccCCCCCccooook.......',
-    '..kdooooooccCCCCCCCccooook......',
-    '.kddooooooccCCCCCCCccooook......',
-    'kdddooooooccCCCCCCCccooook......',
-    'kddddoooooccCCCCCCccoooook......',
-    '.kdddooooooccccccccooooook......',
-    '..kkddoooooooooooooooooook......',
-    legRow1,
-    legRow2,
-    '................................',
+    '....kkk......kkk........',
+    '...kopok....kopok.......',
+    '...koook....koook.......',
+    '..kkoooookkoooookk......',
+    '..koooooooooooooook.....',
+    '.koooooooooooooooook....',
+    ('.koooooo' + eyeT + eyeB + 'ooooo' + eyeT + eyeB + 'ooook....'),
+    ('.koooooo' + eyeB + eyeB + 'ooooo' + eyeB + eyeB + 'ooook....'),
+    '.kooooooooocccoooooook..',
+    '.koooooooccccnncccook...',
+    '.kooooooocccnnnccccok...',
+    '..koooooocccccccccok....',
+    '..kooooooocccccccok.....',
+    '...kooooooocccccok......',
+    '....koooooooooook.......',
+    '.....kkoooooookk........',
+    '.....kssSSSSssk.........',
+    '....ksSSssssSSsk........',
+    '....ksskkssssok.........',
+    '...koosskoooook.........',
+    '...koosskoooooook.......',
+    '..kooksskooooooook......',
+    '..kodkskkoccccooook.....',
+    '..kodk.koocCCcooook.....',
+    '...kk..koocCCcooook.....',
+    '.......koccCCccoook.....',
+    'kk.....koccccccook......',
+    'kdkk...koooooooook......',
+    'kddookkkoooooooook......',
+    'kdddooookkkkkkkkk.......',
+    '.kddoook' + legA,
+    '..kkook.' + legB,
+    '........' + feet,
+    '........................',
   ];
 }
 
 const OTTER_IDLE = makeSprite(otterGrid(
-  '....kkoooookkkkkkkoooookk.......',
-  '.....kddddk......kddddk.........', true), OP);
+  'koook..koook....', 'koook..koook....', 'kddok..kddok....', true), OP);
 const OTTER_BLINK = makeSprite(otterGrid(
-  '....kkoooookkkkkkkoooookk.......',
-  '.....kddddk......kddddk.........', false), OP);
+  'koook..koook....', 'koook..koook....', 'kddok..kddok....', false), OP);
 const OTTER_WALK1 = makeSprite(otterGrid(
-  '...kkoooookkkkkkkkkoooookk......',
-  '...kddddk..........kddddk.......', true), OP);
+  '.koook.koook....', '.koookkoook.....', 'kddok...kddok...', true), OP);
 const OTTER_WALK2 = makeSprite(otterGrid(
-  '......kkoooookkkoooookk.........',
-  '........kddddkkddddk............', true), OP);
+  'koook.koook.....', 'koookkoook......', '..kddok.kddok...', true), OP);
 
 // ---- gull (28x16 texels = 14x8 logical) --------------------------------------
 const GP = { 'k': '#232830', 'w': '#f4f6f8', 'g': '#c9ced4', 'o': '#e8a13c' };

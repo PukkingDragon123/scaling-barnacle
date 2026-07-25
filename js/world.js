@@ -42,7 +42,7 @@ const WorldScene = {
   camX: 0, time: 0,
   gulls: [], smoke: [], stars: null, clouds: null,
   crab: { x: 260, dir: 1, t: 0 },
-  perchedGull: { there: true, x: 330 },
+  perchedGull: { there: true, x: 375 },
   fishJumpT: 9, fishJump: null,
   sprayT: 2,
   spray: [],
@@ -77,6 +77,7 @@ const WorldScene = {
     const s = [
       { x: 191, label: 'Enter House', act: () => Game.go(HouseScene, {}) },
       { x: 252, label: 'ClamNet  (sell & shop)', act: () => { Shop.openUI(); } },
+      { x: 315, label: 'Workbench  (crack & polish)', act: () => { Bench.openUI(); } },
     ];
     for (let i = 0; i < G.bridge; i++) {
       s.push({
@@ -135,7 +136,7 @@ const WorldScene = {
       this.perchedGull.there = false;
       this.gulls.push({ x: this.perchedGull.x - this.camX, y: DECK_Y - 20, vx: rand(24, 40) * (Math.random() < 0.5 ? -1 : 1), f: 0 });
       SND.gull();
-      setTimeout(() => { this.perchedGull.there = true; this.perchedGull.x = pick([330, 380, 560]); }, 15000);
+      setTimeout(() => { this.perchedGull.there = true; this.perchedGull.x = pick([375, 420, 560]); }, 15000);
     }
 
     // crab
@@ -154,6 +155,16 @@ const WorldScene = {
     if (this.fishJump) {
       this.fishJump.t += dt;
       if (this.fishJump.t > 1) this.fishJump = null;
+    }
+
+    // a pod of dolphins passing far out, now and then
+    if (!this.dolphins && Math.random() < dt / 30) {
+      this.dolphins = { x: -30, t: 0 };
+    }
+    if (this.dolphins) {
+      this.dolphins.x += 34 * dt;
+      this.dolphins.t += dt;
+      if (this.dolphins.x > W + 60) this.dolphins = null;
     }
 
     // sea spray at stilts
@@ -282,6 +293,30 @@ const WorldScene = {
       ctx.fillStyle = `rgba(220,230,245,${(nite - 0.5) * 0.25})`;
       for (let y = HORIZON + 4; y < H; y += 5)
         ctx.fillRect(W * 0.55 + Math.sin(y * 0.4 + this.time * 2) * 6, y, 22 + (y - HORIZON) * 0.3, 1);
+    }
+
+    // dolphin pod arcing along the horizon (screen space, far water)
+    if (this.dolphins) {
+      const d = this.dolphins;
+      ctx.fillStyle = `rgba(40,60,84,${0.75 - nite * 0.3})`;
+      for (let i = 0; i < 3; i++) {
+        const px2 = d.x - i * 22;
+        const ph = (d.t * 1.4 + i * 0.6) % TAU;
+        const arc = Math.max(0, Math.sin(ph));
+        if (arc < 0.05) continue;
+        const py2 = 164 - arc * 9;
+        ctx.save();
+        ctx.translate(px2, py2);
+        ctx.rotate(Math.cos(ph) * -0.5);
+        ctx.beginPath(); ctx.ellipse(0, 0, 7, 2.4, 0, 0, TAU); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-1, -1.5); ctx.lineTo(1.5, -4.5); ctx.lineTo(3.5, -1.5); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        if (arc < 0.3) {
+          ctx.fillStyle = 'rgba(255,255,255,0.35)';
+          ctx.fillRect(px2 - 4, 165, 8, 1);
+          ctx.fillStyle = `rgba(40,60,84,${0.75 - nite * 0.3})`;
+        }
+      }
     }
 
     // fish jump
@@ -471,12 +506,46 @@ const WorldScene = {
     ctx.beginPath(); ctx.ellipse(222, DECK_Y - 2, 2.5, 1, 0, 0, TAU); ctx.stroke();
     // crab pot cage
     ctx.strokeStyle = '#4a3c26'; ctx.lineWidth = PIX * 2;
-    ctx.strokeRect(306, DECK_Y - 9, 12, 9);
+    ctx.strokeRect(342, DECK_Y - 9, 12, 9);
     ctx.beginPath();
-    ctx.moveTo(306, DECK_Y - 4.5); ctx.lineTo(318, DECK_Y - 4.5);
-    ctx.moveTo(310, DECK_Y - 9); ctx.lineTo(310, DECK_Y);
-    ctx.moveTo(314, DECK_Y - 9); ctx.lineTo(314, DECK_Y);
+    ctx.moveTo(342, DECK_Y - 4.5); ctx.lineTo(354, DECK_Y - 4.5);
+    ctx.moveTo(346, DECK_Y - 9); ctx.lineTo(346, DECK_Y);
+    ctx.moveTo(350, DECK_Y - 9); ctx.lineTo(350, DECK_Y);
     ctx.stroke();
+
+    // ---- workbench: vise, hammer, shell pile ---------------------------------------
+    ctx.fillStyle = '#4a3820';
+    ctx.fillRect(300, DECK_Y - 13, 32, 3.5);
+    ctx.fillStyle = '#5f4a2c';
+    ctx.fillRect(300, DECK_Y - 13, 32, 1);
+    ctx.fillStyle = '#3a2c16';
+    ctx.fillRect(303, DECK_Y - 9.5, 3, 9.5);
+    ctx.fillRect(326, DECK_Y - 9.5, 3, 9.5);
+    ctx.fillRect(302, DECK_Y - 5, 28, 2);   // shelf
+    // vise on the left end
+    ctx.fillStyle = '#3c4448';
+    ctx.fillRect(303, DECK_Y - 18, 7, 5);
+    ctx.fillStyle = '#5a646c';
+    ctx.fillRect(303, DECK_Y - 18, 7, 1.5);
+    ctx.fillStyle = '#2a3036';
+    ctx.fillRect(305.5, DECK_Y - 20.5, 2, 3);
+    // hammer resting on the bench
+    ctx.fillStyle = '#7a5c34';
+    ctx.save();
+    ctx.translate(319, DECK_Y - 14);
+    ctx.rotate(-0.45);
+    ctx.fillRect(0, 0, 9, 1.5);
+    ctx.fillStyle = '#4a5258';
+    ctx.fillRect(7.5, -2, 3.5, 5);
+    ctx.restore();
+    // little pile of shells waiting
+    drawSpr(ctx, SPR.icons.clam, 312, DECK_Y - 19);
+    drawSpr(ctx, SPR.icons.oyster, 318, DECK_Y - 17.5);
+    // lantern hook glow at night
+    if (nightness(G.clock) > 0.3) {
+      ctx.fillStyle = 'rgba(255,206,110,0.1)';
+      ctx.beginPath(); ctx.arc(316, DECK_Y - 14, 13, 0, TAU); ctx.fill();
+    }
 
     // ---- laptop table under a striped awning ---------------------------------------
     // awning
@@ -580,8 +649,8 @@ const WorldScene = {
     const bob = frame === 2 ? -0.5 : 0;
     // soft shadow
     ctx.fillStyle = 'rgba(0,0,0,0.28)';
-    ctx.beginPath(); ctx.ellipse(this.px, DECK_Y + 0.5, 7, 1.6, 0, 0, TAU); ctx.fill();
-    drawSpr(ctx, frames[frame], this.px - 8, DECK_Y - 13 + bob);
+    ctx.beginPath(); ctx.ellipse(this.px, DECK_Y + 0.5, 6, 1.5, 0, 0, TAU); ctx.fill();
+    drawSpr(ctx, frames[frame], this.px - 6, DECK_Y - 16.5 + bob);
 
     // interact prompt bubble
     let best = null, bd = 20;

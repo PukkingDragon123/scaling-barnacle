@@ -40,8 +40,31 @@ const DiveScene = {
     this.sharkRollT = 1;
     this.whaleT = rand(20, 50);
     this.barra = { state: 'idle', t: rand(8, 16), y: 0, x: 0, dir: 1, hit: false };
+    this.pry = null;          // active pry minigame { n, t, speed, win, marker }
+    this.numbT = 0;           // jellyfish sting lockout
+    this.surfaceT = 0;        // held-up-at-top timer
     this.nodes = this.gen(p);
     this.buildWall();
+    // jellyfish drift up through the water column
+    this.jellies = [];
+    const jcount = 2 + (p >= 1 ? 1 : 0) + (p >= 2 ? 1 : 0);
+    for (let i = 0; i < jcount; i++) {
+      this.jellies.push({
+        x: Math.random() < 0.6 ? (Math.random() < 0.5 ? rand(20, this.WALL_X - 20) : rand(this.WALL_X + this.WALL_W + 20, W - 20)) : rand(this.WALL_X, this.WALL_X + this.WALL_W),
+        wy: rand(120, PILINGS[p].depth), vy: rand(6, 13), sway: rand(TAU), r: rand(8, 13), cd: 0,
+      });
+    }
+    // schools of little fish weaving behind the piling
+    this.schools = [];
+    for (let s = 0; s < 2; s++) {
+      const members = [];
+      const count = irand(5, 8);
+      for (let i = 0; i < count; i++) members.push({ ox: -i * 7 - rand(0, 4), oy: rand(-8, 8), ph: rand(TAU) });
+      this.schools.push({ x: rand(0, W), y: rand(40, H - 40), dir: Math.random() < 0.5 ? 1 : -1, speed: rand(22, 34), ph: rand(TAU), members, flee: false });
+    }
+    // night plankton
+    this.plankton = [];
+    for (let i = 0; i < 26; i++) this.plankton.push({ x: rand(W), y: rand(H), v: rand(2, 6), ph: rand(TAU) });
     // ambient fish
     this.fish = [];
     for (let i = 0; i < 9; i++) {
@@ -58,13 +81,9 @@ const DiveScene = {
     SND.splash();
     if (!G.flags.seenDive) {
       G.flags.seenDive = true;
-      if (TouchUI.enabled) {
-        Game.toast('Hold your paw on shells to scrape them off!');
-        Game.toast('Right-side arrows: swim.  SURFACE before O2 runs out!');
-      } else {
-        Game.toast('Hold LEFT MOUSE on shells to scrape them off!');
-        Game.toast('W/S or wheel: swim.  [Q] surface.  Watch your O2!');
-      }
+      Game.toast('Scrape the crust off a shell... then HOLD on it to pry —');
+      Game.toast('release when the marker is in the GREEN!');
+      Game.toast('No magic resurfacing: swim UP yourself, and mind your O2!');
     }
     if (this.p === 2 && !G.flags.seenDeep) {
       G.flags.seenDeep = true;
@@ -72,44 +91,68 @@ const DiveScene = {
     }
   },
 
-  // ---- node generation ----------------------------------------------------
+  // ---- node generation: sparse, big, staged ----------------------------------
   gen(p) {
     const def = PILINGS[p];
     const rng = mulberry32(G.seeds[p] * 7919 + p * 101 + 13);
     const nodes = [];
-    const rows = Math.floor((def.depth - 80) / 30);
+    const rows = Math.floor((def.depth - 110) / 56);
     for (let r = 0; r < rows; r++) {
       const d = r / rows;
-      const count = 3 + Math.floor(rng() * 3);
+      const count = rng() < 0.35 ? 2 : 1;
       for (let i = 0; i < count; i++) {
         const kind = weightedPick([
           ['clam', 5 - 2.5 * d],
           ['mussel', 1.2 + 1.5 * d],
-          ['barnacle', 2.4],
+          ['barnacle', 2.2],
           ['oyster', (p >= 1) ? 0.5 + 2.2 * d : (d > 0.55 ? 0.7 : 0)],
           ['abalone', (p >= 2 && d > 0.45) ? 2.2 * d : 0],
-          ['urchin', 0.35 + 1.5 * d + 0.3 * p],
+          ['urchin', 0.4 + 1.5 * d + 0.3 * p],
         ], rng());
         const nd = NODE_DEFS[kind];
         nodes.push({
-          x: this.WALL_X + 16 + rng() * (this.WALL_W - 32),
-          y: 60 + r * 30 + rng() * 16,
-          kind, r: nd.r * (0.85 + rng() * 0.4),
-          hp: nd.hp, maxHp: nd.hp,
-          seed: Math.floor(rng() * 99999), alive: true, shake: 0, phase: rng() * TAU,
+          x: this.WALL_X + 28 + rng() * (this.WALL_W - 56) + (count === 2 ? (i === 0 ? -34 : 34) : 0),
+          y: 84 + r * 56 + rng() * 24,
+          kind, r: nd.r * (0.9 + rng() * 0.25),
+          hp: Math.max(1, nd.crust), maxHp: Math.max(1, nd.crust),
+          stage: nd.crust > 0 ? 'crusted' : 'exposed',
+          seed: Math.floor(rng() * 99999), alive: true, shake: 0, phase: rng() * TAU, clampT: 0,
+        });
+      }
+      // living decoration: starfish + anemones make the wall feel inhabited
+      if (rng() < 0.45) {
+        nodes.push({
+          kind: 'star', decor: true, alive: true,
+          x: this.WALL_X + 18 + rng() * (this.WALL_W - 36), y: 84 + r * 56 + rng() * 40,
+          r: 5.5 + rng() * 3.5, seed: Math.floor(rng() * 99999), phase: rng() * TAU,
+        });
+      }
+      if (rng() < 0.3) {
+        nodes.push({
+          kind: 'anemone', decor: true, alive: true,
+          x: rng() < 0.5 ? this.WALL_X + 8 + rng() * 10 : this.WALL_X + this.WALL_W - 18 + rng() * 10,
+          y: 84 + r * 56 + rng() * 40,
+          r: 5 + rng() * 3, seed: Math.floor(rng() * 99999), phase: rng() * TAU,
         });
       }
     }
-    // apply regrowth: knock out (1 - growth) of harvestable nodes, deterministically
-    const harv = nodes.filter(n => n.kind !== 'urchin');
-    const shuffled = harv.slice();
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    // moray eel dens, deeper half only
+    for (let y = def.depth * 0.35; y < def.depth - 100; y += 300 + rng() * 160) {
+      nodes.push({
+        kind: 'eelhole', decor: true, alive: true,
+        x: this.WALL_X + 34 + rng() * (this.WALL_W - 68), y: y + rng() * 60,
+        r: 12, seed: Math.floor(rng() * 99999), phase: rng() * TAU,
+        eel: { state: 'hidden', t: 3 + rng() * 5 },
+      });
     }
-    const dead = Math.round((1 - clamp(G.growth[p], 0, 1)) * shuffled.length);
-    for (let i = 0; i < dead; i++) shuffled[i].alive = false;
-    this.totalHarv = Math.max(1, shuffled.length);
+    // regrowth: shallow slots are the least likely to have come back — the good
+    // beds are always a little deeper than you'd like
+    const harv = nodes.filter(n => !n.decor && n.kind !== 'urchin');
+    const scored = harv.map(n => ({ n, s: rng() * (0.55 + 0.9 * (n.y / def.depth)) }));
+    scored.sort((a, b) => a.s - b.s);
+    const dead = Math.round((1 - clamp(G.growth[p], 0, 1)) * scored.length);
+    for (let i = 0; i < dead; i++) scored[i].n.alive = false;
+    this.totalHarv = Math.max(1, scored.length);
     return nodes;
   },
 
@@ -202,11 +245,35 @@ const DiveScene = {
 
   nodeAt(mx, my) {
     for (const n of this.nodes) {
-      if (!n.alive) continue;
+      if (!n.alive || n.decor) continue;
       const dx = mx - n.x, dy = my - n.y;
       if (dx * dx + dy * dy < (n.r + 4) * (n.r + 4)) return n;
     }
     return null;
+  },
+
+  // ---- pry minigame -----------------------------------------------------------
+  startPry(n) {
+    const pd = NODE_DEFS[n.kind].pry;
+    if (!pd) return;
+    const bar = PRYBARS[G.gear.pry];
+    this.pry = { n, t: 0, speed: pd.speed * bar.speed, win: pd.win + bar.bonus, marker: 0 };
+    SND.pryCreak();
+  },
+
+  resolvePry(success) {
+    const n = this.pry.n;
+    this.pry = null;
+    if (success) {
+      this.popNode(n);
+    } else {
+      n.clampT = 0.7;
+      n.shake = 1;
+      SND.clank();
+      this.msgSet(pick(['It clamps down tight!', 'Slipped!', 'Almost had it...']));
+      if (n.kind === 'urchin') this.hurtPlayer(0.5);
+      this.shakeT = Math.max(this.shakeT, 0.15);
+    }
   },
 
   hurtPlayer(amount) {
@@ -246,7 +313,8 @@ const DiveScene = {
     n.alive = false;
     const drop = NODE_DEFS[n.kind].drop;
     const gained = [drop];
-    if (n.kind === 'oyster' && Math.random() < 0.07 + 0.03 * this.p) gained.push('pearl');
+    // loose pearls are a rare dive treat — most come from cracking at the bench
+    if (n.kind === 'oyster' && Math.random() < 0.04) gained.push('pearl');
     for (const it of gained) {
       this.bag[it] = (this.bag[it] || 0) + 1;
       this.bagCount++;
@@ -309,8 +377,9 @@ const DiveScene = {
       count += this.bag[k];
       value += ITEMS[k].price * this.bag[k];
     }
-    // remember regrowth state
+    // remember regrowth state (and apply an overnight regrow that happened mid-dive)
     this.exitGrowth();
+    if (G.flags.pendingRegrow) Game.newDayRegrow(true);
     SND.splash();
     SND.setScene('surface');
     if (count > 0) Game.toast(`Stored ${count} shells (worth ~$${value})`);
@@ -320,7 +389,7 @@ const DiveScene = {
   },
 
   exitGrowth() {
-    const alive = this.nodes.filter(n => n.kind !== 'urchin' && n.alive).length;
+    const alive = this.nodes.filter(n => !n.decor && n.kind !== 'urchin' && n.alive).length;
     G.growth[this.p] = alive / this.totalHarv;
   },
 
@@ -331,10 +400,6 @@ const DiveScene = {
     for (const f of this.fish) f.flee = true;
     SND.setScene('shark');
     this.msgSet('...the water goes quiet.', 3);
-  },
-
-  sharkBlocksSurface() {
-    return this.shark && ['omen', 'pass', 'stare', 'attack'].includes(this.shark.state);
   },
 
   updateShark(dt) {
@@ -440,6 +505,7 @@ const DiveScene = {
         this.bag = {}; this.bagCount = 0;
         this.exitGrowth();
         G.day++; G.clock = 0.3;
+        Game.newDayRegrow(true);
         Game.save();
         Game.go(HouseScene, { wake: true });
       }
@@ -468,34 +534,40 @@ const DiveScene = {
       return;
     }
 
-    // surfacing
-    if (Input.p('KeyQ') || Input.p('KeyE')) {
-      if (this.sharkBlocksSurface()) {
-        this.msgSet('You are frozen with fear.');
-      } else {
-        this.surface(false);
-        return;
-      }
+    // surfacing: no magic button — swim to the top and keep kicking
+    const holdingUp = Input.keys['KeyW'] || Input.keys['ArrowUp'];
+    if (this.camY <= 1 && holdingUp) {
+      this.surfaceT += dt;
+      if (this.surfaceT > 0.45) { this.surface(false); return; }
+    } else {
+      this.surfaceT = Math.max(0, this.surfaceT - dt * 2);
     }
 
-    // scraping — hold to grind; a quick tap also lands one hit (mobile-friendly)
+    // ---- working the wall: scrape crust, then pry the shell loose --------------
     this.scrapeT -= dt;
+    if (this.numbT > 0) this.numbT -= dt;
     const scr = SCRAPERS[G.gear.scraper];
     const mx = Input.mouse.x, my = Input.mouse.y + this.camY;
-    if ((Input.mouse.down || Input.mouse.clicked) && !(this.shark && this.shark.state === 'stare')) {
-      if (this.scrapeT <= 0) {
-        const n = this.nodeAt(mx, my);
-        if (n) {
-          if (n.kind === 'urchin') {
-            if (G.gear.gloves) {
-              this.scrapeT = scr.tick * 1.4;
-              n.hp -= 1; n.shake = 1;
-              SND.scrape();
-              if (n.hp <= 0) {
-                if (this.bagCount >= BAGS[G.gear.bag].cap) { n.hp = 1; this.msgSet(TouchUI.enabled ? 'Bag full! Tap SURFACE' : 'Bag full! Surface with [Q]'); }
-                else this.popNode(n);
-              }
-            } else {
+    const stareLock = this.shark && this.shark.state === 'stare';
+
+    if (this.pry) {
+      // pry in progress: marker swings, release in the window
+      const p = this.pry;
+      p.t += dt;
+      p.marker = Math.sin(p.t * p.speed);
+      if (!p.n.alive) this.pry = null;
+      else if (!Input.mouse.down) {
+        if (p.t < 0.22) this.pry = null;              // twitch: cancel, no penalty
+        else this.resolvePry(Math.abs(p.marker) <= p.win);
+      } else if (p.t > 2.6) {
+        this.resolvePry(false);                        // held too long: it clamps
+      }
+    } else if ((Input.mouse.down || Input.mouse.clicked) && this.numbT <= 0 && !stareLock) {
+      const n = this.nodeAt(mx, my);
+      if (n) {
+        if (n.stage === 'exposed') {
+          if (n.kind === 'urchin' && !G.gear.gloves) {
+            if (this.scrapeT <= 0) {
               this.scrapeT = 0.55;
               this.hurtPlayer(1);
               this.msgSet('OUCH! Sea urchin! (Pry Gloves would help)');
@@ -503,33 +575,116 @@ const DiveScene = {
                 this.particles.push({ x: n.x, y: n.y, vx: rand(-40, 40), vy: rand(-40, 40), t: 0.5, col: '#5a3a8a', s: 1 });
             }
           } else if (this.bagCount >= BAGS[G.gear.bag].cap) {
-            this.scrapeT = 0.4;
-            this.msgSet(TouchUI.enabled ? 'Bag full! Tap SURFACE' : 'Bag full! Surface with [Q]');
-            SND.alarm();
-          } else {
-            this.scrapeT = scr.tick;
-            n.hp -= scr.dmg; n.shake = 1;
-            SND.scrape();
-            for (let i = 0; i < 3; i++)
-              this.particles.push({
-                x: mx + rand(-4, 4), y: my + rand(-4, 4),
-                vx: rand(-25, 25), vy: rand(-40, 10), t: rand(0.25, 0.5),
-                col: G.gear.scraper === 2 && Math.random() < 0.4 ? '#ffe66e' : '#cfc8b8', s: 1,
-              });
-            if (Math.random() < 0.4)
-              this.bubbles.push({ x: mx + rand(-4, 4), y: Input.mouse.y, r: rand(1, 2.5), v: rand(18, 34), wob: rand(TAU) });
-            if (n.hp <= 0) this.popNode(n);
+            if (this.scrapeT <= 0) {
+              this.scrapeT = 0.5;
+              this.msgSet('Bag full! Swim up to the surface!');
+              SND.alarm();
+            }
+          } else if (n.clampT <= 0 && Input.mouse.down) {
+            this.startPry(n);
           }
-        } else {
-          this.scrapeT = 0.16;
-          if (mx > this.WALL_X && mx < this.WALL_X + this.WALL_W && Math.random() < 0.5) {
-            SND.clink();
-            this.particles.push({ x: mx, y: my, vx: rand(-15, 15), vy: rand(-25, 5), t: 0.3, col: '#8a8478', s: 1 });
+        } else if (n.stage === 'crusted' && this.scrapeT <= 0) {
+          this.scrapeT = scr.tick;
+          n.hp -= scr.dmg; n.shake = 1;
+          SND.scrape();
+          for (let i = 0; i < 4; i++)
+            this.particles.push({
+              x: mx + rand(-5, 5), y: my + rand(-5, 5),
+              vx: rand(-30, 30), vy: rand(-45, 10), t: rand(0.25, 0.55),
+              col: Math.random() < 0.55 ? '#8a9484' : (G.gear.scraper === 2 && Math.random() < 0.5 ? '#ffe66e' : '#cfc8b8'), s: 1,
+            });
+          if (Math.random() < 0.4)
+            this.bubbles.push({ x: mx + rand(-4, 4), y: Input.mouse.y, r: rand(1, 2.5), v: rand(18, 34), wob: rand(TAU) });
+          if (n.hp <= 0) {
+            if (n.kind === 'barnacle') {
+              // barnacles come straight off with the crust
+              if (this.bagCount >= BAGS[G.gear.bag].cap) { n.hp = 1; this.msgSet('Bag full! Swim up to the surface!'); }
+              else this.popNode(n);
+            } else {
+              n.stage = 'exposed';
+              n.shake = 1;
+              SND.ding();
+              this.floaters.push({ x: n.x, y: n.y - n.r - 6, t: 1, txt: 'Exposed! Hold to pry', col: '#a0f2b4' });
+              for (let i = 0; i < 8; i++)
+                this.particles.push({
+                  x: n.x + rand(-n.r, n.r) * 0.7, y: n.y + rand(-n.r, n.r) * 0.6,
+                  vx: rand(-40, 40), vy: rand(-55, 5), t: rand(0.3, 0.7),
+                  col: '#8a9484', s: rand(1, 2), rot: rand(TAU), vr: rand(-8, 8), chunk: true,
+                });
+            }
           }
+        }
+      } else if (this.scrapeT <= 0) {
+        this.scrapeT = 0.16;
+        if (mx > this.WALL_X && mx < this.WALL_X + this.WALL_W && Math.random() < 0.5) {
+          SND.clink();
+          this.particles.push({ x: mx, y: my, vx: rand(-15, 15), vy: rand(-25, 5), t: 0.3, col: '#8a8478', s: 1 });
         }
       }
     }
-    for (const n of this.nodes) if (n.shake > 0) n.shake -= dt * 4;
+    for (const n of this.nodes) {
+      if (n.shake > 0) n.shake -= dt * 4;
+      if (n.clampT > 0) n.clampT -= dt;
+    }
+
+    // ---- jellyfish -------------------------------------------------------------
+    for (const j of this.jellies) {
+      j.wy -= j.vy * dt;
+      j.x += Math.sin(this.time * 0.9 + j.sway) * 7 * dt;
+      if (j.wy < -30) { j.wy = this.maxCam + H + 20; j.x = rand(20, W - 20); }
+      if (j.cd > 0) j.cd -= dt;
+      const sy = j.wy - this.camY;
+      if (sy > -20 && sy < H + 20 && j.cd <= 0) {
+        const dx = Input.mouse.x - j.x, dy = Input.mouse.y - sy;
+        if (dx * dx + dy * dy < (j.r + 5) * (j.r + 5) && (Input.mouse.down || this.pry)) {
+          j.cd = 1.4;
+          this.pry = null;
+          this.numbT = 1.6;
+          this.hurtPlayer(0.5);
+          SND.zap();
+          this.msgSet('Jellyfish sting! Your paw is numb...');
+        }
+      }
+    }
+
+    // ---- moray eels ------------------------------------------------------------
+    for (const n of this.nodes) {
+      if (n.kind !== 'eelhole') continue;
+      const e = n.eel;
+      e.t -= dt;
+      if (e.state === 'hidden' && e.t <= 0) { e.state = 'peek'; e.t = 2.2 + rand(0, 1.2); }
+      else if (e.state === 'peek') {
+        const dx = Input.mouse.x - n.x, dy = (Input.mouse.y + this.camY) - n.y;
+        const near = dx * dx + dy * dy < 36 * 36;
+        if (near && (Input.mouse.down || this.pry)) {
+          e.state = 'strike'; e.t = 0.5; e.bit = false;
+        } else if (e.t <= 0) { e.state = 'hidden'; e.t = 3.5 + rand(0, 4); }
+      } else if (e.state === 'strike') {
+        if (!e.bit && e.t < 0.3) {
+          e.bit = true;
+          const dx = Input.mouse.x - n.x, dy = (Input.mouse.y + this.camY) - n.y;
+          if (dx * dx + dy * dy < 48 * 48) {
+            this.pry = null;
+            this.hurtPlayer(1);
+            this.spillBag(2);
+            SND.bite();
+            this.msgSet('Moray bite! Watch the dens!');
+          }
+        }
+        if (e.t <= 0) { e.state = 'hidden'; e.t = 5 + rand(0, 4); }
+      }
+    }
+
+    // ---- schools of fish ---------------------------------------------------------
+    for (const s of this.schools) {
+      if (this.shark && !s.flee) { s.flee = true; s.speed *= 4; }
+      if (!this.shark && s.flee) { s.flee = false; s.speed = rand(22, 34); }
+      s.x += s.dir * s.speed * dt;
+      s.y += Math.sin(this.time * 0.5 + s.ph) * 8 * dt - (this.camY - before) * 0.2;
+      s.y = clamp(s.y, 20, H - 20);
+      if (s.x < -80) { s.x = W + 80; s.y = rand(40, H - 40); }
+      if (s.x > W + 80) { s.x = -80; s.y = rand(40, H - 40); }
+    }
 
     // barracuda (only past the first piling, or at night)
     if (this.p >= 1 || isNight(G.clock)) {
@@ -624,10 +779,14 @@ const DiveScene = {
 
   // ---- drawing ---------------------------------------------------------------
   drawNode(ctx, n, sy) {
+    if (n.kind === 'star') { this.drawStar(ctx, n, sy); return; }
+    if (n.kind === 'anemone') { this.drawAnemone(ctx, n, sy); return; }
+    if (n.kind === 'eelhole') { this.drawEelhole(ctx, n, sy); return; }
     const sx = n.x + (n.shake > 0 ? rand(-1.3, 1.3) : 0);
     const jy = sy + (n.shake > 0 ? rand(-1, 1) : 0);
     ctx.save();
     ctx.translate(Math.round(sx * DPX) / DPX, Math.round(jy * DPX) / DPX);
+    if (n.clampT > 0) ctx.scale(1, 0.88);   // clamped down tight
     const rng = mulberry32(n.seed);
     const r = n.r;
 
@@ -804,29 +963,139 @@ const DiveScene = {
         ctx.beginPath(); ctx.arc(0, 0, r + 5, 0, TAU); ctx.stroke();
       }
     }
-    // cracks
-    if (n.hp < n.maxHp && n.kind !== 'urchin') {
-      const frac = 1 - n.hp / n.maxHp;
-      ctx.strokeStyle = 'rgba(16,10,5,0.9)';
-      ctx.lineWidth = PIX * 2;
-      const cracks = Math.ceil(frac * 4);
-      const crng = mulberry32(n.seed + 5);
-      for (let i = 0; i < cracks; i++) {
+    // crust overlay: lumps chip away one by one as you scrape
+    if (n.stage === 'crusted') {
+      const frac = n.hp / n.maxHp;
+      const crng = mulberry32(n.seed + 9);
+      const lumps = 9;
+      const visible = Math.ceil(lumps * frac);
+      for (let i = 0; i < lumps; i++) {
+        // draw all rng values first so lump shapes stay stable as they vanish
         const a = crng() * TAU;
-        const midA = a + crng() * 0.5 - 0.25;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * 1.5, Math.sin(a) * 1.5);
-        ctx.lineTo(Math.cos(midA) * r * 0.5, Math.sin(midA) * r * 0.5);
-        ctx.lineTo(Math.cos(midA + crng() * 0.6 - 0.3) * r * 0.9, Math.sin(midA + crng() * 0.6 - 0.3) * r * 0.9);
-        ctx.stroke();
+        const rr = crng() * n.r * 0.72;
+        const lr = n.r * (0.3 + crng() * 0.3);
+        const rot = crng() * 2;
+        if (i >= visible) continue;
+        ctx.fillStyle = ['#6e7d6a', '#8a9484', '#5c6a58'][i % 3];
+        ctx.beginPath(); ctx.ellipse(Math.cos(a) * rr, Math.sin(a) * rr * 0.75, lr, lr * 0.75, rot, 0, TAU); ctx.fill();
+        ctx.fillStyle = 'rgba(200,208,196,0.5)';
+        ctx.fillRect(Math.cos(a) * rr - lr * 0.3, Math.sin(a) * rr * 0.75 - lr * 0.4, 1.5, 1);
       }
-      // loosened wobble: nearly-dead shells lean away from the wall
-      if (frac > 0.6) {
-        ctx.globalAlpha = 0.3;
-        ctx.fillStyle = '#d8d0c0';
-        ctx.fillRect(-r * 0.3, -r - 1.5, r * 0.6, PIX * 2);
-        ctx.globalAlpha = 1;
+      // dusting of grit over everything still crusted
+      ctx.fillStyle = 'rgba(150,158,146,0.5)';
+      for (let i = 0; i < visible; i++) {
+        const a = crng() * TAU, rr = crng() * n.r * 0.9;
+        ctx.fillRect(Math.cos(a) * rr, Math.sin(a) * rr * 0.75, 1, 1);
       }
+    }
+    // exposed and ready to pry: soft beckoning glow
+    if (n.stage === 'exposed' && n.kind !== 'urchin') {
+      ctx.strokeStyle = `rgba(160,242,180,${0.28 + Math.sin(this.time * 3 + n.phase) * 0.16})`;
+      ctx.lineWidth = PIX * 2;
+      ctx.beginPath(); ctx.ellipse(0, 0.5, n.r * 1.14, n.r * 0.92, 0, 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
+  },
+
+  drawStar(ctx, n, sy) {
+    ctx.save();
+    ctx.translate(Math.round(n.x * DPX) / DPX, Math.round(sy * DPX) / DPX);
+    const wig = Math.sin(this.time * 0.7 + n.phase) * 0.07;
+    ctx.rotate(n.phase + wig);
+    const cols = [['#e8735a', '#f2957e'], ['#d85a8a', '#e87aa8'], ['#c86a3c', '#e88a5c']];
+    const [base, light] = cols[n.seed % 3];
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.ellipse(1, 1.2, n.r * 1.1, n.r * 0.9, 0, 0, TAU); ctx.fill();
+    for (let i = 0; i < 5; i++) {
+      const a = i / 5 * TAU - Math.PI / 2;
+      ctx.fillStyle = base;
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a) * n.r * 0.5, Math.sin(a) * n.r * 0.5, n.r * 0.52, n.r * 0.24, a, 0, TAU);
+      ctx.fill();
+    }
+    ctx.fillStyle = base;
+    ctx.beginPath(); ctx.arc(0, 0, n.r * 0.42, 0, TAU); ctx.fill();
+    ctx.fillStyle = light;
+    ctx.beginPath(); ctx.arc(-0.5, -0.5, n.r * 0.24, 0, TAU); ctx.fill();
+    // bumps down each arm
+    ctx.fillStyle = light;
+    for (let i = 0; i < 5; i++) {
+      const a = i / 5 * TAU - Math.PI / 2;
+      ctx.fillRect(Math.cos(a) * n.r * 0.55, Math.sin(a) * n.r * 0.55, 1, 1);
+      ctx.fillRect(Math.cos(a) * n.r * 0.8, Math.sin(a) * n.r * 0.8, PIX * 2, PIX * 2);
+    }
+    ctx.restore();
+  },
+
+  drawAnemone(ctx, n, sy) {
+    ctx.save();
+    ctx.translate(Math.round(n.x * DPX) / DPX, Math.round(sy * DPX) / DPX);
+    // base
+    ctx.fillStyle = '#7a3c46';
+    ctx.beginPath(); ctx.ellipse(0, 1.5, n.r * 0.9, n.r * 0.55, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#94505a';
+    ctx.beginPath(); ctx.ellipse(0, 0.8, n.r * 0.7, n.r * 0.4, 0, 0, TAU); ctx.fill();
+    // tentacles swaying with the water
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9 - 0.5) * 2.4;
+      const sw = Math.sin(this.time * 1.6 + n.phase + i * 0.8) * 2.4;
+      ctx.strokeStyle = i % 2 ? '#8ad0c2' : '#aee2d2';
+      ctx.lineWidth = PIX * 2;
+      ctx.beginPath();
+      ctx.moveTo(a * n.r * 0.4, 0);
+      ctx.quadraticCurveTo(a * n.r * 0.6 + sw * 0.5, -n.r * 0.7, a * n.r * 0.8 + sw, -n.r * 1.25);
+      ctx.stroke();
+      ctx.fillStyle = '#f2b8d0';
+      ctx.fillRect(a * n.r * 0.8 + sw - PIX, -n.r * 1.25 - PIX, PIX * 2, PIX * 2);
+    }
+    ctx.restore();
+  },
+
+  drawEelhole(ctx, n, sy) {
+    ctx.save();
+    ctx.translate(Math.round(n.x * DPX) / DPX, Math.round(sy * DPX) / DPX);
+    // rocky rim + dark den
+    ctx.fillStyle = '#1c1610';
+    ctx.beginPath(); ctx.ellipse(0, 0, n.r + 2, n.r * 0.8 + 1.5, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#0a0805';
+    ctx.beginPath(); ctx.ellipse(0, 0, n.r, n.r * 0.75, 0, 0, TAU); ctx.fill();
+    const rrng = mulberry32(n.seed);
+    ctx.fillStyle = '#4a4238';
+    for (let i = 0; i < 7; i++) {
+      const a = rrng() * TAU;
+      ctx.fillRect(Math.cos(a) * (n.r + 1.5), Math.sin(a) * (n.r * 0.8 + 1), 2, 1.5);
+    }
+    const e = n.eel;
+    if (e.state === 'peek') {
+      // eyes glowing in the dark, sizing you up
+      const g = 0.65 + Math.sin(this.time * 5 + n.phase) * 0.3;
+      ctx.fillStyle = `rgba(150,255,140,${g})`;
+      ctx.fillRect(-4, -2, 2, 2);
+      ctx.fillRect(2, -2, 2, 2);
+      ctx.fillStyle = 'rgba(60,80,50,0.8)';
+      ctx.beginPath(); ctx.ellipse(0, 2, n.r * 0.5, n.r * 0.3, 0, 0, TAU); ctx.fill();
+    } else if (e.state === 'strike') {
+      const prog = 1 - e.t / 0.5;
+      const ext = Math.sin(prog * Math.PI) * 42;
+      const ang = Math.atan2((Input.mouse.y + this.camY) - n.y, Input.mouse.x - n.x);
+      ctx.rotate(ang);
+      // body tube
+      ctx.fillStyle = '#3c5a3a';
+      ctx.fillRect(0, -4, ext, 8);
+      ctx.fillStyle = '#54774e';
+      ctx.fillRect(0, -4, ext, 3);
+      // head with open jaw
+      ctx.save();
+      ctx.translate(ext, 0);
+      ctx.fillStyle = '#3c5a3a';
+      ctx.beginPath(); ctx.ellipse(0, 0, 8, 5.5, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#28211c';
+      ctx.beginPath(); ctx.moveTo(2, -1); ctx.lineTo(11, -5); ctx.lineTo(11, 5); ctx.lineTo(2, 1); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#e8e4da';
+      ctx.fillRect(8, -4, 1.5, 2); ctx.fillRect(8, 2, 1.5, 2);
+      ctx.fillStyle = '#f2ff9a';
+      ctx.fillRect(-2, -3.5, 2, 2);
+      ctx.restore();
     }
     ctx.restore();
   },
@@ -985,11 +1254,44 @@ const DiveScene = {
       ctx.restore();
     }
 
+    // schools of little fish weaving behind the piling
+    for (const s of this.schools) {
+      for (const m of s.members) {
+        const fx = s.x + m.ox * s.dir;
+        const fy = s.y + m.oy + Math.sin(this.time * 3 + m.ph) * 2.2;
+        ctx.save();
+        ctx.translate(fx, fy);
+        ctx.scale(s.dir, 1);
+        ctx.fillStyle = 'rgba(122,172,192,0.55)';
+        ctx.beginPath(); ctx.ellipse(0, 0, 2.8, 1.2, 0, 0, TAU); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-2.6, 0); ctx.lineTo(-4.4, -1.4); ctx.lineTo(-4.4, 1.4); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+    }
+
     // the piling wall (DPX-dense texture)
     if (this.wallCanvas) {
       ctx.drawImage(this.wallCanvas,
         0, this.camY * DPX, this.wallCanvas.width, H * DPX,
         this.WALL_X - 12, 0, this.wallCanvas.width / DPX, H);
+    }
+
+    // dancing caustic light on the wall near the surface
+    if (this.camY < 170 && !night) {
+      const cAlpha = 0.85 * (1 - this.camY / 170);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 7; i++) {
+        const wy = i * 26 + Math.sin(this.time * 0.6 + i * 1.7) * 12;
+        const sy = wy - this.camY;
+        if (sy < -10 || sy > H) continue;
+        const cx = this.WALL_X + 16 + ((i * 53 + Math.sin(this.time * 0.8 + i) * 30 + 200) % (this.WALL_W - 32));
+        ctx.fillStyle = `rgba(140,200,230,${0.05 * cAlpha})`;
+        ctx.beginPath(); ctx.ellipse(cx, sy, 24, 7, Math.sin(this.time + i) * 0.3, 0, TAU); ctx.fill();
+        ctx.fillStyle = `rgba(190,235,255,${0.05 * cAlpha})`;
+        ctx.beginPath(); ctx.ellipse(cx + 6, sy + 2, 11, 3.5, 0, 0, TAU); ctx.fill();
+      }
+      ctx.restore();
     }
 
     // kelp strands swaying along the piling edges
@@ -1027,8 +1329,33 @@ const DiveScene = {
     for (const n of this.nodes) {
       if (!n.alive) continue;
       const sy = n.y - this.camY;
-      if (sy < -24 || sy > H + 24) continue;
+      if (sy < -30 || sy > H + 30) continue;
       this.drawNode(ctx, n, sy);
+    }
+
+    // pry minigame bar above the shell being levered
+    if (this.pry) {
+      const p = this.pry;
+      const bx = clamp(p.n.x, 60, W - 60);
+      const by = p.n.y - this.camY - p.n.r - 18;
+      uiPanel(ctx, bx - 30, by - 2, 60, 12, 0.92);
+      // green window
+      const halfW = 26;
+      const winPx = p.win * halfW;
+      ctx.fillStyle = '#14301c';
+      ctx.fillRect(bx - halfW, by + 1, halfW * 2, 6);
+      ctx.fillStyle = '#3f9a58';
+      ctx.fillRect(bx - winPx, by + 1, winPx * 2, 6);
+      ctx.fillStyle = 'rgba(180,255,200,0.5)';
+      ctx.fillRect(bx - winPx, by + 1, winPx * 2, 1);
+      // swinging marker
+      const mxk = bx + p.marker * halfW;
+      ctx.fillStyle = '#ffe66e';
+      ctx.beginPath();
+      ctx.moveTo(mxk, by + 7.5); ctx.lineTo(mxk - 3, by + 12.5); ctx.lineTo(mxk + 3, by + 12.5);
+      ctx.closePath(); ctx.fill();
+      ctx.fillRect(mxk - PIX, by + 1, PIX * 2, 6);
+      text(ctx, 'release!', bx, by - 10, { size: 7, color: '#ffe6b0', align: 'center' });
     }
 
     // particles (world space)
@@ -1069,6 +1396,45 @@ const DiveScene = {
     // marine snow
     ctx.fillStyle = 'rgba(210,225,230,0.35)';
     for (const s of this.snow) ctx.fillRect(Math.round(s.x), Math.round(s.y), 1, 1);
+
+    // jellyfish
+    for (const j of this.jellies) {
+      const sy = j.wy - this.camY;
+      if (sy < -30 || sy > H + 30) continue;
+      const pulse = 1 + Math.sin(this.time * 2.2 + j.sway) * 0.14;
+      ctx.save();
+      ctx.translate(j.x, sy);
+      // tentacles
+      for (let i = 0; i < 5; i++) {
+        const tx = (i - 2) * j.r * 0.32;
+        ctx.strokeStyle = i % 2 ? 'rgba(232,160,200,0.4)' : 'rgba(200,138,224,0.4)';
+        ctx.lineWidth = PIX * 2;
+        ctx.beginPath();
+        ctx.moveTo(tx, j.r * 0.3);
+        ctx.quadraticCurveTo(tx + Math.sin(this.time * 2.6 + i) * 3, j.r * 0.9, tx + Math.sin(this.time * 1.8 + i * 2) * 5, j.r * 1.7);
+        ctx.stroke();
+      }
+      // bell
+      ctx.fillStyle = 'rgba(232,160,200,0.55)';
+      ctx.beginPath(); ctx.ellipse(0, 0, j.r * pulse, j.r * 0.8 / pulse, 0, Math.PI, 0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(248,208,230,0.55)';
+      ctx.beginPath(); ctx.ellipse(-j.r * 0.2, -j.r * 0.2, j.r * 0.55 * pulse, j.r * 0.4, 0, Math.PI, 0); ctx.closePath(); ctx.fill();
+      if (night) {
+        ctx.fillStyle = 'rgba(248,190,225,0.12)';
+        ctx.beginPath(); ctx.arc(0, 0, j.r * 1.6, 0, TAU); ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // bioluminescent plankton after dark
+    if (night) {
+      for (const pl of this.plankton) {
+        const py = ((pl.y - this.time * pl.v) % H + H) % H;
+        const tw = Math.abs(Math.sin(this.time * 1.4 + pl.ph));
+        ctx.fillStyle = `rgba(122,242,232,${0.25 + tw * 0.45})`;
+        ctx.fillRect(pl.x + Math.sin(this.time * 0.7 + pl.ph) * 4, py, PIX * 2, PIX * 2);
+      }
+    }
 
     // barracuda
     const b = this.barra;
@@ -1204,8 +1570,33 @@ const DiveScene = {
     text(ctx, `${Math.round((this.camY + H * 0.5) / 12)}m`, W - 9, 29, { size: 8, color: '#9fc4d4', align: 'right' });
     ctx.fillStyle = '#5ad2f0';
     ctx.beginPath(); ctx.moveTo(W - 41, 30); ctx.lineTo(W - 38, 35.5); ctx.lineTo(W - 35, 30); ctx.closePath(); ctx.fill();
-    if (!TouchUI.enabled)
-      text(ctx, '[Q] surface', 10, H - 38, { size: 7, color: 'rgba(200,225,235,0.65)' });
+    // near the top: the surface itself shimmers into view + kick-up prompt
+    if (this.camY < 46) {
+      const wl = 20 - this.camY;   // waterline screen y
+      if (wl > -8) {
+        ctx.fillStyle = 'rgba(220,245,255,0.35)';
+        for (let x = 0; x < W; x += 7)
+          ctx.fillRect(x, wl + Math.sin(x * 0.09 + this.time * 2.4) * 2.2, 5, 1.2);
+        ctx.fillStyle = 'rgba(190,230,250,0.12)';
+        ctx.fillRect(0, 0, W, Math.max(0, wl));
+      }
+      const bob = Math.sin(this.time * 3.2) * 2.5;
+      const active = this.surfaceT > 0;
+      ctx.fillStyle = active ? '#ffe66e' : 'rgba(200,235,250,0.8)';
+      for (let i = 0; i < 2; i++) {
+        ctx.beginPath();
+        ctx.moveTo(W / 2, 30 + bob + i * 7);
+        ctx.lineTo(W / 2 - 6, 37 + bob + i * 7);
+        ctx.lineTo(W / 2 + 6, 37 + bob + i * 7);
+        ctx.closePath(); ctx.fill();
+      }
+      text(ctx, active ? 'kick! kick!' : 'swim up to surface', W / 2, 48 + bob, { size: 7, color: active ? '#ffe66e' : 'rgba(200,235,250,0.8)', align: 'center' });
+      if (active) {
+        rrect(ctx, W / 2 - 20, 58 + bob, 40, 4, '#08141c', '#2c4654');
+        ctx.fillStyle = '#ffe66e';
+        ctx.fillRect(W / 2 - 19, 59 + bob, 38 * clamp(this.surfaceT / 0.45, 0, 1), 2);
+      }
+    }
     // combo
     if (this.combo >= 3) {
       const cs = 9 + Math.min(this.combo, 15);
@@ -1258,28 +1649,61 @@ const DiveScene = {
   drawCursor(ctx) {
     const mx = Input.mouse.x, my = Input.mouse.y;
     const scraping = Input.mouse.down;
+    // the right tool comes out on its own: crowbar over pry-ready shells
+    const hover = this.nodeAt(mx, my + this.camY);
+    const pryMode = !!this.pry || (hover && hover.stage === 'exposed' && (hover.kind !== 'urchin' || G.gear.gloves));
     ctx.save();
     ctx.translate(mx, my);
-    if (scraping) ctx.rotate(Math.sin(this.time * 40) * 0.12);
-    // paw
-    ctx.fillStyle = '#6b4a2f';
-    ctx.beginPath(); ctx.arc(6, 8, 5, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#8a6444';
-    ctx.beginPath(); ctx.arc(6, 8, 3.4, 0, TAU); ctx.fill();
-    // handle
-    ctx.fillStyle = '#7a3c1e';
-    ctx.fillRect(1, 2, 3, 8);
-    // blade
-    const bladeCol = ['#9aa0a0', '#c8d0d4', '#ffe66e'][G.gear.scraper];
-    ctx.fillStyle = bladeCol;
-    ctx.beginPath();
-    ctx.moveTo(-6, -6); ctx.lineTo(4, -1); ctx.lineTo(4, 3); ctx.lineTo(-8, -1);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.fillRect(-6, -5, 6, 1);
-    if (G.gear.scraper === 2 && scraping && Math.random() < 0.5) {
-      ctx.fillStyle = '#ffe66e';
-      ctx.fillRect(rand(-8, 0), rand(-8, -2), 1, 1);
+    if (this.numbT > 0) {
+      ctx.translate(rand(-1, 1), rand(-1, 1));
+      if (Math.random() < 0.4) {
+        ctx.fillStyle = '#f2b8d0';
+        ctx.fillRect(rand(-9, 9), rand(-9, 9), 1, 1);
+      }
+    }
+    if (pryMode) {
+      // pry bar levers with the marker
+      const lean = this.pry ? this.pry.marker * 0.45 : -0.25;
+      ctx.rotate(lean);
+      // paw grip
+      ctx.fillStyle = '#6b4a2f';
+      ctx.beginPath(); ctx.arc(7, 9, 5, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#8a6444';
+      ctx.beginPath(); ctx.arc(7, 9, 3.4, 0, TAU); ctx.fill();
+      // bar
+      const barCol = ['#b06a3c', '#c8d0d4', '#ffd24e'][G.gear.pry];
+      ctx.fillStyle = barCol;
+      ctx.save();
+      ctx.rotate(-0.7);
+      ctx.fillRect(-2, -12, 3, 22);
+      ctx.restore();
+      // hooked tip
+      ctx.strokeStyle = barCol; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(-9.5, -6.5, 3.5, Math.PI * 0.9, Math.PI * 1.9); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.fillRect(-3, -8, 1, 8);
+    } else {
+      if (scraping) ctx.rotate(Math.sin(this.time * 40) * 0.12);
+      // paw
+      ctx.fillStyle = '#6b4a2f';
+      ctx.beginPath(); ctx.arc(6, 8, 5, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#8a6444';
+      ctx.beginPath(); ctx.arc(6, 8, 3.4, 0, TAU); ctx.fill();
+      // handle
+      ctx.fillStyle = '#7a3c1e';
+      ctx.fillRect(1, 2, 3, 8);
+      // blade
+      const bladeCol = ['#9aa0a0', '#c8d0d4', '#ffe66e'][G.gear.scraper];
+      ctx.fillStyle = bladeCol;
+      ctx.beginPath();
+      ctx.moveTo(-6, -6); ctx.lineTo(4, -1); ctx.lineTo(4, 3); ctx.lineTo(-8, -1);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fillRect(-6, -5, 6, 1);
+      if (G.gear.scraper === 2 && scraping && Math.random() < 0.5) {
+        ctx.fillStyle = '#ffe66e';
+        ctx.fillRect(rand(-8, 0), rand(-8, -2), 1, 1);
+      }
     }
     ctx.restore();
   },

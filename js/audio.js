@@ -117,6 +117,29 @@ const SND = {
     this.tone({ f: 52, f2: 34, type: 'sine', d: 0.1, v: v * 0.6, t: 0.16 });
   },
   sleepy() { [523, 392, 329, 261].forEach((f, i) => this.tone({ f, type: 'triangle', d: 0.6, v: 0.09, t: i * 0.16, fx: true })); },
+  pryCreak() {
+    this.tone({ f: 140, f2: 220, type: 'sawtooth', d: 0.3, v: 0.08 });
+    this.noise({ f: 350, f2: 600, d: 0.25, v: 0.08, q: 3 });
+  },
+  clank() {
+    this.tone({ f: 320, f2: 120, type: 'square', d: 0.12, v: 0.2 });
+    this.noise({ f: 800, f2: 300, d: 0.1, v: 0.18 });
+  },
+  ding() { this.tone({ f: 990, type: 'triangle', d: 0.3, v: 0.14, fx: true }); this.tone({ f: 1480, type: 'sine', d: 0.25, v: 0.08, t: 0.05, fx: true }); },
+  zap() {
+    this.tone({ f: 620, f2: 180, type: 'sawtooth', d: 0.18, v: 0.2 });
+    this.noise({ f: 2400, f2: 900, d: 0.15, v: 0.15, q: 4 });
+  },
+  crackHit(perfect) {
+    this.noise({ f: 1800, f2: 500, d: 0.08, v: 0.3 });
+    this.tone({ f: perfect ? 520 : 300, f2: 120, type: 'triangle', d: 0.14, v: 0.3 });
+    if (perfect) this.tone({ f: 1040, type: 'sine', d: 0.3, v: 0.1, t: 0.06, fx: true });
+  },
+  smash() {
+    this.noise({ f: 500, f2: 120, d: 0.3, v: 0.35, q: 0.8 });
+    this.tone({ f: 140, f2: 50, type: 'sawtooth', d: 0.25, v: 0.25 });
+  },
+  rub() { this.noise({ f: rand(2000, 3200), f2: rand(1200, 1800), d: 0.09, v: 0.05, q: 2.5 }); },
 
   droneOn() {
     if (!this.ready || this.droneHum || this.muted) return;

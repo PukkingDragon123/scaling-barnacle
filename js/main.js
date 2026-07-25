@@ -83,7 +83,7 @@ const TouchUI = {
   layout() {
     const b = [];
     if (!G || !Game.scene || Game.scene === TitleScene) return b;
-    if (Game.helpOpen || Shop.open) return b;
+    if (Game.helpOpen || Shop.open || Bench.open) return b;
     const sc = Game.scene;
     if (sc === WorldScene || sc === HouseScene) {
       b.push({ x: 8, y: H - 52, w: 44, h: 44, key: 'ArrowLeft', icon: 'left' });
@@ -93,7 +93,6 @@ const TouchUI = {
     } else if (sc === DiveScene) {
       b.push({ x: W - 46, y: H - 122, w: 40, h: 40, key: 'KeyW', icon: 'up' });
       b.push({ x: W - 46, y: H - 76, w: 40, h: 40, key: 'KeyS', icon: 'down' });
-      b.push({ x: 8, y: 34, w: 62, h: 20, tap: 'KeyQ', icon: 'surface' });
     }
     return b;
   },
@@ -108,15 +107,6 @@ const TouchUI = {
     if (!this.enabled) return;
     for (const b of this.buttons) {
       const held = this.isHeld(b);
-      if (b.icon === 'surface') {
-        uiPanel(c, b.x, b.y, b.w, b.h, held ? 0.98 : 0.7);
-        text(c, 'SURFACE', b.x + b.w / 2 + 4, b.y + 6, { size: 7, color: held ? '#ffe66e' : '#bfe8f5', align: 'center' });
-        c.fillStyle = held ? '#ffe66e' : '#bfe8f5';
-        c.beginPath();
-        c.moveTo(b.x + 7, b.y + 13); c.lineTo(b.x + 10.5, b.y + 7); c.lineTo(b.x + 14, b.y + 13);
-        c.closePath(); c.fill();
-        continue;
-      }
       if (b.icon === 'help') {
         uiPanel(c, b.x, b.y, b.w, b.h, held ? 0.98 : 0.6);
         text(c, '?', b.x + b.w / 2, b.y + 4, { size: 9, color: '#efe0bc', align: 'center' });
@@ -252,6 +242,17 @@ const Game = {
     this.save();
   },
 
+  // Shell beds only come back overnight — and only some of them. Each piling
+  // rolls its own fortune; a lucky day is a bounty, a poor one sends you deeper.
+  newDayRegrow(force) {
+    if (!force && this.scene === DiveScene) { G.flags.pendingRegrow = true; return; }
+    for (let i = 0; i < 3; i++) {
+      G.growth[i] = clamp(rand(0.5, 0.78) + (Math.random() < 0.15 ? 0.22 : 0), 0, 1);
+      G.seeds[i]++;
+    }
+    delete G.flags.pendingRegrow;
+  },
+
   globalUpdate(dt) {
     this.time += dt;
     // day cycle: one full day = 5 real minutes
@@ -260,16 +261,8 @@ const Game = {
       G.clock -= 1;
       G.day++;
       this.toast(`Day ${G.day} dawns.`);
+      this.newDayRegrow(false);
       this.save();
-    }
-    // clam regrowth while not diving
-    if (this.scene !== DiveScene) {
-      for (let i = 0; i < 3; i++) {
-        if (G.growth[i] < 1) {
-          G.growth[i] = Math.min(1, G.growth[i] + dt * 0.0045);
-          if (G.growth[i] >= 1) G.seeds[i]++;
-        }
-      }
     }
     // drone shipment
     if (G.pendingCrate) {
@@ -339,28 +332,30 @@ const Game = {
     const lines = touch ? [
       ['ON THE SURFACE', '#5ad2f0'],
       ['  Arrow buttons walk. The paw button interacts.', '#d8ccb4'],
-      ['  Sell shells on the laptop; a drone pays on pickup.', '#d8ccb4'],
-      ['  Sleep in bed: heal up, clams regrow, day advances.', '#d8ccb4'],
+      ['  Laptop sells (drone pays on pickup). Workbench', '#d8ccb4'],
+      ['  cracks shells & polishes treasures -- worth more!', '#d8ccb4'],
+      ['  Sleep to heal. Beds regrow overnight... partly.', '#d8ccb4'],
       ['UNDER THE SEA', '#5ad2f0'],
-      ['  Hold your paw on shells to scrape them loose.', '#d8ccb4'],
-      ['  Right-side arrows swim. SURFACE before O2 runs out!', '#d8ccb4'],
-      ['  Purple urchins sting -- don\'t scrape them barehanded.', '#d8ccb4'],
-      ['  A red "!" means a barracuda -- lift your paw away!', '#d8ccb4'],
+      ['  Scrape crust off a shell, then HOLD to pry --', '#d8ccb4'],
+      ['  let go in the green! No button gets you home:', '#d8ccb4'],
+      ['  SWIM UP before your O2 runs out.', '#ffe6b0'],
+      ['  Urchins sting, jellyfish numb, eels lunge from dens,', '#d8ccb4'],
+      ['  a red "!" is a barracuda -- lift your paw!', '#d8ccb4'],
       ['  If the water goes quiet... DON\'T. MOVE.', '#e8434c'],
-      ['', '#fff'],
       ['  Tap anywhere to close this guide.', '#8a9484'],
     ] : [
       ['ON THE SURFACE', '#5ad2f0'],
       ['  A/D or arrows ... walk        E ... interact', '#d8ccb4'],
-      ['  Sell shells on the laptop; a drone pays on pickup.', '#d8ccb4'],
-      ['  Sleep in bed: heal up, clams regrow, day advances.', '#d8ccb4'],
+      ['  Laptop sells (drone pays on pickup). Workbench', '#d8ccb4'],
+      ['  cracks shells & polishes treasures -- worth more!', '#d8ccb4'],
+      ['  Sleep to heal. Beds regrow overnight... partly.', '#d8ccb4'],
       ['UNDER THE SEA', '#5ad2f0'],
-      ['  Hold LEFT MOUSE ... scrape    W/S or wheel ... swim', '#d8ccb4'],
-      ['  Q ... surface   Watch the O2 bar!', '#d8ccb4'],
-      ['  Purple urchins sting -- don\'t scrape them barehanded.', '#d8ccb4'],
-      ['  A red "!" means a barracuda -- move your paw away!', '#d8ccb4'],
+      ['  Scrape crust (hold LMB), then HOLD on the shell to', '#d8ccb4'],
+      ['  pry -- release in the green! W/S ... swim.', '#d8ccb4'],
+      ['  No surface button: SWIM UP before O2 runs out.', '#ffe6b0'],
+      ['  Urchins sting, jellyfish numb, eels lunge from dens,', '#d8ccb4'],
+      ['  a red "!" is a barracuda -- move your paw!', '#d8ccb4'],
       ['  If the water goes quiet... DON\'T. MOVE.', '#e8434c'],
-      ['', '#fff'],
       ['  M ... mute      H ... close this guide', '#8a9484'],
     ];
     let y = 48;
@@ -482,7 +477,7 @@ const TitleScene = {
     c.fillStyle = 'rgba(0,0,0,0.25)';
     c.beginPath(); c.ellipse(W / 2, 222 + bob * 0.4, 15, 3, 0, 0, TAU); c.fill();
     const blink = (this.time % 3.4) < 0.14;
-    drawSpr(c, SPR.otterR[blink ? 3 : 0], W / 2 - 8, 190 + bob);
+    drawSpr(c, SPR.otterR[blink ? 3 : 0], W / 2 - 6, 186 + bob);
     // title with layered drop shadow
     const wob = Math.sin(this.time * 2) * 2;
     text(c, "MR. OTTO'S", W / 2 + 2, 40 + wob + 2, { size: 26, color: 'rgba(30,12,24,0.8)', align: 'center', shadow: false });
@@ -524,7 +519,7 @@ function frame(now) {
     const muted = SND.toggleMute();
     Game.toast(muted ? 'Sound muted.' : 'Sound on.');
   }
-  if (G && Game.scene !== TitleScene && !Shop.open && Input.p('KeyH'))
+  if (G && Game.scene !== TitleScene && !Shop.open && !Bench.open && Input.p('KeyH'))
     Game.helpOpen = !Game.helpOpen;
 
   // one-time landscape hint on phones
@@ -539,6 +534,8 @@ function frame(now) {
       if (Input.p('Escape') || Input.mouse.clicked) Game.helpOpen = false;
     } else if (Shop.open) {
       Shop.update(dt);
+    } else if (Bench.open) {
+      Bench.update(dt);
     } else if (Game.scene) {
       Game.scene.update(dt);
     }
@@ -554,6 +551,7 @@ function frame(now) {
   ctx.fillRect(0, 0, W, H);
   if (Game.scene) Game.scene.draw(ctx);
   if (Shop.open) Shop.draw(ctx);
+  if (Bench.open) Bench.draw(ctx);
   if (G && Game.scene !== TitleScene) Game.drawHUD(ctx);
   TouchUI.draw(ctx);
   Game.drawToasts(ctx);
