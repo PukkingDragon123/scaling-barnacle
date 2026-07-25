@@ -100,8 +100,19 @@ const WorldScene = {
       this.px = clamp(this.px + mv * 92 * dt, 56, this.endX() - 10);
       this.walkT += dt * 9;
       this.idleT = 0;
+      // little dust puffs kicked up behind him
+      this.dustT = (this.dustT || 0) - dt;
+      if (this.dustT <= 0) {
+        this.dustT = 0.24;
+        if (!this.dust) this.dust = [];
+        this.dust.push({ x: this.px - mv * 5, y: DECK_Y - 0.5, s: rand(1, 1.8), t: rand(0.3, 0.5) });
+      }
     } else {
       this.idleT += dt;
+    }
+    if (this.dust) {
+      for (const d of this.dust) { d.t -= dt; d.y -= 3 * dt; d.x -= (this.dir || 1) * 2 * dt; }
+      this.dust = this.dust.filter(d => d.t > 0);
     }
     this.camX = clamp(this.px - W / 2, 0, this.worldW() - W);
 
@@ -641,16 +652,28 @@ const WorldScene = {
     ctx.fillStyle = 'rgba(240,248,250,0.7)';
     for (const p of this.spray) ctx.fillRect(p.x, p.y, PIX * 2, PIX * 2);
 
-    // ---- player ----------------------------------------------------------------------
+    // ---- player: bouncy squash & stretch ------------------------------------------
+    for (const d of this.dust || []) {
+      ctx.fillStyle = `rgba(200,186,150,${clamp(d.t * 1.6, 0, 0.55)})`;
+      ctx.beginPath(); ctx.arc(d.x, d.y, d.s * (1.6 - d.t), 0, TAU); ctx.fill();
+    }
     const frames = this.dir >= 0 ? SPR.otterR : SPR.otterL;
-    let frame = 0;
-    if (this.walkT > 0 && this.idleT < 0.1) frame = 1 + (Math.floor(this.walkT) % 2);
-    else if ((this.time % 3.6) < 0.13) frame = 3;
-    const bob = frame === 2 ? -0.5 : 0;
-    // soft shadow
+    const walking = this.walkT > 0 && this.idleT < 0.1;
+    let frame = 0, sqx = 1, sqy = 1, hop = 0;
+    if (walking) {
+      frame = 1 + (Math.floor(this.walkT) % 2);
+      const ph = this.walkT * 2.2;
+      hop = Math.abs(Math.sin(ph)) * 1.8;
+      sqy = 1 + Math.cos(ph * 2) * 0.05;      // stretch at the hop apex, squash on landing
+      sqx = 1 - (sqy - 1) * 0.85;
+    } else {
+      if ((this.time % 3.6) < 0.13) frame = 3;
+      sqy = 1 + Math.sin(this.time * 2.1) * 0.02;   // gentle breathing
+      sqx = 1 - (sqy - 1) * 0.7;
+    }
     ctx.fillStyle = 'rgba(0,0,0,0.28)';
-    ctx.beginPath(); ctx.ellipse(this.px, DECK_Y + 0.5, 6, 1.5, 0, 0, TAU); ctx.fill();
-    drawSpr(ctx, frames[frame], this.px - 6, DECK_Y - 16.5 + bob);
+    ctx.beginPath(); ctx.ellipse(this.px, DECK_Y + 0.6, Math.max(3.5, 6 - hop * 0.9), 1.5, 0, 0, TAU); ctx.fill();
+    drawOtto(ctx, frames[frame], this.px, DECK_Y + 0.5, sqx, sqy, hop);
 
     // interact prompt bubble
     let best = null, bd = 20;
@@ -744,28 +767,121 @@ const WorldScene = {
     const lvl = G.house;
     const top = this.houseTop();
     const x0 = lvl >= 3 ? 64 : 78, x1 = lvl >= 3 ? 212 : 202;
-    const wallA = lvl >= 3 ? '#7a6248' : (lvl === 2 ? '#6e5a40' : '#5f4a30');
-    const wallB = lvl >= 3 ? '#6e563c' : (lvl === 2 ? '#634e36' : '#544026');
-    const roof = lvl >= 3 ? '#8a3c30' : (lvl === 2 ? '#7a4838' : '#4a3826');
-    const roofDark = lvl >= 3 ? '#6e2c22' : (lvl === 2 ? '#623428' : '#3a2c1c');
-    const trim = lvl >= 3 ? '#3f8f8f' : (lvl === 2 ? '#4a8f7a' : '#3a2c18');
+    // a proper fisherman's hut: weathered boards -> falu red -> deep teal
+    const wallA = lvl >= 3 ? '#2f6a68' : (lvl === 2 ? '#9e3f32' : '#7c6a52');
+    const wallB = lvl >= 3 ? '#285c5a' : (lvl === 2 ? '#8a352a' : '#6e5c46');
+    const trim = '#e2d6b4';
+    const trimDark = '#b8ac8c';
+    const roof = lvl >= 3 ? '#8a3c30' : (lvl === 2 ? '#3f3d38' : '#4a3826');
+    const roofDark = lvl >= 3 ? '#6e2c22' : (lvl === 2 ? '#302e2a' : '#3a2c1c');
 
-    // walls: horizontal siding planks, alternating tones with knots
+    // walls: vertical board-and-batten with weathering streaks
     const rng = mulberry32(99 + lvl);
-    for (let y = top + 12, i = 0; y < DECK_Y; y += 5, i++) {
-      ctx.fillStyle = i % 2 ? wallB : wallA;
-      ctx.fillRect(x0, y, x1 - x0, 5);
-      ctx.fillStyle = 'rgba(0,0,0,0.22)';
-      ctx.fillRect(x0, y, x1 - x0, PIX);
-      if (rng() > 0.6) {
-        ctx.fillStyle = 'rgba(30,20,10,0.45)';
-        ctx.fillRect(x0 + 6 + rng() * (x1 - x0 - 16), y + 1.5, 2, 1.5);
+    ctx.fillStyle = wallA;
+    ctx.fillRect(x0, top + 12, x1 - x0, DECK_Y - top - 12);
+    for (let x = x0, i = 0; x < x1; x += 7, i++) {
+      if (rng() > 0.55) {
+        ctx.fillStyle = wallB;
+        ctx.fillRect(x, top + 12, Math.min(7, x1 - x), DECK_Y - top - 12);
+      }
+      // batten strip
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillRect(x, top + 12, PIX * 2, DECK_Y - top - 12);
+      // salt weathering near the deck
+      if (rng() > 0.5) {
+        ctx.fillStyle = 'rgba(226,214,180,0.16)';
+        ctx.fillRect(x + 1.5, DECK_Y - 5 - rng() * 7, 4, 2 + rng() * 4);
       }
     }
-    // corner trim boards
-    ctx.fillStyle = '#4a3820';
+    // cream corner boards + baseboard — crisp trim sells the paint job
+    ctx.fillStyle = trim;
     ctx.fillRect(x0, top + 12, 3, DECK_Y - top - 12);
     ctx.fillRect(x1 - 3, top + 12, 3, DECK_Y - top - 12);
+    ctx.fillRect(x0, DECK_Y - 3, x1 - x0, 3);
+    ctx.fillStyle = trimDark;
+    ctx.fillRect(x0 + 2.5, top + 12, PIX, DECK_Y - top - 12);
+    ctx.fillRect(x1 - 3, top + 12, PIX, DECK_Y - top - 12);
+    ctx.fillRect(x0, DECK_Y - 0.5, x1 - x0, PIX);
+
+    // draped fishing net on the wall, with cork floats
+    ctx.strokeStyle = 'rgba(226,214,180,0.4)';
+    ctx.lineWidth = PIX;
+    const netX = x0 + 10, netW = 26, netY = top + 17, netH = 20;
+    for (let i = 0; i <= 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(netX + i * netW / 4, netY);
+      ctx.quadraticCurveTo(netX + i * netW / 4 - 3, netY + netH / 2, netX + i * netW / 4, netY + netH);
+      ctx.stroke();
+    }
+    for (let i = 0; i <= 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(netX, netY + i * netH / 3);
+      ctx.quadraticCurveTo(netX + netW / 2, netY + i * netH / 3 + 4, netX + netW, netY + i * netH / 3);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#c9713f';
+    ctx.beginPath(); ctx.arc(netX + 4, netY + netH - 1, 1.6, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(netX + netW - 5, netY + netH + 1, 1.6, 0, TAU); ctx.fill();
+
+    // string of little glass buoys hanging under the eave
+    const bcols = ['#c8352a', '#e8b84e', '#3f8f8f'];
+    for (let i = 0; i < 3; i++) {
+      const bx2 = x1 - 46 + i * 11;
+      const sw2 = Math.sin(this.time * 1.4 + i * 1.3) * 0.8;
+      ctx.strokeStyle = 'rgba(40,30,16,0.8)'; ctx.lineWidth = PIX;
+      ctx.beginPath(); ctx.moveTo(bx2, top + 14); ctx.lineTo(bx2 + sw2, top + 20); ctx.stroke();
+      ctx.fillStyle = bcols[i];
+      ctx.beginPath(); ctx.arc(bx2 + sw2, top + 23, 3, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fillRect(bx2 + sw2 - 1.5, top + 21.5, 1.5, 1.5);
+      ctx.fillStyle = '#2c2013';
+      ctx.fillRect(bx2 + sw2 - 1, top + 19.5, 2, 1.5);
+    }
+
+    // life ring by the door
+    const lrX = x0 + 24, lrY = DECK_Y - 40;
+    ctx.strokeStyle = '#2c2013'; ctx.lineWidth = PIX;
+    ctx.beginPath(); ctx.moveTo(lrX, lrY - 7); ctx.lineTo(lrX, lrY - 4); ctx.stroke();
+    ctx.fillStyle = '#f2ede2';
+    ctx.beginPath(); ctx.arc(lrX, lrY, 6.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = wallA;
+    ctx.beginPath(); ctx.arc(lrX, lrY, 3.2, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#c8352a';
+    for (let i = 0; i < 4; i++) {
+      const a = i / 4 * TAU + 0.4;
+      ctx.fillRect(lrX + Math.cos(a) * 4.6 - 1.5, lrY + Math.sin(a) * 4.6 - 1.5, 3, 3);
+    }
+    ctx.strokeStyle = 'rgba(44,32,19,0.6)';
+    ctx.beginPath(); ctx.arc(lrX, lrY, 6.5, 0, TAU); ctx.stroke();
+
+    // porch canopy over the door on angled brackets
+    ctx.fillStyle = roofDark;
+    ctx.beginPath();
+    ctx.moveTo(174, DECK_Y - 36); ctx.lineTo(206, DECK_Y - 36);
+    ctx.lineTo(210, DECK_Y - 31); ctx.lineTo(170, DECK_Y - 31);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = roof;
+    ctx.fillRect(170, DECK_Y - 32, 40, 1.5);
+    ctx.fillStyle = trim;
+    ctx.fillRect(170, DECK_Y - 31, 40, 1);
+    ctx.strokeStyle = '#2c2013'; ctx.lineWidth = PIX * 2;
+    ctx.beginPath();
+    ctx.moveTo(176, DECK_Y - 31); ctx.lineTo(180, DECK_Y - 24);
+    ctx.moveTo(204, DECK_Y - 31); ctx.lineTo(200, DECK_Y - 24);
+    ctx.stroke();
+
+    // wall lantern beside the door
+    const wlX = 172, wlY = DECK_Y - 24;
+    ctx.fillStyle = '#1c140a';
+    ctx.fillRect(wlX - 1, wlY - 2, 2, 2);
+    ctx.fillRect(wlX - 2.5, wlY, 5, 6);
+    const wlLit = nite > 0.25;
+    ctx.fillStyle = wlLit ? `rgba(255,206,110,${0.85 + Math.sin(this.time * 8) * 0.15})` : '#4a3c22';
+    ctx.fillRect(wlX - 1.5, wlY + 1, 3, 4);
+    if (wlLit) {
+      ctx.fillStyle = 'rgba(255,200,110,0.14)';
+      ctx.beginPath(); ctx.arc(wlX, wlY + 3, 12, 0, TAU); ctx.fill();
+    }
 
     // roof: hand-laid shingles
     const ridgeX = (x0 + x1) / 2;

@@ -40,25 +40,26 @@ const OP = {
 };
 
 function otterGrid(legA, legB, feet, eyeOpen) {
-  const eyeT = eyeOpen ? 'w' : 'o';
-  const eyeB = eyeOpen ? 'e' : 'k';
+  // big sparkling anime eyes: 4x4 with a 2x2 shine (open), single lash (closed)
+  const E = eyeOpen ? ['eeee', 'wwee', 'wwee', 'eeew'] : ['oooo', 'kkkk', 'oooo', 'oooo'];
+  const eyeRow = (i) => '.koooo' + E[i] + 'ooo' + E[i] + 'oook...';
   return [
     '....kkk......kkk........',
-    '...kopok....kopok.......',
+    '...kpppk....kpppk.......',
     '...koook....koook.......',
     '..kkoooookkoooookk......',
     '..koooooooooooooook.....',
     '.koooooooooooooooook....',
-    ('.koooooo' + eyeT + eyeB + 'ooooo' + eyeT + eyeB + 'ooook....'),
-    ('.koooooo' + eyeB + eyeB + 'ooooo' + eyeB + eyeB + 'ooook....'),
-    '.kooooooooocccoooooook..',
-    '.koooooooccccnncccook...',
-    '.kooooooocccnnnccccok...',
-    '..koooooocccccccccok....',
-    '..kooooooocccccccok.....',
-    '...kooooooocccccok......',
-    '....koooooooooook.......',
-    '.....kkoooooookk........',
+    eyeRow(0),
+    eyeRow(1),
+    eyeRow(2),
+    eyeRow(3),
+    '.kppooooocccccooooppk...',
+    '.kppooooocnnccooooppk...',
+    '.koooooooccnccoooooook..',
+    '..koooooooccccooooook...',
+    '..kkoooooooooooooook....',
+    '....kkoooooooooookk.....',
     '.....kssSSSSssk.........',
     '....ksSSssssSSsk........',
     '....ksskkssssok.........',
@@ -257,6 +258,17 @@ const SPR = {
   coin: COIN,
   clouds: [makeCloud(72, 22), makeCloud(96, 26), makeCloud(52, 18)],
 };
+
+// Draw Otto anchored at his feet with squash & stretch — the bounce lives here.
+// sqx/sqy scale about the ground point; lift hops him off it.
+function drawOtto(ctx, img, cx, feetY, sqx = 1, sqy = 1, lift = 0) {
+  const w = img.width / DPX, h = img.height / DPX;
+  ctx.save();
+  ctx.translate(Math.round(cx * DPX) / DPX, feetY - lift);
+  ctx.scale(sqx, sqy);
+  ctx.drawImage(img, -w / 2, -h + 1, w, h);
+  ctx.restore();
+}
 
 // ---- procedural drone (finer texels via PIX) -----------------------------------
 function drawDrone(ctx, x, y, t, hasCrate) {

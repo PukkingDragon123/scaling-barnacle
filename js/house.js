@@ -439,14 +439,24 @@ const HouseScene = {
     ctx.fillStyle = nite > 0.3 ? '#1a2440' : '#9fc4d4';
     ctx.beginPath(); ctx.arc(431, FLOOR - 48, 3.4, 0, TAU); ctx.fill();
 
-    // ---- player ------------------------------------------------------------------------
+    // ---- player: bouncy squash & stretch -----------------------------------------------
     const frames = this.dir >= 0 ? SPR.otterR : SPR.otterL;
-    let frame = 0;
-    if (this.walkT > 0 && this.idleT < 0.1) frame = 1 + (Math.floor(this.walkT) % 2);
-    else if ((this.time % 3.6) < 0.13) frame = 3;
+    const walking = this.walkT > 0 && this.idleT < 0.1;
+    let frame = 0, sqx = 1, sqy = 1, hop = 0;
+    if (walking) {
+      frame = 1 + (Math.floor(this.walkT) % 2);
+      const ph = this.walkT * 2.2;
+      hop = Math.abs(Math.sin(ph)) * 1.8;
+      sqy = 1 + Math.cos(ph * 2) * 0.05;
+      sqx = 1 - (sqy - 1) * 0.85;
+    } else {
+      if ((this.time % 3.6) < 0.13) frame = 3;
+      sqy = 1 + Math.sin(this.time * 2.1) * 0.02;
+      sqx = 1 - (sqy - 1) * 0.7;
+    }
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.beginPath(); ctx.ellipse(this.px, FLOOR + 0.5, 6, 1.5, 0, 0, TAU); ctx.fill();
-    drawSpr(ctx, frames[frame], this.px - 6, FLOOR - 16.5);
+    ctx.beginPath(); ctx.ellipse(this.px, FLOOR + 0.6, Math.max(3.5, 6 - hop * 0.9), 1.5, 0, 0, TAU); ctx.fill();
+    drawOtto(ctx, frames[frame], this.px, FLOOR + 0.5, sqx, sqy, hop);
 
     // prompt
     let best = null, bd = 26;

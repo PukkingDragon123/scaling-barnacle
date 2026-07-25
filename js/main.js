@@ -203,6 +203,9 @@ const Game = {
       if (this.fade >= 1) {
         this.fade = 1;
         const p = this.pending; this.pending = null;
+        Shop.open = false;        // scene changes always dismiss modals
+        Bench.open = false;
+        this.helpOpen = false;
         this.scene = p.scene;
         this.scene.enter(p.arg);
         this.fadeDir = -1;
@@ -269,12 +272,23 @@ const Game = {
       G.pendingCrate.t -= dt;
       if (G.pendingCrate.t <= 0) {
         G.money += G.pendingCrate.value;
+        G.stats.sold++;
         SND.cash();
         SND.droneOff();
         this.toast(`Drone pickup: +$${G.pendingCrate.value}!`);
         G.pendingCrate = null;
         this.save();
       }
+    }
+    // Otto's plan: advance the current goal when its condition is met
+    if (G.goal < GOALS.length && GOAL_DONE[G.goal](G)) {
+      const done = GOALS[G.goal];
+      G.goal++;
+      G.money += 25;
+      SND.chime();
+      this.toast(`Goal complete: ${done.name}!  (+$25)`);
+      if (G.goal >= GOALS.length) this.toast('Otto is living the dream. You did it!');
+      this.save();
     }
     // autosave
     this.saveT -= dt;
@@ -308,6 +322,14 @@ const Game = {
     c.fillRect(dx + Math.cos(a) * dr - 1, dy + Math.sin(a) * dr - 1, 2, 2);
     if (this.scene !== DiveScene && !TouchUI.enabled)
       text(c, '[H] help', W - 9, 24, { size: 6, color: 'rgba(220,230,240,0.55)', align: 'right' });
+    // current goal banner: the plan, always in view
+    const goalTxt = G.goal < GOALS.length ? GOALS[G.goal].name : 'Living the dream';
+    const star = G.goal < GOALS.length ? '*' : '★';
+    const gw = textWidth(c, `${star} ${goalTxt}`, 6.5) + 12;
+    c.globalAlpha = 0.85;
+    uiPanel(c, W / 2 - gw / 2, 4, gw, 12, 0.6);
+    text(c, `${star} ${goalTxt}`, W / 2, 7, { size: 6.5, color: '#ffe6b0', align: 'center' });
+    c.globalAlpha = 1;
   },
 
   drawToasts(c) {
@@ -358,11 +380,18 @@ const Game = {
       ['  If the water goes quiet... DON\'T. MOVE.', '#e8434c'],
       ['  M ... mute      H ... close this guide', '#8a9484'],
     ];
-    let y = 48;
+    let y = 46;
     for (const [ln, col] of lines) {
       text(c, ln, 66, y, { size: 7, color: col });
-      y += 13.5;
+      y += 12;
     }
+    // the plan, right in the guide
+    text(c, "OTTO'S PLAN", 66, y + 2, { size: 7, color: '#ffe66e' });
+    const cur = G.goal < GOALS.length ? GOALS[G.goal] : null;
+    text(c, cur
+      ? `  ${G.goal}/${GOALS.length} done  >  ${cur.name} — ${cur.hint}`
+      : `  All ${GOALS.length} goals complete. Otto is living the dream!`,
+      66, y + 14, { size: 7, color: '#d8ccb4' });
   },
 
   drawCursor(c) {
@@ -477,7 +506,8 @@ const TitleScene = {
     c.fillStyle = 'rgba(0,0,0,0.25)';
     c.beginPath(); c.ellipse(W / 2, 222 + bob * 0.4, 15, 3, 0, 0, TAU); c.fill();
     const blink = (this.time % 3.4) < 0.14;
-    drawSpr(c, SPR.otterR[blink ? 3 : 0], W / 2 - 6, 186 + bob);
+    const br = Math.sin(this.time * 2.1) * 0.02;
+    drawOtto(c, SPR.otterR[blink ? 3 : 0], W / 2, 203.5 + bob, 1 - br * 0.7, 1 + br, 0);
     // title with layered drop shadow
     const wob = Math.sin(this.time * 2) * 2;
     text(c, "MR. OTTO'S", W / 2 + 2, 40 + wob + 2, { size: 26, color: 'rgba(30,12,24,0.8)', align: 'center', shadow: false });

@@ -96,6 +96,32 @@ const NODE_DEFS = {
 const BENCH_CRACK = { clam: 'clamMeat', mussel: 'musselMeat', oyster: 'oysterMeat' };
 const BENCH_POLISH = { abalone: 'abalonePol', pearl: 'pearlPol' };
 
+// Otto's plan: one clear goal at a time, from first scrape to the dream.
+const GOALS = [
+  { name: 'Scrape together 5 shells',    hint: 'Dive at the North Piling' },
+  { name: 'Send a crate to market',      hint: 'Sell on the laptop; the drone pays on pickup' },
+  { name: 'Crack a shell at the workbench', hint: 'Tap when the marker is centered' },
+  { name: 'Buy the Mesh Bag',            hint: 'GEAR tab on the laptop' },
+  { name: 'Extend the bridge east',      hint: 'BUILD tab — oysters live out there' },
+  { name: 'Find a pearl',                hint: 'Crack oysters — clean cracks find more' },
+  { name: 'Polish something precious',   hint: 'Pearls & abalone gleam at the workbench' },
+  { name: 'Reach the Deep Piling',       hint: 'BUILD tab — bring a headlamp' },
+  { name: 'Survive the Gray One',        hint: "When the water goes quiet: DON'T MOVE" },
+  { name: 'The dream: save $5,000',      hint: 'A manor, a trophy, and a full coin purse' },
+];
+const GOAL_DONE = [
+  (g) => g.stats.scraped >= 5,
+  (g) => g.stats.sold >= 1,
+  (g) => g.stats.cracked >= 1,
+  (g) => g.gear.bag >= 1,
+  (g) => g.bridge >= 2,
+  (g) => g.stats.pearls >= 1,
+  (g) => g.stats.polished >= 1,
+  (g) => g.bridge >= 3,
+  (g) => g.stats.sharkSurvived >= 1,
+  (g) => g.money >= 5000,
+];
+
 const SAVE_KEY = 'ottoClamFarm.v1';
 
 function defaultState() {
@@ -112,7 +138,8 @@ function defaultState() {
     seeds: [11, 22, 33],
     clock: 0.30,    // 0..1 day cycle; 0.30 = morning
     pendingCrate: null, // { value, t }
-    stats: { scraped: 0, sharkSurvived: 0, deaths: 0, pearls: 0, cracked: 0, polished: 0 },
+    stats: { scraped: 0, sharkSurvived: 0, deaths: 0, pearls: 0, cracked: 0, polished: 0, sold: 0 },
+    goal: 0,
     flags: {},      // tutorial flags
     musicOn: true,
   };
