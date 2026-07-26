@@ -162,7 +162,7 @@ def biggest_blob(im):
     return im
 
 
-def punch(im, sat=1.30, mul=0.90):
+def punch(im, sat=1.42, mul=0.985):
     """Bake richer colour and a touch of shade into an asset, so the game can
     look saturated and moody without a per-frame filter pass."""
     im = im.convert('RGBA')
@@ -283,7 +283,7 @@ def gif_frames(src, name, count, box=None, target=None, step_offset=0):
             fr = fr.crop(box)
         if target:
             fr = fr.resize(target, Image.LANCZOS)
-        fr = punch(fr.convert('RGBA'), 1.26, 0.88).convert('RGB')
+        fr = punch(fr.convert('RGBA'), 1.20, 0.98).convert('RGB')
         path = os.path.join(OUT, f'{name}{j}.jpg')
         fr.save(path, quality=82, optimize=True)
         manifest[f'{name}{j}'] = {'w': fr.size[0], 'h': fr.size[1], 'ext': 'jpg'}
@@ -335,13 +335,16 @@ top = trim(hx.crop((0, 0, hx.size[0], round(hx.size[1] * 0.60))))
 top = top.resize((round(top.size[0] * 2.2), round(top.size[1] * 2.2)), Image.LANCZOS)
 save('house_top', top)
 
-print('new open-front hut (interior scene) + workbench prop...')
-hut = defringe(trim(global_key(Image.open(os.path.join(ROOT, '044A2D24-7F4F-4661-A7BB-C5E89EC3CD66.png')), 42)))
+print('houses (already background-free) + workbench prop...')
+hut = trim(Image.open(os.path.join(ROOT, '044A2D24-7F4F-4661-A7BB-C5E89EC3CD66-removebg-preview.png')).convert('RGBA'))
 save('hut_full', hut)
 # the room itself: crop away the stilts, keep the porch floor and everything above
 room = trim(hut.crop((0, 0, hut.size[0], round(hut.size[1] * 0.70))))
-room = room.resize((round(room.size[0] * 1.7), round(room.size[1] * 1.7)), Image.LANCZOS)
+room = room.resize((round(room.size[0] * 3.2), round(room.size[1] * 3.2)), Image.LANCZOS)
 save('hut_room', room)
+
+hx2 = trim(Image.open(os.path.join(ROOT, '840E2071-1BC2-437D-BF2C-FE6478FF1DA3-removebg-preview.png')).convert('RGBA'))
+save('house_clean', hx2.resize((round(hx2.size[0] * 1.8), round(hx2.size[1] * 1.8)), Image.LANCZOS))
 
 wb = defringe(trim(global_key(Image.open(os.path.join(ROOT, 'IMG_4468.jpeg')), 48)), tol=88, passes=3)
 save('workbench', wb)
@@ -360,6 +363,17 @@ print('furniture (components)...')
 fu = defringe(global_key(Image.open(os.path.join(ROOT, '175C57F7-66B8-4C75-A0DB-5DC747AEBA78.png')), 40))
 for i, b in enumerate(components(fu, min_area=500)):
     save(f'furn_{i}', trim(fu.crop(tuple(b))))
+
+print('animated ocean (pixel-art, upscaled with NEAREST to keep the pixels)...')
+oc = Image.open(os.path.join(ROOT, 'IMG_4470.gif'))
+ocn = oc.n_frames
+for j in range(12):
+    oc.seek(round(j * ocn / 12) % ocn)
+    fr = oc.convert('RGB').resize((1080, 540), Image.NEAREST)
+    fr = punch(fr.convert('RGBA'), 1.16, 1.0).convert('RGB')
+    fr.save(os.path.join(OUT, f'ocean{j}.jpg'), quality=86, optimize=True)
+    manifest[f'ocean{j}'] = {'w': 1080, 'h': 540, 'ext': 'jpg'}
+print(f"  ocean0..11: {sum(os.path.getsize(os.path.join(OUT, f'ocean{j}.jpg')) for j in range(12))//1024}KB")
 
 print('animated backgrounds...')
 # sunny surface: 1000x500 -> cover 960x540 (scale to 1080x540, center crop)

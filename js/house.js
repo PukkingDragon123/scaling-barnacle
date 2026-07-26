@@ -84,16 +84,26 @@ const HouseScene = {
     const FLOOR = this.FLOOR;
     const nite = nightness(G.clock);
 
-    // coded sky + sea behind the cutaway
-    SKY.update(0, this.time);
-    SKY.drawSky(ctx, G.clock, this.time, 0);
-    SKY.drawSea(ctx, G.clock, this.time, 0);
+    // the ocean visible past the open front
+    drawA(ctx, `ocean${Math.floor(this.time * 8) % 12}`, -30, 0, 540, 270);
+    SKY.tint(ctx, G.clock, this.time);
 
     // the hut, zoomed so the room fills the frame — its porch floor is the floor
     const rw = 640;                      // wider than the screen: we are inside it
     const rh = assetH('hut_room', rw);
     // the porch floor line sits at ~0.925 of the cropped sprite
     drawA(ctx, 'hut_room', (W - rw) / 2, FLOOR - rh * 0.925, rw, rh);
+
+    // carry the floorboards down to the bottom edge so no sea peeks under them
+    const fy = FLOOR - rh * 0.925 + rh - 2;
+    if (fy < H) {
+      ctx.fillStyle = '#a8542f';           // matched to the sprite's last floor row
+      ctx.fillRect(0, fy, W, H - fy);
+      ctx.fillStyle = 'rgba(94,52,24,0.30)';
+      for (let bx = -8; bx < W; bx += 21) ctx.fillRect(bx, fy, 1, H - fy);
+      ctx.fillStyle = 'rgba(60,32,14,0.22)';
+      ctx.fillRect(0, H - 3, W, 3);
+    }
 
     // ---- player -------------------------------------------------------------------------
     const OTTER_WALK = ['o4_4', 'o4_5', 'o4_6', 'o4_7'];

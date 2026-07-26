@@ -13,7 +13,7 @@ const DECK_Y = 214;   // the dock sits low in frame, water filling the bottom
 
 // Every structure is anchored by its MEASURED deck-surface line (fraction of
 // sprite height) so nothing floats: deck surfaces all land exactly on DECK_Y.
-const HOUSE_X = 36, HOUSE_W = 112, HOUSE_DECK = 0.427;   // dock_0 from the dock sheet
+const HOUSE_X = 30, HOUSE_W = 124, HOUSE_DECK = 0.425;   // the uploaded hut, background-free
 const PIER_START = 128, SEG_W = 88, PIER_DECK = 0.035;   // dock_11 trestle module
 
 // place a sprite so its deck surface sits on DECK_Y
@@ -39,7 +39,7 @@ const WorldScene = {
 
   worldW() { return this.endX() + 80; },
   endX() { return 300 + G.bridge * 200; },
-  houseTop() { return DECK_Y - assetH('dock_0', HOUSE_W) * HOUSE_DECK; },
+  houseTop() { return DECK_Y - assetH('house_clean', HOUSE_W) * HOUSE_DECK; },
 
   enter(opts) {
     this.time = 0;
@@ -123,9 +123,10 @@ const WorldScene = {
     const nite = nightness(G.clock);
     this._lampGlows = [];
 
-    // coded pixel-art sky and sea
-    SKY.drawSky(ctx, G.clock, this.time, cam);
-    SKY.drawSea(ctx, G.clock, this.time, cam);
+    // the animated pixel-art ocean, with a gentle horizontal drift
+    const oc = `ocean${Math.floor(this.time * 8) % 12}`;
+    drawA(ctx, oc, -30 - (cam * 0.05) % 30, 0, 540, 270);
+    SKY.tint(ctx, G.clock, this.time);
 
     ctx.save();
     ctx.translate(-cam, 0);
@@ -145,7 +146,7 @@ const WorldScene = {
     }
 
     // ---- the house, its platform flush with the pier deck --------------------------
-    const hh = drawOnDeck(ctx, 'dock_0', HOUSE_X, HOUSE_W, HOUSE_DECK);
+    const hh = drawOnDeck(ctx, 'house_clean', HOUSE_X, HOUSE_W, HOUSE_DECK);
     const hy = DECK_Y - hh * HOUSE_DECK;
     if (G.house >= 2) {
       const bx0 = HOUSE_X + HOUSE_W * 0.30, bx1 = HOUSE_X + HOUSE_W * 0.72, by = hy + hh * 0.10;
@@ -263,6 +264,14 @@ const WorldScene = {
 
     ctx.restore();
 
+    // golden hour: let the low sun fall on the dock and props too
+    const warmth = clamp(1 - Math.abs(G.clock - 0.615) / 0.13, 0, 1)
+                 + clamp(1 - Math.abs(G.clock - 0.155) / 0.10, 0, 1);
+    if (warmth > 0.01) {
+      ctx.fillStyle = `rgba(255,150,74,${warmth * 0.20})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+
     // night: tint + warm glows
     if (nite > 0.05) {
       ctx.fillStyle = `rgba(8,12,38,${nite * 0.45})`;
@@ -270,7 +279,7 @@ const WorldScene = {
       ctx.save();
       ctx.translate(-cam, 0);
       // hut window glow
-      const hh2 = assetH('dock_0', HOUSE_W);
+      const hh2 = assetH('house_clean', HOUSE_W);
       const hy2 = DECK_Y - hh2 * HOUSE_DECK;
       ctx.fillStyle = `rgba(255,214,120,${nite * 0.18})`;
       ctx.beginPath(); ctx.arc(HOUSE_X + HOUSE_W * 0.63, hy2 + hh2 * 0.38, 15, 0, TAU); ctx.fill();

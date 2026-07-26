@@ -163,46 +163,67 @@ const Shop = {
   },
 
   draw(ctx) {
-    ctx.fillStyle = 'rgba(6,10,16,0.66)';
-    ctx.fillRect(0, 0, W, H);
     const X = this.WX, Y = this.WY, WW = this.WW, HH = this.WH;
     const mx = Input.mouse.x, my = Input.mouse.y;
-    uiPanel(ctx, X, Y, WW, HH, 0.97, true);
-
-    // header
+    const t = Game.time;
+    // ---- CRT terminal shell -------------------------------------------------------
+    ctx.fillStyle = 'rgba(2,6,8,0.80)';
+    ctx.fillRect(0, 0, W, H);
     ctx.save();
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(X + 3, Y + 3, WW - 6, 19, 2.5); else ctx.rect(X + 3, Y + 3, WW - 6, 19);
-    ctx.fillStyle = '#2c5a6a'; ctx.fill();
-    ctx.restore();
-    text(ctx, 'ClamNet  ~  otto.sea/market', X + 12, Y + 8, { size: 8, color: '#d6f0f8', shadow: false });
-    const cHov = mx > X + WW - 28 && mx < X + WW - 4 && my > Y + 2 && my < Y + 24;
-    ctx.fillStyle = cHov ? '#e8434c' : '#1d3f4c';
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(X + WW - 24, Y + 5, 16, 15, 2.5); else ctx.rect(X + WW - 24, Y + 5, 16, 15);
+    if (ctx.roundRect) ctx.roundRect(X, Y, WW, HH, 4); else ctx.rect(X, Y, WW, HH);
+    ctx.fillStyle = 'rgba(4,16,14,0.97)';
     ctx.fill();
-    text(ctx, 'X', X + WW - 16, Y + 8, { size: 8, color: '#d6f0f8', align: 'center', shadow: false });
+    ctx.strokeStyle = '#2ef2a0'; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.restore();
+    // outer glow
+    ctx.strokeStyle = 'rgba(46,242,160,0.14)'; ctx.lineWidth = 3;
+    ctx.strokeRect(X - 1.5, Y - 1.5, WW + 3, HH + 3);
+    // scanlines
+    ctx.save();
+    ctx.beginPath(); ctx.rect(X, Y, WW, HH); ctx.clip();
+    ctx.fillStyle = 'rgba(46,242,160,0.045)';
+    for (let y = Y + (t * 8 % 3); y < Y + HH; y += 3) ctx.fillRect(X, y, WW, 1);
+    // faint grid
+    ctx.strokeStyle = 'rgba(46,242,160,0.05)'; ctx.lineWidth = PIX;
+    for (let gx = X + 12; gx < X + WW; gx += 24) { ctx.beginPath(); ctx.moveTo(gx, Y); ctx.lineTo(gx, Y + HH); ctx.stroke(); }
 
-    // purse
-    drawAC(ctx, 'shell_pearl', X + WW - 68, Y + 32, 13);
-    text(ctx, `${G.money}`, X + WW - 58, Y + 27, { size: 10, color: '#8a6420', shadow: false });
+    // ---- title bar ----
+    ctx.fillStyle = 'rgba(46,242,160,0.12)';
+    ctx.fillRect(X + 2, Y + 2, WW - 4, 18);
+    ctx.fillStyle = '#2ef2a0';
+    ctx.fillRect(X + 2, Y + 19.4, WW - 4, PIX * 2);
+    text(ctx, '> CLAMNET v2.4  //  otto@reef:~$', X + 10, Y + 6.5, { size: 7.5, color: '#7dffcf', shadow: false });
+    if (Math.sin(t * 6) > 0) text(ctx, '_', X + 10 + textWidth(ctx, '> CLAMNET v2.4  //  otto@reef:~$ ', 7.5), Y + 6.5, { size: 7.5, color: '#2ef2a0', shadow: false });
+    // connection blips
+    for (let i = 0; i < 3; i++) {
+      const on = Math.sin(t * (3 + i) + i) > -0.2;
+      ctx.fillStyle = on ? '#2ef2a0' : 'rgba(46,242,160,0.22)';
+      ctx.fillRect(X + WW - 66 + i * 5, Y + 8, 3, 6);
+    }
+    const cHov = mx > X + WW - 28 && mx < X + WW - 4 && my > Y + 2 && my < Y + 22;
+    ctx.strokeStyle = cHov ? '#ff5a6a' : '#2ef2a0'; ctx.lineWidth = 1;
+    ctx.strokeRect(X + WW - 24.5, Y + 5.5, 15, 13);
+    text(ctx, 'X', X + WW - 17, Y + 7.5, { size: 8, color: cHov ? '#ff5a6a' : '#2ef2a0', align: 'center', shadow: false });
 
-    // tabs as pills
+    // ---- balance readout ----
+    text(ctx, 'BAL', X + WW - 112, Y + 27, { size: 6.5, color: 'rgba(125,255,207,0.6)', shadow: false });
+    text(ctx, `$${G.money}`.padStart(7, ' '), X + WW - 92, Y + 25, { size: 10, color: '#2ef2a0', shadow: false });
+
+    // ---- tabs as terminal switches ----
     for (let i = 0; i < this.TABS.length; i++) {
       const tx = X + 12 + i * 58, ty = Y + 26, tw = 54, th = 16;
       const sel = i === this.tab;
       const hov = mx > tx && mx < tx + tw && my > ty && my < ty + th;
-      ctx.save();
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(tx, ty, tw, th, 3); else ctx.rect(tx, ty, tw, th);
-      ctx.fillStyle = sel ? '#7a4a2c' : (hov ? '#e6d2ae' : '#e0cba6');
-      ctx.fill();
-      if (!sel) { ctx.strokeStyle = 'rgba(122,74,48,0.4)'; ctx.lineWidth = 1; ctx.stroke(); }
-      ctx.restore();
-      text(ctx, this.TABS[i], tx + tw / 2, ty + 4.5, { size: 7, color: sel ? '#ffe9c4' : '#7a5a3a', align: 'center', shadow: false });
+      ctx.fillStyle = sel ? 'rgba(46,242,160,0.20)' : (hov ? 'rgba(46,242,160,0.10)' : 'rgba(46,242,160,0.04)');
+      ctx.fillRect(tx, ty, tw, th);
+      ctx.strokeStyle = sel ? '#2ef2a0' : 'rgba(46,242,160,0.35)'; ctx.lineWidth = 1;
+      ctx.strokeRect(tx + 0.5, ty + 0.5, tw - 1, th - 1);
+      text(ctx, `[${i + 1}]${this.TABS[i]}`, tx + tw / 2, ty + 4.5, {
+        size: 6.5, color: sel ? '#baffe6' : 'rgba(125,255,207,0.65)', align: 'center', shadow: false });
     }
 
-    // rows
+    // ---- rows as log lines ----
     const y0 = Y + 48, RH = 25;
     const vis = this._vis || 7;
     for (let i = 0; i < vis; i++) {
@@ -210,65 +231,53 @@ const Shop = {
       if (!r) break;
       const ry = y0 + i * RH;
       if (r.info) {
-        text(ctx, r.info, X + 16, ry + 8, { size: 7, color: '#8a6a4a', shadow: false });
+        text(ctx, '  ! ' + r.info, X + 14, ry + 8, { size: 6.5, color: '#ffd45a', shadow: false });
         continue;
       }
       const btnX = X + WW - 96, btnW = 84, btnH = 18;
       const hov = !!r.act && mx > btnX && mx < btnX + btnW && my > ry + 2 && my < ry + 2 + btnH;
-      // card
-      ctx.save();
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(X + 12, ry, WW - 24, RH - 3, 3); else ctx.rect(X + 12, ry, WW - 24, RH - 3);
-      ctx.fillStyle = hov ? '#f4e2c0' : '#ecdbb8';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(122,74,48,0.35)'; ctx.lineWidth = 1; ctx.stroke();
-      ctx.restore();
-      let lx = X + 18;
+      ctx.fillStyle = hov ? 'rgba(46,242,160,0.10)' : 'rgba(46,242,160,0.035)';
+      ctx.fillRect(X + 12, ry, WW - 24, RH - 3);
+      ctx.fillStyle = hov ? '#2ef2a0' : 'rgba(46,242,160,0.35)';
+      ctx.fillRect(X + 12, ry, PIX * 3, RH - 3);
+      let lx = X + 20;
       if (r.art || r.gart) {
-        ctx.fillStyle = 'rgba(122,74,48,0.14)';
-        ctx.beginPath(); ctx.arc(lx + 9, ry + 11, 9.5, 0, TAU); ctx.fill();
+        ctx.strokeStyle = 'rgba(46,242,160,0.3)'; ctx.lineWidth = PIX;
+        ctx.strokeRect(lx - 0.5, ry + 2.5, 18, 17);
         if (r.art) drawItemIcon(ctx, r.art, lx + 9, ry + 11, 15);
         else drawAC(ctx, r.gart, lx + 9, ry + 11, 15);
-        lx += 23;
+        lx += 24;
       }
-      text(ctx, r.label, lx, ry + 3.5, { size: 8, color: '#4a3020', shadow: false });
-      if (r.sub) text(ctx, r.sub, lx, ry + 13, { size: 6.5, color: '#8a6a4a', shadow: false });
+      text(ctx, r.label, lx, ry + 3.5, { size: 8, color: '#d8fff0', shadow: false });
+      if (r.sub) text(ctx, '  ' + r.sub, lx, ry + 13, { size: 6.5, color: 'rgba(125,255,207,0.62)', shadow: false });
       if (r.btn) {
         const canAfford = r.price === undefined || G.money >= r.price;
         const active = !!r.act;
-        ctx.save();
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(btnX, ry + 2, btnW, btnH, 3); else ctx.rect(btnX, ry + 2, btnW, btnH);
-        ctx.fillStyle = !active ? '#d8c6a4' : (canAfford ? (hov ? '#3f9a58' : '#4aa862') : '#c88a8a');
-        ctx.fill();
-        ctx.strokeStyle = !active ? 'rgba(122,74,48,0.3)' : 'rgba(30,70,40,0.55)';
-        ctx.lineWidth = 1; ctx.stroke();
-        ctx.restore();
-        text(ctx, r.btn, btnX + btnW / 2, ry + 7, {
-          size: 7.5, align: 'center', shadow: false,
-          color: !active ? '#9a8464' : '#ffffff',
-        });
+        const col = !active ? 'rgba(46,242,160,0.28)' : (canAfford ? '#2ef2a0' : '#ff6a7a');
+        ctx.fillStyle = active && canAfford && hov ? 'rgba(46,242,160,0.24)' : 'rgba(46,242,160,0.06)';
+        ctx.fillRect(btnX, ry + 2, btnW, btnH);
+        ctx.strokeStyle = col; ctx.lineWidth = 1;
+        ctx.strokeRect(btnX + 0.5, ry + 2.5, btnW - 1, btnH - 1);
+        text(ctx, (active ? '> ' : '') + r.btn, btnX + btnW / 2, ry + 7, { size: 7.5, align: 'center', color: col, shadow: false });
       }
     }
 
     if (this._rows.length > vis) {
       const maxScroll = this._rows.length - vis;
       const ax = X + WW - 58, ay = y0 + vis * RH + 2;
-      text(ctx, `${this.scroll + 1}-${this.scroll + vis} of ${this._rows.length}`, X + WW / 2, Y + HH - 15, { size: 6.5, color: '#8a6a4a', align: 'center', shadow: false });
+      text(ctx, `[${this.scroll + 1}..${this.scroll + vis}/${this._rows.length}]`, X + WW / 2, Y + HH - 15,
+        { size: 6.5, color: 'rgba(125,255,207,0.6)', align: 'center', shadow: false });
       for (let i = 0; i < 2; i++) {
         const canGo = i === 0 ? this.scroll > 0 : this.scroll < maxScroll;
-        ctx.save();
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(ax + i * 24, ay, 21, 17, 3); else ctx.rect(ax + i * 24, ay, 21, 17);
-        ctx.fillStyle = canGo ? '#7a4a2c' : '#d8c6a4';
-        ctx.fill(); ctx.restore();
-        ctx.fillStyle = canGo ? '#ffe9c4' : '#b0a084';
-        const cx2 = ax + i * 24 + 10.5, cy2 = ay + 8.5, d = i === 0 ? -1 : 1;
-        ctx.beginPath();
-        ctx.moveTo(cx2, cy2 + 4 * d); ctx.lineTo(cx2 - 4.5, cy2 - 3 * d); ctx.lineTo(cx2 + 4.5, cy2 - 3 * d);
-        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = canGo ? '#2ef2a0' : 'rgba(46,242,160,0.2)'; ctx.lineWidth = 1;
+        ctx.strokeRect(ax + i * 24 + 0.5, ay + 0.5, 20, 16);
+        text(ctx, i === 0 ? '^' : 'v', ax + i * 24 + 10.5, ay + 4, {
+          size: 8, color: canGo ? '#2ef2a0' : 'rgba(46,242,160,0.25)', align: 'center', shadow: false });
       }
     }
-    text(ctx, TouchUI.enabled ? 'tap X to close' : '[1-4] tabs   [Esc] close', X + 14, Y + HH - 15, { size: 6.5, color: '#8a6a4a', shadow: false });
+    // the hint lives in the title bar — the last log line owns the bottom edge
+    text(ctx, TouchUI.enabled ? 'tap X to disconnect' : '[1-4] tabs  [Esc] disconnect',
+      X + WW - 74, Y + 7.5, { size: 6, color: 'rgba(125,255,207,0.5)', align: 'right', shadow: false });
+    ctx.restore();
   },
 };

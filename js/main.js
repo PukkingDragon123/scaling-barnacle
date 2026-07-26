@@ -579,9 +579,10 @@ function frame(now) {
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
   }
+  // the HUD goes under the modals — a full-screen panel would collide with it
+  if (G && Game.scene !== TitleScene && !Shop.open && !Bench.open) Game.drawHUD(ctx);
   if (Shop.open) Shop.draw(ctx);
   if (Bench.open) Bench.draw(ctx);
-  if (G && Game.scene !== TitleScene) Game.drawHUD(ctx);
   TouchUI.draw(ctx);
   Game.drawToasts(ctx);
   if (Game.helpOpen) Game.drawHelp(ctx);
