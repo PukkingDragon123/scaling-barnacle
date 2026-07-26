@@ -2339,10 +2339,24 @@ function nightness(clock) {
 const PILING_X = [460, 640, 820];
 const DECK_Y = 176;
 
-// house placement (the uploaded stilt hut)
-const HOUSE_X = 30, HOUSE_W = 175;
-// bridge of repeating dock modules
-const SEG_START = 330, SEG_W = 88;
+// Every structure is anchored by its MEASURED deck-surface line (fraction of
+// sprite height) so nothing floats: deck surfaces all land exactly on DECK_Y.
+const HOUSE_X = 30, HOUSE_W = 175, HOUSE_DECK = 0.42;
+const PIER_START = 146, SEG_W = 88, PIER_DECK = 0.035;   // dock_11 trestle module
+const WATER_Y = 214;
+
+// place a sprite so its deck surface sits on DECK_Y
+function drawOnDeck(ctx, name, x, w, deckFrac) {
+  const h = assetH(name, w);
+  drawA(ctx, name, x, DECK_Y - h * deckFrac, w, h);
+  return h;
+}
+// place a sprite standing ON the deck (its feet at DECK_Y)
+function drawStanding(ctx, name, cx, w, sink = 1) {
+  const h = assetH(name, w);
+  drawA(ctx, name, cx - w / 2, DECK_Y - h + sink, w, h);
+  return h;
+}
 
 const WorldScene = {
   customCursor: false,
@@ -2381,9 +2395,9 @@ const WorldScene = {
 
   spots() {
     const s = [
-      { x: 118, label: 'Enter House', act: () => Game.go(HouseScene, {}) },
-      { x: 245, label: 'ClamNet  (sell & shop)', act: () => { Shop.openUI(); } },
-      { x: 302, label: 'Workbench  (crack & polish)', act: () => { Bench.openUI(); } },
+      { x: 92, label: 'Enter House', act: () => Game.go(HouseScene, {}) },
+      { x: 252, label: 'ClamNet  (sell & shop)', act: () => { Shop.openUI(); } },
+      { x: 316, label: 'Workbench  (crack & polish)', act: () => { Bench.openUI(); } },
     ];
     for (let i = 0; i < G.bridge; i++) {
       s.push({
@@ -2479,9 +2493,9 @@ const WorldScene = {
     this.sprayT -= dt;
     if (this.sprayT <= 0) {
       this.sprayT = rand(0.8, 1.8);
-      const sx = SEG_START + Math.floor(rand(0, (this.endX() - SEG_START) / SEG_W)) * SEG_W;
+      const sx = PIER_START + Math.floor(rand(0, (this.endX() - PIER_START) / SEG_W)) * SEG_W;
       for (let i = 0; i < 3; i++)
-        this.spray.push({ x: sx + rand(-3, 3), y: 202, vx: rand(-6, 6), vy: rand(-22, -10), t: rand(0.4, 0.8) });
+        this.spray.push({ x: sx + rand(-3, 3), y: WATER_Y, vx: rand(-6, 6), vy: rand(-24, -12), t: rand(0.4, 0.8) });
     }
     for (const p of this.spray) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 60 * dt; p.t -= dt; }
     this.spray = this.spray.filter(p => p.t > 0);
@@ -2550,22 +2564,28 @@ const WorldScene = {
     ctx.translate(-cam, 0);
     const endX = this.endX();
 
-    // boardwalk under everything, tying the modules together
-    ctx.fillStyle = '#7a4a3c';
-    ctx.fillRect(196, DECK_Y - 1, SEG_START - 186, 2.5);
-    ctx.fillStyle = 'rgba(255,220,190,0.25)';
-    ctx.fillRect(196, DECK_Y - 1, SEG_START - 186, PIX * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.fillRect(196, DECK_Y + 1, SEG_START - 186, PIX * 2);
+    // ---- the pier: ONE trestle module tiled edge to edge -------------------------
+    const pierH = assetH('dock_11', SEG_W);
+    const pierTop = DECK_Y - pierH * PIER_DECK;
+    for (let x = PIER_START; x < endX; x += SEG_W - 1) {
+      drawA(ctx, 'dock_11', x, pierTop, SEG_W, pierH);
+    }
+    // ladders hanging off the deck at each dive piling
+    for (let i = 0; i < G.bridge; i++) {
+      const lw = 16, lh = assetH('dock_9', lw);
+      drawA(ctx, 'dock_9', PILING_X[i] + 6, DECK_Y - lh * 0.021, lw, lh);
+    }
+    // end-of-pier gate
+    if (G.bridge < 3) {
+      const gw = 30;
+      drawOnDeck(ctx, 'dock_10', endX - 16, gw, 0.035);
+    }
 
-    // ---- the house (uploaded stilt hut): its platform IS the deck line ---------------
-    const hh = assetH('house_ext', HOUSE_W);
-    const hy = DECK_Y - hh * 0.557;
-    drawA(ctx, 'house_ext', HOUSE_X, hy, HOUSE_W, hh);
-    // upgrade accents
+    // ---- the house, its platform flush with the pier deck --------------------------
+    const hh = drawOnDeck(ctx, 'house_ext', HOUSE_X, HOUSE_W, HOUSE_DECK);
+    const hy = DECK_Y - hh * HOUSE_DECK;
     if (G.house >= 2) {
-      // bunting across the front
-      const bx0 = HOUSE_X + HOUSE_W * 0.28, bx1 = HOUSE_X + HOUSE_W * 0.78, by = hy + hh * 0.30;
+      const bx0 = HOUSE_X + HOUSE_W * 0.30, bx1 = HOUSE_X + HOUSE_W * 0.72, by = hy + hh * 0.10;
       ctx.strokeStyle = '#6a5030'; ctx.lineWidth = PIX;
       ctx.beginPath(); ctx.moveTo(bx0, by); ctx.quadraticCurveTo((bx0 + bx1) / 2, by + 5, bx1, by); ctx.stroke();
       for (let i = 0; i < 6; i++) {
@@ -2575,19 +2595,10 @@ const WorldScene = {
         ctx.beginPath(); ctx.moveTo(fx - 2.4, fy); ctx.lineTo(fx + 2.4, fy); ctx.lineTo(fx, fy + 4); ctx.closePath(); ctx.fill();
       }
     }
-    if (G.house >= 3) {
-      // gilded roof finial glint
-      ctx.fillStyle = '#f2cc5a';
-      ctx.fillRect(HOUSE_X + HOUSE_W * 0.395, hy - 1, 4, 4);
-      if (Math.sin(this.time * 3) > 0.7) {
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(HOUSE_X + HOUSE_W * 0.395 + rand(0, 3), hy - 1 + rand(0, 3), 1, 1);
-      }
-    }
     if (G.decor.lights) {
       for (let i = 0; i < 12; i++) {
-        const lx = HOUSE_X + HOUSE_W * 0.22 + i * (HOUSE_W * 0.05);
-        const ly = hy + hh * 0.22 + Math.sin(i * 1.2) * 2.5;
+        const lx = HOUSE_X + HOUSE_W * 0.24 + i * (HOUSE_W * 0.045);
+        const ly = hy + hh * 0.06 + Math.sin(i * 1.2) * 2.5;
         ctx.fillStyle = ['#ffd66e', '#ff8a7a', '#8af2ff', '#a0f2b4'][i % 4];
         ctx.fillRect(lx, ly, 1.5, 1.5);
         if (nite > 0.3) {
@@ -2597,75 +2608,40 @@ const WorldScene = {
       }
     }
 
-    // ---- laptop stand (dock_1) + ClamNet laptop ------------------------------------
-    const standW = 52, standH = assetH('dock_1', standW);
-    const standY = DECK_Y - standH * 0.52;
-    drawA(ctx, 'dock_1', 220, standY, standW, standH);
+    // ---- lamp posts standing on the deck -------------------------------------------
+    for (let x = PIER_START + SEG_W * 2.5; x < endX - 20; x += SEG_W * 3) {
+      const lh = drawStanding(ctx, 'dock_15', x, 15, 5);
+      this._lampGlows.push({ x, y: DECK_Y - lh + 6 });
+    }
+
+    // ---- ClamNet: a table on the deck with the laptop on it -------------------------
+    const tblH = drawStanding(ctx, 'furn_2', 252, 34, 1);
+    const topY = DECK_Y - tblH + 1;
     ctx.fillStyle = '#2a3038';
-    ctx.fillRect(238, standY + standH * 0.30, 15, 10);
+    ctx.fillRect(245, topY - 10, 15, 10);
     ctx.fillStyle = nite > 0.3 ? '#9fe8ff' : '#5ad2f0';
-    ctx.fillRect(239, standY + standH * 0.30 + 1, 13, 8);
+    ctx.fillRect(246, topY - 9, 13, 8);
     ctx.fillStyle = 'rgba(255,255,255,0.65)';
-    ctx.fillRect(240, standY + standH * 0.30 + 2, 5, 1);
-    ctx.fillRect(240, standY + standH * 0.30 + 4, 8, 1);
+    ctx.fillRect(247, topY - 8, 5, 1);
+    ctx.fillRect(247, topY - 6, 8, 1);
     if (nite > 0.3) {
       ctx.fillStyle = 'rgba(120,220,255,0.13)';
-      ctx.beginPath(); ctx.arc(245, standY + standH * 0.30 + 5, 14, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(252, topY - 5, 14, 0, TAU); ctx.fill();
     }
 
-    // ---- workbench (dock_13 table w/ barrel + lantern) --------------------------------
-    const wbW = 62, wbH = assetH('dock_13', wbW);
-    const wbY = DECK_Y - wbH * 0.36;
-    drawA(ctx, 'dock_13', 274, wbY, wbW, wbH);
-    this._lampGlows.push({ x: 274 + wbW * 0.9, y: wbY + wbH * 0.12 });
-    drawAC(ctx, 'shell_clam', 296, wbY + wbH * 0.30, 10);
-    drawAC(ctx, 'shell_scallop', 306, wbY + wbH * 0.32, 9);
+    // ---- Workbench: desk + barrel + crate on the deck --------------------------------
+    const bH = drawStanding(ctx, 'furn_18', 316, 34, 1);
+    const bTop = DECK_Y - bH + 1;
+    drawAC(ctx, 'shell_clam', 308, bTop - 4, 10);
+    drawAC(ctx, 'shell_scallop', 320, bTop - 4, 9);
+    drawStanding(ctx, 'furn_9', 340, 15, 1);
+    drawStanding(ctx, 'furn_7', 291, 14, 1);
 
-    // ---- bridge: one clean module, repeated and connected -----------------------------
-    // lamp posts stand behind the deck every third segment
-    const lpW = 17, lpH = assetH('dock_15', lpW);
-    for (let x = SEG_START + SEG_W * 1.5; x < endX - 20; x += SEG_W * 3) {
-      drawA(ctx, 'dock_15', x, DECK_Y - lpH + 2, lpW, lpH);
-      this._lampGlows.push({ x: x + lpW * 0.55, y: DECK_Y - lpH + 6 });
-    }
-    const segH = assetH('dock_3', SEG_W + 2);
-    for (let x = SEG_START; x < endX; x += SEG_W) {
-      drawA(ctx, 'dock_3', x - 1, DECK_Y - segH * 0.20, SEG_W + 2, segH);
-    }
-    // end-of-bridge barrier
-    if (G.bridge < 3) {
-      const gw = 26, gh = assetH('dock_10', gw);
-      drawA(ctx, 'dock_10', endX - 14, DECK_Y - gh * 0.96, gw, gh);
-      ctx.fillStyle = '#c8a03c';
-      ctx.fillRect(endX - 10, DECK_Y - 18, 18, 7);
-      ctx.fillStyle = '#7a5c1c';
-      for (let i = 0; i < 3; i++) ctx.fillRect(endX - 8 + i * 6.5, DECK_Y - 16.5, 3.5, 4);
-    }
-
-    // dive pilings: ladder + buoy
-    for (let i = 0; i < G.bridge; i++) {
-      const x = PILING_X[i];
-      const lw = 17, lh = assetH('dock_9', lw);
-      drawA(ctx, 'dock_9', x + 4, DECK_Y - 3, lw, lh);
-      const by = 208 + Math.sin(this.time * 1.6 + i * 2) * 2.5;
-      ctx.fillStyle = '#8a2620';
-      ctx.beginPath(); ctx.arc(x + 30, by, 5, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#c8352a';
-      ctx.beginPath(); ctx.arc(x + 29, by - 1, 4, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#f2ede2';
-      ctx.fillRect(x + 26, by - 2, 9, 2);
-      if (nite > 0.4 && Math.sin(this.time * 3 + i) > 0) {
-        ctx.fillStyle = 'rgba(255,80,60,0.95)';
-        ctx.fillRect(x + 29, by - 7, 2, 2);
-      }
-    }
-
-    // drone pad
-    ctx.fillStyle = '#3c4448';
-    ctx.fillRect(158, DECK_Y - 1, 44, 2);
-    ctx.strokeStyle = '#9aa4a8'; ctx.lineWidth = PIX * 2;
-    ctx.beginPath(); ctx.ellipse(180, DECK_Y - 0.5, 14, 1.6, 0, 0, TAU); ctx.stroke();
-    text(ctx, 'H', 180, DECK_Y - 8, { size: 7, color: '#9aa4a8', align: 'center' });
+    // drone landing pad
+    ctx.fillStyle = 'rgba(60,68,72,0.9)';
+    ctx.fillRect(170, DECK_Y - 2, 40, 2);
+    ctx.strokeStyle = '#c8cdd0'; ctx.lineWidth = PIX * 2;
+    ctx.beginPath(); ctx.ellipse(190, DECK_Y - 1, 13, 1.6, 0, 0, TAU); ctx.stroke();
 
     this.drawDrone(ctx);
 
@@ -2738,22 +2714,32 @@ const WorldScene = {
       ctx.closePath(); ctx.fill();
     }
 
-    // waves cut from the painted sea itself, two drifting layers over the post feet
-    const wImg = ASSETS[`bg_surf${Math.floor(this.time * 7) % 10}`];
-    if (wImg && wImg.width) {
-      const sy = wImg.height * 0.66, sh = wImg.height * 0.15;
-      for (let L = 0; L < 2; L++) {
-        const bob = Math.sin(this.time * (1.1 + L * 0.6) + L * 2.2) * 2;
-        const drift = (this.time * (9 + L * 7)) % 540;
-        const dy = 216 + L * 10 + bob;
-        ctx.globalAlpha = 0.9;
-        for (let tx = cam - drift - 540; tx < cam + W + 540; tx += 540) {
-          ctx.drawImage(wImg, 0, sy, wImg.width, sh, tx, dy, 540, 58 - L * 6);
-        }
+    // ---- waterline: tint what's below it, foam where it meets the posts -----------
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(cam - 20, WATER_Y, W + 40, H - WATER_Y);
+    ctx.clip();
+    ctx.fillStyle = 'rgba(120,214,240,0.42)';
+    ctx.fillRect(cam - 20, WATER_Y, W + 40, H - WATER_Y);
+    ctx.restore();
+    // soft foam only where the posts break the surface
+    ctx.fillStyle = 'rgba(255,255,255,0.30)';
+    for (let x = PIER_START - SEG_W; x < endX + SEG_W; x += SEG_W - 1) {
+      for (const ox of [6, SEG_W - 10]) {
+        const fx = x + ox;
+        if (fx < cam - 20 || fx > cam + W + 20) continue;
+        const wob = Math.sin(this.time * 1.6 + fx * 0.1) * 1.2;
+        ctx.beginPath();
+        ctx.ellipse(fx + 3, WATER_Y + 1 + wob, 9, 1.6, 0, 0, TAU);
+        ctx.fill();
       }
-      ctx.globalAlpha = 1;
     }
-
+    // one gentle glimmer line along the waterline
+    ctx.fillStyle = 'rgba(255,255,255,0.14)';
+    for (let x = cam - 24; x < cam + W + 24; x += 14) {
+      const wy = WATER_Y + Math.sin(x * 0.045 + this.time * 1.2) * 1.4;
+      ctx.fillRect(x, wy, 7, 1);
+    }
     ctx.restore();
 
     // gulls (screen space)
@@ -2793,7 +2779,7 @@ const WorldScene = {
   drawDrone(ctx) {
     const pc = G.pendingCrate;
     if (!pc) return;
-    const padX = 180, padY = DECK_Y - 1;
+    const padX = 190, padY = DECK_Y - 1;
     let crateY = padY - 10;
     let leaving = pc.t <= 1.1;
     if (pc.t <= 2.4 && pc.t > 1.1) crateY = padY - 10 - (2.4 - pc.t) * 30;
