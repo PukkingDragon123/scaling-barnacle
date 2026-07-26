@@ -26,7 +26,7 @@ function loadAssets(done) {
 function drawA(ctx, name, x, y, w, h) {
   const img = ASSETS[name];
   if (!img || !img.width) return;
-  if (w === undefined) { w = img.width / DPX; h = img.height / DPX; }
+  if (w === undefined) { w = img.width * APIX; h = img.height * APIX; }
   else if (h === undefined) { h = w * img.height / img.width; }
   ctx.drawImage(img, x, y, w, h);
 }
@@ -35,7 +35,7 @@ function drawA(ctx, name, x, y, w, h) {
 function drawAC(ctx, name, cx, cy, w, h, flip) {
   const img = ASSETS[name];
   if (!img || !img.width) return;
-  if (w === undefined) w = img.width / DPX;
+  if (w === undefined) w = img.width * APIX;
   if (h === undefined) h = w * img.height / img.width;
   ctx.save();
   ctx.translate(cx, cy);
@@ -69,7 +69,5 @@ function drawItemIcon(ctx, key, cx, cy, s = 10) {
     const w = img.width >= img.height ? s : s * img.width / img.height;
     const h = img.width >= img.height ? s * img.height / img.width : s;
     ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
-  } else if (SPR.icons[key]) {
-    drawSpr(ctx, SPR.icons[key], cx - 4, cy - 3.5);
   }
 }

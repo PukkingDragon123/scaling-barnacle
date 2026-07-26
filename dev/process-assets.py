@@ -172,35 +172,36 @@ def gif_frames(src, name, count, box=None, target=None, step_offset=0):
 
 print('shell sheets (crusted / clean / open)...')
 SHELLS = ['pearl', 'clam', 'mussel', 'scallop', 'cockle', 'conch', 'whelk', 'abalone']
-grid_slice('1018D17D-8991-4669-896C-C8AC4D96652F.png', 4, 2, [f'crust_{s}' for s in SHELLS], target_h=76)
-grid_slice('E09CC168-D3F6-41EC-8AFB-EA7DCD7BE151.png', 4, 2, [f'shell_{s}' for s in SHELLS], target_h=76)
-grid_slice('BFCC98C5-7462-41A9-903F-F14436B5E6C7.png', 4, 2, [f'open_{s}' for s in SHELLS], target_h=100)
+grid_slice('1018D17D-8991-4669-896C-C8AC4D96652F.png', 4, 2, [f'crust_{s}' for s in SHELLS], target_h=132)
+grid_slice('E09CC168-D3F6-41EC-8AFB-EA7DCD7BE151.png', 4, 2, [f'shell_{s}' for s in SHELLS], target_h=132)
+grid_slice('BFCC98C5-7462-41A9-903F-F14436B5E6C7.png', 4, 2, [f'open_{s}' for s in SHELLS], target_h=168)
 
 print('critters...')
 grid_slice('D4666433-3C9F-4DFB-990E-05C6F744C3B7.png', 4, 3,
            ['jelly_0', 'jelly_1', 'jelly_2', 'jelly_3',
             'eel_0', 'eel_1', 'eel_2', 'eel_3',
-            'urchin_0', 'urchin_1', 'urchin_2', 'urchin_3'], target_h=64)
+            'urchin_0', 'urchin_1', 'urchin_2', 'urchin_3'], target_h=110)
 
-print('otter walk (empty + full basket)...')
-grid_slice('IMG_4463.jpeg', 4, 2,
-           ['otter_0', 'otter_1', 'otter_2', 'otter_3',
-            'otterf_0', 'otterf_1', 'otterf_2', 'otterf_3'], tol=42, target_h=52)
+print('otter sheet (idle / walk / run / swim / dive)...')
+grid_slice('IMG_4466.jpeg', 4, 3,
+           ['o3_0', 'o3_1', 'o3_2', 'o3_3',
+            'o3_4', 'o3_5', 'o3_6', 'o3_7',
+            'o3_8', 'o3_9', 'o3_swim', 'o3_dive'], tol=52, target_h=104)
 
 print('drone poses...')
 grid_slice('94E66AAE-4813'[:0] + '94E66AAE-6E7E-4813-A583-EED25CC7193B.png', 4, 2,
            ['drone_fly', 'drone_side', 'drone_claw', 'drone_hang',
-            'drone_lift', 'drone_lift2', 'drone_go', 'drone_go2'], target_h=64)
+            'drone_lift', 'drone_lift2', 'drone_go', 'drone_go2'], target_h=110)
 
 print('gear icons...')
 grid_slice('47D385F6-2F9E-42C5-A2B5-0A1AFF061733.png', 4, 3,
            ['g_helmet', 'g_mask', 'g_tank', 'g_fins',
             'g_suit', 'g_belt', 'g_knife', 'g_plier',
-            'g_scraper', 'g_crowbar', 'g_torch', 'g_netbag'], target_h=40)
+            'g_scraper', 'g_crowbar', 'g_torch', 'g_netbag'], target_h=72)
 
 print('pole...')
 pole = trim(key_bg(Image.open(os.path.join(ROOT, '59157A61-FA0E-450E-A739-A006F2DCE590.png'))))
-pole = pole.resize((pole.size[0] // 2, pole.size[1] // 2), Image.NEAREST)
+pole = pole.resize((round(pole.size[0] * 0.72), round(pole.size[1] * 0.72)), Image.LANCZOS)
 save('pole', pole)
 
 print('house exterior...')
@@ -209,7 +210,7 @@ save('house_ext', hx)
 
 print('house interior...')
 hi = trim(key_bg(Image.open(os.path.join(ROOT, '2DD3E769-96DE-4F19-9812-7A79465BF57B.png')), tol=30))
-hi = hi.resize((960, round(hi.size[1] * 960 / hi.size[0])), Image.NEAREST)
+hi = hi.resize((1440, round(hi.size[1] * 1440 / hi.size[0])), Image.LANCZOS)
 save('house_int', hi)
 
 print('dock modules (components)...')
@@ -224,11 +225,11 @@ for i, b in enumerate(components(fu, min_area=500)):
 
 print('animated backgrounds...')
 # sunny surface: 1000x500 -> cover 960x540 (scale to 1080x540, center crop)
-gif_frames('IMG_4440.gif', 'bg_surf', 10, target=(1080, 540))
+gif_frames('IMG_4440.gif', 'bg_surf', 8, target=(1620, 810))
 # deep water: crop the signature band off the top, keep a tall slab for parallax
-gif_frames('IMG_4439.gif', 'bg_deep', 10, box=(0, 130, 1300, 1300), target=(960, 864))
+gif_frames('IMG_4439.gif', 'bg_deep', 8, box=(0, 130, 1300, 1300), target=(1440, 1296))
 # god rays band
-gif_frames('IMG_4438.webp', 'bg_rays', 8, target=(960, 368))
+gif_frames('IMG_4438.webp', 'bg_rays', 6, target=(1440, 552))
 
 with open(os.path.join(OUT, 'manifest.json'), 'w') as f:
     json.dump(manifest, f)

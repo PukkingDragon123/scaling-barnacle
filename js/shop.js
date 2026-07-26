@@ -6,7 +6,7 @@ const Shop = {
   tab: 0,
   scroll: 0,
   TABS: ['SELL', 'GEAR', 'BUILD', 'DECOR'],
-  WX: 24, WY: 16, WW: 432, WH: 238,
+  WX: 40, WY: 22, WW: 400, WH: 226,
   _rows: [],
 
   openUI() {
@@ -126,35 +126,35 @@ const Shop = {
 
     this._rows = this.buildRows();
     // when the list overflows, the 8th row band becomes the scroll-arrow strip
-    this._vis = this._rows.length > 8 ? 7 : 8;
+    this._vis = this._rows.length > 7 ? 6 : 7;
     const maxScroll = Math.max(0, this._rows.length - this._vis);
     this.scroll = clamp(this.scroll, 0, maxScroll);
 
     if (Input.mouse.clicked) {
       const mx = Input.mouse.x, my = Input.mouse.y;
       // close button (generous hit box for touch)
-      if (mx > this.WX + this.WW - 26 && mx < this.WX + this.WW + 4 && my > this.WY - 4 && my < this.WY + 20) { this.close(); return; }
+      if (mx > this.WX + this.WW - 28 && my > this.WY && my < this.WY + 24) { this.close(); return; }
       // scroll arrows (touch has no wheel)
-      const ay = this.WY + 44 + 7 * 23;
-      if (maxScroll > 0 && mx > this.WX + this.WW - 56 && mx < this.WX + this.WW - 8 && my > ay && my < ay + 20) {
-        this.scroll = clamp(this.scroll + (mx > this.WX + this.WW - 32 ? 1 : -1), 0, maxScroll);
+      const ay = this.WY + 48 + this._vis * 25 + 2;
+      if (maxScroll > 0 && mx > this.WX + this.WW - 58 && mx < this.WX + this.WW - 12 && my > ay && my < ay + 18) {
+        this.scroll = clamp(this.scroll + (mx > this.WX + this.WW - 34 ? 1 : -1), 0, maxScroll);
         SND.blip();
         return;
       }
       // tabs
       for (let i = 0; i < this.TABS.length; i++) {
-        const tx = this.WX + 10 + i * 62;
-        if (mx > tx && mx < tx + 56 && my > this.WY + 20 && my < this.WY + 36) {
+        const tx = this.WX + 12 + i * 58;
+        if (mx > tx && mx < tx + 54 && my > this.WY + 26 && my < this.WY + 42) {
           this.tab = i; this.scroll = 0; SND.blip(); return;
         }
       }
       // rows
-      const y0 = this.WY + 44;
+      const y0 = this.WY + 48;
       for (let i = 0; i < this._vis; i++) {
         const r = this._rows[i + this.scroll];
         if (!r || r.info || !r.act) continue;
-        const ry = y0 + i * 23;
-        if (mx > this.WX + this.WW - 96 && mx < this.WX + this.WW - 12 && my > ry && my < ry + 20) {
+        const ry = y0 + i * 25;
+        if (mx > this.WX + this.WW - 96 && mx < this.WX + this.WW - 12 && my > ry + 2 && my < ry + 20) {
           r.act();
           return;
         }
@@ -163,89 +163,112 @@ const Shop = {
   },
 
   draw(ctx) {
-    // dim world behind
-    ctx.fillStyle = 'rgba(4,8,14,0.62)';
+    ctx.fillStyle = 'rgba(6,10,16,0.66)';
     ctx.fillRect(0, 0, W, H);
-    // driftwood window
-    uiPanel(ctx, this.WX, this.WY, this.WW, this.WH, 0.97);
-    // title bar
-    ctx.fillStyle = 'rgba(58,42,22,0.95)';
-    ctx.fillRect(this.WX + 2, this.WY + 2, this.WW - 4, 15);
-    ctx.fillStyle = 'rgba(230,200,150,0.25)';
-    ctx.fillRect(this.WX + 2, this.WY + 2, this.WW - 4, PIX);
-    // little shell buttons
-    ['#e8434c', '#e8b84e', '#4fae6a'].forEach((c, i) => {
-      ctx.fillStyle = c;
-      ctx.beginPath(); ctx.arc(this.WX + 9 + i * 8, this.WY + 9.5, 2.2, 0, TAU); ctx.fill();
-    });
-    text(ctx, 'ClamNet  ~  otto.sea/market', this.WX + 36, this.WY + 6, { size: 7, color: '#d8c8a8' });
-    text(ctx, 'X', this.WX + this.WW - 11, this.WY + 5.5, { size: 8, color: '#e8434c', align: 'center' });
-    // money with coin
-    drawSpr(ctx, SPR.coin, this.WX + this.WW - 52, this.WY + 22);
-    text(ctx, `${G.money}`, this.WX + this.WW - 42, this.WY + 23, { size: 9, color: '#ffe66e' });
-    // tabs as hanging wooden tags
-    for (let i = 0; i < this.TABS.length; i++) {
-      const tx = this.WX + 10 + i * 62;
-      const sel = i === this.tab;
-      ctx.fillStyle = sel ? '#7a5c34' : '#2e2314';
-      ctx.fillRect(tx, this.WY + 21, 56, 15);
-      ctx.fillStyle = sel ? 'rgba(255,235,190,0.4)' : 'rgba(255,235,190,0.08)';
-      ctx.fillRect(tx, this.WY + 21, 56, 1);
-      ctx.fillStyle = sel ? '#c8a03c' : '#4a3a20';
-      ctx.fillRect(tx + 26, this.WY + 23, 3, 3);
-      text(ctx, this.TABS[i], tx + 28, this.WY + 27, { size: 7, color: sel ? '#ffe6b0' : '#8a7758', align: 'center' });
-    }
-    // rows: card slats
-    const y0 = this.WY + 44;
-    const vis = this._vis || 8;
+    const X = this.WX, Y = this.WY, WW = this.WW, HH = this.WH;
     const mx = Input.mouse.x, my = Input.mouse.y;
+    uiPanel(ctx, X, Y, WW, HH, 0.97, true);
+
+    // header
+    ctx.save();
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(X + 3, Y + 3, WW - 6, 19, 2.5); else ctx.rect(X + 3, Y + 3, WW - 6, 19);
+    ctx.fillStyle = '#2c5a6a'; ctx.fill();
+    ctx.restore();
+    text(ctx, 'ClamNet  ~  otto.sea/market', X + 12, Y + 8, { size: 8, color: '#d6f0f8', shadow: false });
+    const cHov = mx > X + WW - 28 && mx < X + WW - 4 && my > Y + 2 && my < Y + 24;
+    ctx.fillStyle = cHov ? '#e8434c' : '#1d3f4c';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(X + WW - 24, Y + 5, 16, 15, 2.5); else ctx.rect(X + WW - 24, Y + 5, 16, 15);
+    ctx.fill();
+    text(ctx, 'X', X + WW - 16, Y + 8, { size: 8, color: '#d6f0f8', align: 'center', shadow: false });
+
+    // purse
+    drawAC(ctx, 'shell_pearl', X + WW - 68, Y + 32, 13);
+    text(ctx, `${G.money}`, X + WW - 58, Y + 27, { size: 10, color: '#8a6420', shadow: false });
+
+    // tabs as pills
+    for (let i = 0; i < this.TABS.length; i++) {
+      const tx = X + 12 + i * 58, ty = Y + 26, tw = 54, th = 16;
+      const sel = i === this.tab;
+      const hov = mx > tx && mx < tx + tw && my > ty && my < ty + th;
+      ctx.save();
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(tx, ty, tw, th, 3); else ctx.rect(tx, ty, tw, th);
+      ctx.fillStyle = sel ? '#7a4a2c' : (hov ? '#e6d2ae' : '#e0cba6');
+      ctx.fill();
+      if (!sel) { ctx.strokeStyle = 'rgba(122,74,48,0.4)'; ctx.lineWidth = 1; ctx.stroke(); }
+      ctx.restore();
+      text(ctx, this.TABS[i], tx + tw / 2, ty + 4.5, { size: 7, color: sel ? '#ffe9c4' : '#7a5a3a', align: 'center', shadow: false });
+    }
+
+    // rows
+    const y0 = Y + 48, RH = 25;
+    const vis = this._vis || 7;
     for (let i = 0; i < vis; i++) {
       const r = this._rows[i + this.scroll];
       if (!r) break;
-      const ry = y0 + i * 23;
+      const ry = y0 + i * RH;
       if (r.info) {
-        text(ctx, r.info, this.WX + 16, ry + 6, { size: 7, color: '#b8a888' });
+        text(ctx, r.info, X + 16, ry + 8, { size: 7, color: '#8a6a4a', shadow: false });
         continue;
       }
-      ctx.fillStyle = 'rgba(56,42,24,0.55)';
-      ctx.fillRect(this.WX + 8, ry, this.WW - 16, 21);
-      ctx.fillStyle = 'rgba(230,200,150,0.12)';
-      ctx.fillRect(this.WX + 8, ry, this.WW - 16, PIX);
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      ctx.fillRect(this.WX + 8, ry + 20.5, this.WW - 16, PIX);
-      let lx = this.WX + 14;
-      if (r.art) { drawItemIcon(ctx, r.art, lx + 6, ry + 10.5, 13); lx += 15; }
-      else if (r.gart) { drawAC(ctx, r.gart, lx + 6, ry + 10.5, 13); lx += 15; }
-      text(ctx, r.label, lx, ry + 3, { size: 8, color: '#f4e8cc' });
-      if (r.sub) text(ctx, r.sub, lx, ry + 12, { size: 6, color: '#a89272' });
+      const btnX = X + WW - 96, btnW = 84, btnH = 18;
+      const hov = !!r.act && mx > btnX && mx < btnX + btnW && my > ry + 2 && my < ry + 2 + btnH;
+      // card
+      ctx.save();
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(X + 12, ry, WW - 24, RH - 3, 3); else ctx.rect(X + 12, ry, WW - 24, RH - 3);
+      ctx.fillStyle = hov ? '#f4e2c0' : '#ecdbb8';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(122,74,48,0.35)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.restore();
+      let lx = X + 18;
+      if (r.art || r.gart) {
+        ctx.fillStyle = 'rgba(122,74,48,0.14)';
+        ctx.beginPath(); ctx.arc(lx + 9, ry + 11, 9.5, 0, TAU); ctx.fill();
+        if (r.art) drawItemIcon(ctx, r.art, lx + 9, ry + 11, 15);
+        else drawAC(ctx, r.gart, lx + 9, ry + 11, 15);
+        lx += 23;
+      }
+      text(ctx, r.label, lx, ry + 3.5, { size: 8, color: '#4a3020', shadow: false });
+      if (r.sub) text(ctx, r.sub, lx, ry + 13, { size: 6.5, color: '#8a6a4a', shadow: false });
       if (r.btn) {
         const canAfford = r.price === undefined || G.money >= r.price;
         const active = !!r.act;
-        const hov = active && mx > this.WX + this.WW - 96 && mx < this.WX + this.WW - 12 && my > ry && my < ry + 20;
-        rrect(ctx, this.WX + this.WW - 96, ry + 2, 84, 17,
-          active ? (hov ? '#2c5a44' : '#1c3a2c') : 'rgba(24,18,10,0.7)',
-          active ? (canAfford ? '#4fae6a' : '#7a4444') : '#4a3a24');
-        text(ctx, r.btn, this.WX + this.WW - 54, ry + 6, {
-          size: 7, align: 'center',
-          color: !active ? '#6a5a42' : (canAfford ? '#a0f2b4' : '#e88a8a'),
+        ctx.save();
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(btnX, ry + 2, btnW, btnH, 3); else ctx.rect(btnX, ry + 2, btnW, btnH);
+        ctx.fillStyle = !active ? '#d8c6a4' : (canAfford ? (hov ? '#3f9a58' : '#4aa862') : '#c88a8a');
+        ctx.fill();
+        ctx.strokeStyle = !active ? 'rgba(122,74,48,0.3)' : 'rgba(30,70,40,0.55)';
+        ctx.lineWidth = 1; ctx.stroke();
+        ctx.restore();
+        text(ctx, r.btn, btnX + btnW / 2, ry + 7, {
+          size: 7.5, align: 'center', shadow: false,
+          color: !active ? '#9a8464' : '#ffffff',
         });
       }
     }
+
     if (this._rows.length > vis) {
-      text(ctx, `${this.scroll + 1}-${this.scroll + vis} of ${this._rows.length}`, this.WX + this.WW / 2, this.WY + this.WH - 12, { size: 6, color: '#8a7758', align: 'center' });
-      // tappable scroll arrows in the freed 8th-row band
       const maxScroll = this._rows.length - vis;
-      const ax = this.WX + this.WW - 56, ay = y0 + 7 * 23;
+      const ax = X + WW - 58, ay = y0 + vis * RH + 2;
+      text(ctx, `${this.scroll + 1}-${this.scroll + vis} of ${this._rows.length}`, X + WW / 2, Y + HH - 15, { size: 6.5, color: '#8a6a4a', align: 'center', shadow: false });
       for (let i = 0; i < 2; i++) {
         const canGo = i === 0 ? this.scroll > 0 : this.scroll < maxScroll;
-        uiPanel(ctx, ax + i * 24, ay, 22, 19, canGo ? 0.92 : 0.4);
-        ctx.fillStyle = canGo ? '#efe0bc' : '#5a4c34';
-        const cx2 = ax + i * 24 + 11, cy2 = ay + 9.5, d = i === 0 ? -1 : 1;
+        ctx.save();
         ctx.beginPath();
-        ctx.moveTo(cx2, cy2 + 4 * d); ctx.lineTo(cx2 - 5, cy2 - 3 * d); ctx.lineTo(cx2 + 5, cy2 - 3 * d);
+        if (ctx.roundRect) ctx.roundRect(ax + i * 24, ay, 21, 17, 3); else ctx.rect(ax + i * 24, ay, 21, 17);
+        ctx.fillStyle = canGo ? '#7a4a2c' : '#d8c6a4';
+        ctx.fill(); ctx.restore();
+        ctx.fillStyle = canGo ? '#ffe9c4' : '#b0a084';
+        const cx2 = ax + i * 24 + 10.5, cy2 = ay + 8.5, d = i === 0 ? -1 : 1;
+        ctx.beginPath();
+        ctx.moveTo(cx2, cy2 + 4 * d); ctx.lineTo(cx2 - 4.5, cy2 - 3 * d); ctx.lineTo(cx2 + 4.5, cy2 - 3 * d);
         ctx.closePath(); ctx.fill();
       }
     }
-    text(ctx, TouchUI.enabled ? 'tap X to close' : '[1-4] tabs   [Esc] close', this.WX + 12, this.WY + this.WH - 12, { size: 6, color: '#8a7758' });
+    text(ctx, TouchUI.enabled ? 'tap X to close' : '[1-4] tabs   [Esc] close', X + 14, Y + HH - 15, { size: 6.5, color: '#8a6a4a', shadow: false });
   },
 };

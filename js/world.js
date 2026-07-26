@@ -13,9 +13,8 @@ const DECK_Y = 176;
 
 // Every structure is anchored by its MEASURED deck-surface line (fraction of
 // sprite height) so nothing floats: deck surfaces all land exactly on DECK_Y.
-const HOUSE_X = 30, HOUSE_W = 175, HOUSE_DECK = 0.42;
-const PIER_START = 146, SEG_W = 88, PIER_DECK = 0.035;   // dock_11 trestle module
-const WATER_Y = 214;
+const HOUSE_X = 44, HOUSE_W = 116, HOUSE_DECK = 0.42;
+const PIER_START = 128, SEG_W = 88, PIER_DECK = 0.035;   // dock_11 trestle module
 
 // place a sprite so its deck surface sits on DECK_Y
 function drawOnDeck(ctx, name, x, w, deckFrac) {
@@ -34,12 +33,8 @@ const WorldScene = {
   customCursor: false,
   px: 160, dir: 1, walkT: 0, idleT: 0,
   camX: 0, time: 0,
-  gulls: [], smoke: [], stars: null,
-  crab: { x: 250, dir: 1, t: 0 },
-  perchedGull: { there: true, x: 388 },
-  fishJumpT: 9, fishJump: null,
-  dolphins: null,
-  sprayT: 2, spray: [], dust: [], dustT: 0,
+  smoke: [], stars: null,
+  dust: [], dustT: 0,
   _lampGlows: [],
 
   worldW() { return this.endX() + 80; },
@@ -49,7 +44,7 @@ const WorldScene = {
   enter(opts) {
     this.time = 0;
     if (opts && opts.at !== undefined) this.px = PILING_X[opts.at];
-    else if (opts && opts.fromHouse) this.px = 150;
+    else if (opts && opts.fromHouse) this.px = 112;
     if (!this.stars) {
       const rng = mulberry32(777);
       this.stars = [];
@@ -67,9 +62,9 @@ const WorldScene = {
 
   spots() {
     const s = [
-      { x: 92, label: 'Enter House', act: () => Game.go(HouseScene, {}) },
-      { x: 252, label: 'ClamNet  (sell & shop)', act: () => { Shop.openUI(); } },
-      { x: 316, label: 'Workbench  (crack & polish)', act: () => { Bench.openUI(); } },
+      { x: 82, label: 'Enter House', act: () => Game.go(HouseScene, {}) },
+      { x: 232, label: 'ClamNet  (sell & shop)', act: () => { Shop.openUI(); } },
+      { x: 296, label: 'Workbench  (crack & polish)', act: () => { Bench.openUI(); } },
     ];
     for (let i = 0; i < G.bridge; i++) {
       s.push({
@@ -88,7 +83,7 @@ const WorldScene = {
     if (Input.keys['KeyD'] || Input.keys['ArrowRight']) mv += 1;
     if (mv !== 0) {
       this.dir = mv;
-      this.px = clamp(this.px + mv * 92 * dt, 66, this.endX() - 10);
+      this.px = clamp(this.px + mv * 92 * dt, 52, this.endX() - 10);
       this.walkT += dt * 9;
       this.idleT = 0;
       this.dustT -= dt;
@@ -119,59 +114,6 @@ const WorldScene = {
     for (const s of this.smoke) { s.y += s.vy * dt; s.x += Math.sin(this.time + s.y * 0.1) * 0.2 + 3 * dt; s.t -= dt; }
     this.smoke = this.smoke.filter(s => s.t > 0);
 
-    // gulls
-    if (Math.random() < dt / 8) {
-      const fromLeft = Math.random() < 0.5;
-      this.gulls.push({ x: fromLeft ? -20 : W + 20, y: rand(16, 70), vx: fromLeft ? rand(20, 36) : -rand(20, 36), f: 0 });
-      if (Math.random() < 0.6) SND.gull();
-    }
-    for (const g of this.gulls) { g.x += g.vx * dt; g.f += dt * 6; }
-    this.gulls = this.gulls.filter(g => g.x > -30 && g.x < W + 30);
-
-    if (this.perchedGull.there && Math.abs(this.px - this.perchedGull.x) < 22) {
-      this.perchedGull.there = false;
-      this.gulls.push({ x: this.perchedGull.x - this.camX, y: DECK_Y - 20, vx: rand(24, 40) * (Math.random() < 0.5 ? -1 : 1), f: 0 });
-      SND.gull();
-      setTimeout(() => { this.perchedGull.there = true; this.perchedGull.x = pick([388, 420, 560]); }, 15000);
-    }
-
-    // crab
-    const c = this.crab;
-    c.t += dt * 6;
-    c.x += c.dir * 8 * dt;
-    if (c.x < 218 || c.x > 286) c.dir *= -1;
-
-    // fish jump
-    this.fishJumpT -= dt;
-    if (this.fishJumpT <= 0) {
-      this.fishJumpT = rand(8, 20);
-      this.fishJump = { x: rand(this.camX + 40, this.camX + W - 40), t: 0 };
-      if (Math.random() < 0.5) SND.splash();
-    }
-    if (this.fishJump) {
-      this.fishJump.t += dt;
-      if (this.fishJump.t > 1) this.fishJump = null;
-    }
-
-    // dolphins far out
-    if (!this.dolphins && Math.random() < dt / 30) this.dolphins = { x: -30, t: 0 };
-    if (this.dolphins) {
-      this.dolphins.x += 34 * dt;
-      this.dolphins.t += dt;
-      if (this.dolphins.x > W + 60) this.dolphins = null;
-    }
-
-    // sea spray at posts
-    this.sprayT -= dt;
-    if (this.sprayT <= 0) {
-      this.sprayT = rand(0.8, 1.8);
-      const sx = PIER_START + Math.floor(rand(0, (this.endX() - PIER_START) / SEG_W)) * SEG_W;
-      for (let i = 0; i < 3; i++)
-        this.spray.push({ x: sx + rand(-3, 3), y: WATER_Y, vx: rand(-6, 6), vy: rand(-24, -12), t: rand(0.4, 0.8) });
-    }
-    for (const p of this.spray) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 60 * dt; p.t -= dt; }
-    this.spray = this.spray.filter(p => p.t > 0);
-
     if (G.pendingCrate && G.pendingCrate.t < 10) SND.droneOn(); else SND.droneOff();
   },
 
@@ -181,7 +123,7 @@ const WorldScene = {
     this._lampGlows = [];
 
     // the painted sea (animated), light horizontal parallax
-    drawA(ctx, `bg_surf${Math.floor(this.time * 7) % 10}`, -20 - cam * 0.055, 0, 540, 270);
+    drawA(ctx, `bg_surf${Math.floor(this.time * 6) % 8}`, -20 - cam * 0.055, 0, 540, 270);
 
     // night stars + moon over the painted sky
     if (nite > 0.2) {
@@ -196,42 +138,6 @@ const WorldScene = {
       ctx.fillRect(W - 94, 40, 2, 2); ctx.fillRect(W - 88, 44, 1.5, 1.5);
     }
 
-    // dolphins on the horizon
-    if (this.dolphins) {
-      const d = this.dolphins;
-      ctx.fillStyle = `rgba(30,70,110,${0.7 - nite * 0.3})`;
-      for (let i = 0; i < 3; i++) {
-        const px2 = d.x - i * 22;
-        const ph = (d.t * 1.4 + i * 0.6) % TAU;
-        const arc = Math.max(0, Math.sin(ph));
-        if (arc < 0.05) continue;
-        ctx.save();
-        ctx.translate(px2, 128 - arc * 8);
-        ctx.rotate(Math.cos(ph) * -0.5);
-        ctx.beginPath(); ctx.ellipse(0, 0, 7, 2.4, 0, 0, TAU); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(-1, -1.5); ctx.lineTo(1.5, -4.5); ctx.lineTo(3.5, -1.5); ctx.closePath(); ctx.fill();
-        ctx.restore();
-      }
-    }
-
-    // fish jump
-    if (this.fishJump) {
-      const f = this.fishJump, ft = f.t;
-      const fy = 210 - Math.sin(ft * Math.PI) * 26;
-      ctx.save();
-      ctx.translate(f.x - cam, fy);
-      ctx.rotate(ft * Math.PI - Math.PI / 2);
-      ctx.fillStyle = '#4a7a9e';
-      ctx.beginPath(); ctx.ellipse(0, 0, 5, 2, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#7ab0cc';
-      ctx.beginPath(); ctx.ellipse(0.5, -0.5, 3, 1, 0, 0, TAU); ctx.fill();
-      ctx.restore();
-      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-      ctx.lineWidth = PIX * 2;
-      const rr = ft < 0.5 ? ft * 8 : (1 - ft) * 12 + 4;
-      ctx.beginPath(); ctx.ellipse(f.x - cam, 212, rr, rr * 0.3, 0, 0, TAU); ctx.stroke();
-    }
-
     ctx.save();
     ctx.translate(-cam, 0);
     const endX = this.endX();
@@ -239,13 +145,9 @@ const WorldScene = {
     // ---- the pier: ONE trestle module tiled edge to edge -------------------------
     const pierH = assetH('dock_11', SEG_W);
     const pierTop = DECK_Y - pierH * PIER_DECK;
-    for (let x = PIER_START; x < endX; x += SEG_W - 1) {
+    const pierEnd = Math.max(endX, cam + W + SEG_W);
+    for (let x = PIER_START; x < pierEnd; x += SEG_W - 1) {
       drawA(ctx, 'dock_11', x, pierTop, SEG_W, pierH);
-    }
-    // ladders hanging off the deck at each dive piling
-    for (let i = 0; i < G.bridge; i++) {
-      const lw = 16, lh = assetH('dock_9', lw);
-      drawA(ctx, 'dock_9', PILING_X[i] + 6, DECK_Y - lh * 0.021, lw, lh);
     }
     // end-of-pier gate
     if (G.bridge < 3) {
@@ -281,73 +183,59 @@ const WorldScene = {
     }
 
     // ---- lamp posts standing on the deck -------------------------------------------
-    for (let x = PIER_START + SEG_W * 2.5; x < endX - 20; x += SEG_W * 3) {
+    for (let x = PIER_START + SEG_W * 2.5; x < pierEnd; x += SEG_W * 3) {
       const lh = drawStanding(ctx, 'dock_15', x, 15, 5);
       this._lampGlows.push({ x, y: DECK_Y - lh + 6 });
     }
 
     // ---- ClamNet: a table on the deck with the laptop on it -------------------------
-    const tblH = drawStanding(ctx, 'furn_2', 252, 34, 1);
+    const tblH = drawStanding(ctx, 'furn_2', 232, 32, 1);
     const topY = DECK_Y - tblH + 1;
     ctx.fillStyle = '#2a3038';
-    ctx.fillRect(245, topY - 10, 15, 10);
+    ctx.fillRect(225, topY - 10, 15, 10);
     ctx.fillStyle = nite > 0.3 ? '#9fe8ff' : '#5ad2f0';
-    ctx.fillRect(246, topY - 9, 13, 8);
+    ctx.fillRect(226, topY - 9, 13, 8);
     ctx.fillStyle = 'rgba(255,255,255,0.65)';
-    ctx.fillRect(247, topY - 8, 5, 1);
-    ctx.fillRect(247, topY - 6, 8, 1);
+    ctx.fillRect(227, topY - 8, 5, 1);
+    ctx.fillRect(227, topY - 6, 8, 1);
     if (nite > 0.3) {
       ctx.fillStyle = 'rgba(120,220,255,0.13)';
-      ctx.beginPath(); ctx.arc(252, topY - 5, 14, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(232, topY - 5, 14, 0, TAU); ctx.fill();
     }
 
     // ---- Workbench: desk + barrel + crate on the deck --------------------------------
-    const bH = drawStanding(ctx, 'furn_18', 316, 34, 1);
+    const bH = drawStanding(ctx, 'furn_5', 296, 36, 1);
     const bTop = DECK_Y - bH + 1;
-    drawAC(ctx, 'shell_clam', 308, bTop - 4, 10);
-    drawAC(ctx, 'shell_scallop', 320, bTop - 4, 9);
-    drawStanding(ctx, 'furn_9', 340, 15, 1);
-    drawStanding(ctx, 'furn_7', 291, 14, 1);
+    drawAC(ctx, 'shell_clam', 289, bTop - 4, 9);
+    drawAC(ctx, 'shell_scallop', 301, bTop - 4, 8);
+    drawStanding(ctx, 'furn_9', 318, 14, 1);
+    drawStanding(ctx, 'furn_17', 271, 14, 1);
 
     // drone landing pad
     ctx.fillStyle = 'rgba(60,68,72,0.9)';
-    ctx.fillRect(170, DECK_Y - 2, 40, 2);
+    ctx.fillRect(152, DECK_Y - 2, 38, 2);
     ctx.strokeStyle = '#c8cdd0'; ctx.lineWidth = PIX * 2;
-    ctx.beginPath(); ctx.ellipse(190, DECK_Y - 1, 13, 1.6, 0, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(171, DECK_Y - 1, 12, 1.6, 0, 0, TAU); ctx.stroke();
 
     this.drawDrone(ctx);
 
-    // crab + perched gull
-    drawSpr(ctx, SPR.crab[Math.floor(this.crab.t) % 2], Math.round(this.crab.x), DECK_Y - 4);
-    if (this.perchedGull.there) {
-      const gx = this.perchedGull.x;
-      ctx.fillStyle = '#f2f4f6';
-      ctx.beginPath(); ctx.ellipse(gx, DECK_Y - 6, 3.5, 2.5, 0, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.arc(gx + 3, DECK_Y - 9.5, 2, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#e8a13c';
-      ctx.fillRect(gx + 5, DECK_Y - 10, 2, 1);
-      ctx.fillStyle = '#20242c';
-      ctx.fillRect(gx + 3.5, DECK_Y - 10.5, 1, 1);
-    }
-
-    // smoke + spray + dust
+    // smoke + dust
     for (const s of this.smoke) {
       ctx.fillStyle = `rgba(220,220,225,${clamp(s.t / 3, 0, 0.45)})`;
       ctx.beginPath(); ctx.arc(s.x, s.y, s.s, 0, TAU); ctx.fill();
     }
-    ctx.fillStyle = 'rgba(240,248,250,0.7)';
-    for (const p of this.spray) ctx.fillRect(p.x, p.y, PIX * 2, PIX * 2);
     for (const d of this.dust) {
       ctx.fillStyle = `rgba(200,186,150,${clamp(d.t * 1.6, 0, 0.5)})`;
       ctx.beginPath(); ctx.arc(d.x, d.y, d.s * (1.6 - d.t), 0, TAU); ctx.fill();
     }
 
     // ---- player: the uploaded otter, with squash & stretch ---------------------------
-    const OTTER_WALK = ['o2_0', 'o2_1', 'o2_3', 'o2_4', 'o2_5'];
+    const OTTER_WALK = ['o3_4', 'o3_5', 'o3_6', 'o3_7'];
+    const OTTER_IDLE = ['o3_0', 'o3_1', 'o3_2', 'o3_3'];
     const walking = this.walkT > 0 && this.idleT < 0.1;
     let frameN = 0, sqx = 1, sqy = 1, hop = 0;
     if (walking) {
-      frameN = Math.floor(this.walkT * 0.9) % OTTER_WALK.length;
+      frameN = Math.floor(this.walkT * 0.8) % OTTER_WALK.length;
       const ph = this.walkT * 2.2;
       hop = Math.abs(Math.sin(ph)) * 1.6;
       sqy = 1 + Math.cos(ph * 2) * 0.045;
@@ -356,14 +244,14 @@ const WorldScene = {
       sqy = 1 + Math.sin(this.time * 2.1) * 0.02;
       sqx = 1 - (sqy - 1) * 0.7;
     }
-    ctx.fillStyle = 'rgba(0,10,30,0.3)';
-    ctx.beginPath(); ctx.ellipse(this.px, DECK_Y + 0.6, Math.max(4, 7 - hop * 0.9), 1.6, 0, 0, TAU); ctx.fill();
-    const oimg = ASSETS[walking ? OTTER_WALK[frameN] : 'o2_13'];
+    ctx.fillStyle = 'rgba(40,20,10,0.18)';
+    ctx.beginPath(); ctx.ellipse(this.px, DECK_Y + 0.8, Math.max(3.5, 6 - hop * 0.9), 1.3, 0, 0, TAU); ctx.fill();
+    const oimg = ASSETS[walking ? OTTER_WALK[frameN] : OTTER_IDLE[Math.floor(this.time * 2.2) % 4]];
     if (oimg && oimg.width) {
-      const oh = 27, ow = oh * oimg.width / oimg.height;
+      const oh = 30, ow = oh * oimg.width / oimg.height;
       ctx.save();
       ctx.translate(Math.round(this.px * DPX) / DPX, DECK_Y + 0.5 - hop);
-      ctx.scale(this.dir >= 0 ? -sqx : sqx, sqy);   // sheet faces left
+      ctx.scale(this.dir >= 0 ? sqx : -sqx, sqy);   // sheet faces left
       ctx.drawImage(oimg, -ow / 2, -oh + 0.5, ow, oh);
       ctx.restore();
     }
@@ -386,44 +274,7 @@ const WorldScene = {
       ctx.closePath(); ctx.fill();
     }
 
-    // ---- waterline: tint what's below it, foam where it meets the posts -----------
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(cam - 20, WATER_Y, W + 40, H - WATER_Y);
-    ctx.clip();
-    ctx.fillStyle = 'rgba(120,214,240,0.42)';
-    ctx.fillRect(cam - 20, WATER_Y, W + 40, H - WATER_Y);
     ctx.restore();
-    // soft foam only where the posts break the surface
-    ctx.fillStyle = 'rgba(255,255,255,0.30)';
-    for (let x = PIER_START - SEG_W; x < endX + SEG_W; x += SEG_W - 1) {
-      for (const ox of [6, SEG_W - 10]) {
-        const fx = x + ox;
-        if (fx < cam - 20 || fx > cam + W + 20) continue;
-        const wob = Math.sin(this.time * 1.6 + fx * 0.1) * 1.2;
-        ctx.beginPath();
-        ctx.ellipse(fx + 3, WATER_Y + 1 + wob, 9, 1.6, 0, 0, TAU);
-        ctx.fill();
-      }
-    }
-    // one gentle glimmer line along the waterline
-    ctx.fillStyle = 'rgba(255,255,255,0.14)';
-    for (let x = cam - 24; x < cam + W + 24; x += 14) {
-      const wy = WATER_Y + Math.sin(x * 0.045 + this.time * 1.2) * 1.4;
-      ctx.fillRect(x, wy, 7, 1);
-    }
-    ctx.restore();
-
-    // gulls (screen space)
-    for (const g of this.gulls) {
-      const img = SPR.gull[Math.floor(g.f) % 2];
-      if (g.vx < 0) {
-        ctx.save(); ctx.translate(Math.round(g.x), Math.round(g.y)); ctx.scale(-1, 1);
-        drawSpr(ctx, img, -7, 0); ctx.restore();
-      } else {
-        drawSpr(ctx, img, Math.round(g.x), Math.round(g.y));
-      }
-    }
 
     // night: tint + warm glows
     if (nite > 0.05) {
@@ -451,7 +302,7 @@ const WorldScene = {
   drawDrone(ctx) {
     const pc = G.pendingCrate;
     if (!pc) return;
-    const padX = 190, padY = DECK_Y - 1;
+    const padX = 171, padY = DECK_Y - 1;
     let crateY = padY - 10;
     let leaving = pc.t <= 1.1;
     if (pc.t <= 2.4 && pc.t > 1.1) crateY = padY - 10 - (2.4 - pc.t) * 30;

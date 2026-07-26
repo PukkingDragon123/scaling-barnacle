@@ -902,7 +902,7 @@ const DiveScene = {
     const night = isNight(G.clock) ? 0.55 : 0;
     const bgH = 432, bgOver = bgH - H;
     const bgOff = Math.min(bgOver, this.camY * 0.06);
-    drawA(ctx, `bg_deep${Math.floor(this.time * 6) % 10}`, 0, -bgOff, W, bgH);
+    drawA(ctx, `bg_deep${Math.floor(this.time * 5) % 8}`, 0, -bgOff, W, bgH);
     // the deeper you go, the bluer and blacker it gets (headlamp overlay handles the rest)
     ctx.fillStyle = `rgba(3,10,22,${clamp(depthFrac * 0.45 + night * 0.3, 0, 0.7)})`;
     ctx.fillRect(0, 0, W, H);
@@ -911,7 +911,7 @@ const DiveScene = {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 0.55 * (1 - this.camY / 260);
-      drawA(ctx, `bg_rays${Math.floor(this.time * 8) % 8}`, 0, -this.camY * 0.35, W, 184);
+      drawA(ctx, `bg_rays${Math.floor(this.time * 6) % 6}`, 0, -this.camY * 0.35, W, 184);
       ctx.restore();
     }
 

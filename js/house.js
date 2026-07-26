@@ -85,7 +85,7 @@ const HouseScene = {
     const nite = nightness(G.clock);
 
     // sea behind the cutaway
-    drawA(ctx, `bg_surf${Math.floor(this.time * 7) % 10}`, -30, 0, 540, 270);
+    drawA(ctx, `bg_surf${Math.floor(this.time * 6) % 8}`, -30, 0, 540, 270);
     if (nite > 0.2) {
       ctx.fillStyle = `rgba(8,12,38,${nite * 0.4})`;
       ctx.fillRect(0, 0, W, H);
@@ -95,11 +95,12 @@ const HouseScene = {
     drawA(ctx, 'house_int', 0, 0, 480);
 
     // ---- player -------------------------------------------------------------------------
-    const OTTER_WALK = ['o2_0', 'o2_1', 'o2_3', 'o2_4', 'o2_5'];
+    const OTTER_WALK = ['o3_4', 'o3_5', 'o3_6', 'o3_7'];
+    const OTTER_IDLE = ['o3_0', 'o3_1', 'o3_2', 'o3_3'];
     const walking = this.walkT > 0 && this.idleT < 0.1;
     let frameN = 0, sqx = 1, sqy = 1, hop = 0;
     if (walking) {
-      frameN = Math.floor(this.walkT * 0.9) % OTTER_WALK.length;
+      frameN = Math.floor(this.walkT * 0.8) % OTTER_WALK.length;
       const ph = this.walkT * 2.2;
       hop = Math.abs(Math.sin(ph)) * 1.6;
       sqy = 1 + Math.cos(ph * 2) * 0.045;
@@ -108,14 +109,14 @@ const HouseScene = {
       sqy = 1 + Math.sin(this.time * 2.1) * 0.02;
       sqx = 1 - (sqy - 1) * 0.7;
     }
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.beginPath(); ctx.ellipse(this.px, FLOOR + 0.6, Math.max(4, 7 - hop * 0.9), 1.6, 0, 0, TAU); ctx.fill();
-    const oimg = ASSETS[walking ? OTTER_WALK[frameN] : 'o2_13'];
+    ctx.fillStyle = 'rgba(40,20,10,0.2)';
+    ctx.beginPath(); ctx.ellipse(this.px, FLOOR + 0.8, Math.max(3.5, 6 - hop * 0.9), 1.3, 0, 0, TAU); ctx.fill();
+    const oimg = ASSETS[walking ? OTTER_WALK[frameN] : OTTER_IDLE[Math.floor(this.time * 2.2) % 4]];
     if (oimg && oimg.width) {
-      const oh = 27, ow = oh * oimg.width / oimg.height;
+      const oh = 30, ow = oh * oimg.width / oimg.height;
       ctx.save();
       ctx.translate(Math.round(this.px * DPX) / DPX, FLOOR + 0.5 - hop);
-      ctx.scale(this.dir >= 0 ? -sqx : sqx, sqy);
+      ctx.scale(this.dir >= 0 ? sqx : -sqx, sqy);
       ctx.drawImage(oimg, -ow / 2, -oh + 0.5, ow, oh);
       ctx.restore();
     }

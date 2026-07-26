@@ -9,7 +9,7 @@ const Bench = {
   crackPos: 0,         // 0..1 sweep position
   result: null, resultT: 0,
   shine: 0, lastRubX: 0, rubbing: false, sparkles: [],
-  WX: 90, WY: 30, WW: 300, WH: 210,
+  WX: 68, WY: 26, WW: 344, WH: 218,
 
   openUI() {
     this.open = true;
@@ -100,22 +100,25 @@ const Bench = {
     if (this.mode === 'menu') {
       if (Input.mouse.clicked) {
         // close X
-        if (mx > this.WX + this.WW - 26 && my < this.WY + 20) { this.close(); return; }
+        if (mx > this.WX + this.WW - 28 && my > this.WY && my < this.WY + 24) { this.close(); return; }
         const rows = this.menuRows();
-        for (let i = 0; i < rows.length; i++) {
-          const ry = this.WY + 46 + i * 26;
-          if (my > ry && my < ry + 23 && mx > this.WX + 10 && mx < this.WX + this.WW - 10) {
+        for (let i = 0; i < rows.length && i < 5; i++) {
+          const ry = this.WY + 44 + i * 31;
+          if (my > ry && my < ry + 28 && mx > this.WX + 12 && mx < this.WX + this.WW - 12) {
             rows[i].act();
             return;
           }
         }
       }
     } else if (this.mode === 'crack') {
+      if (Input.mouse.clicked && mx > this.WX + this.WW - 28 && my > this.WY && my < this.WY + 24) {
+        this.mode = 'menu'; SND.click(); return;
+      }
       this.t += dt;
       this.crackPos = (Math.sin(this.t * 3.4 - Math.PI / 2) + 1) / 2;
       if (Input.mouse.clicked) this.resolveCrack();
     } else if (this.mode === 'polish') {
-      const overItem = Math.abs(mx - (this.WX + this.WW / 2)) < 46 && Math.abs(my - (this.WY + 104)) < 40;
+      const overItem = Math.abs(mx - (this.WX + this.WW / 2)) < 52 && Math.abs(my - (this.WY + 110)) < 44;
       if (Input.mouse.down && overItem) {
         const dx = Math.abs(mx - this.lastRubX);
         if (dx > 0.5) {
@@ -143,43 +146,75 @@ const Bench = {
   },
 
   draw(ctx) {
-    ctx.fillStyle = 'rgba(4,8,14,0.62)';
+    // dim the world, then a warm bench panel
+    ctx.fillStyle = 'rgba(6,10,16,0.66)';
     ctx.fillRect(0, 0, W, H);
-    uiPanel(ctx, this.WX, this.WY, this.WW, this.WH, 0.97);
-    ctx.fillStyle = 'rgba(58,42,22,0.95)';
-    ctx.fillRect(this.WX + 2, this.WY + 2, this.WW - 4, 15);
-    text(ctx, "~ OTTO'S WORKBENCH ~", this.WX + this.WW / 2, this.WY + 6, { size: 8, color: '#ffe6b0', align: 'center' });
-    text(ctx, 'X', this.WX + this.WW - 11, this.WY + 5.5, { size: 8, color: '#e8434c', align: 'center' });
+    const X = this.WX, Y = this.WY, WW = this.WW, HH = this.WH;
+    uiPanel(ctx, X, Y, WW, HH, 0.97, true);
+    // header bar
+    ctx.save();
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(X + 3, Y + 3, WW - 6, 19, 2.5); else ctx.rect(X + 3, Y + 3, WW - 6, 19);
+    ctx.fillStyle = '#7a4a2c';
+    ctx.fill();
+    ctx.restore();
+    drawAC(ctx, 'g_crowbar', X + 18, Y + 12.5, 15);
+    text(ctx, "OTTO'S WORKBENCH", X + WW / 2, Y + 7.5, { size: 9, color: '#ffe9c4', align: 'center', shadow: false });
+    // close
+    const mx = Input.mouse.x, my = Input.mouse.y;
+    const cHov = mx > X + WW - 26 && mx < X + WW - 4 && my > Y + 2 && my < Y + 22;
+    ctx.fillStyle = cHov ? '#e8434c' : '#5a3220';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(X + WW - 24, Y + 5, 16, 15, 2.5); else ctx.rect(X + WW - 24, Y + 5, 16, 15);
+    ctx.fill();
+    text(ctx, 'X', X + WW - 16, Y + 8, { size: 8, color: '#ffe9c4', align: 'center', shadow: false });
 
     if (this.mode === 'menu') {
       const rows = this.menuRows();
+      text(ctx, 'WHAT SHALL WE WORK ON?', X + WW / 2, Y + 30, { size: 7, color: '#8a6a4a', align: 'center', shadow: false });
       if (!rows.length) {
-        text(ctx, 'Nothing to work on.', this.WX + this.WW / 2, this.WY + 80, { size: 9, color: '#b8a888', align: 'center' });
-        text(ctx, 'Dive for clams, oysters, abalone or pearls!', this.WX + this.WW / 2, this.WY + 96, { size: 7, color: '#8a7758', align: 'center' });
+        text(ctx, 'Nothing to work on.', X + WW / 2, Y + 92, { size: 10, color: '#7a5a3a', align: 'center', shadow: false });
+        text(ctx, 'Dive for clams, oysters, abalone or pearls!', X + WW / 2, Y + 108, { size: 7, color: '#9a7a5a', align: 'center', shadow: false });
       }
-      const mx = Input.mouse.x, my = Input.mouse.y;
-      for (let i = 0; i < rows.length && i < 6; i++) {
-        const ry = this.WY + 46 + i * 26;
-        const hov = my > ry && my < ry + 23 && mx > this.WX + 10 && mx < this.WX + this.WW - 10;
-        ctx.fillStyle = hov ? 'rgba(90,66,36,0.7)' : 'rgba(56,42,24,0.55)';
-        ctx.fillRect(this.WX + 10, ry, this.WW - 20, 23);
-        ctx.fillStyle = 'rgba(230,200,150,0.12)';
-        ctx.fillRect(this.WX + 10, ry, this.WW - 20, PIX);
-        drawItemIcon(ctx, rows[i].art, this.WX + 24, ry + 11.5, 15);
-        text(ctx, rows[i].label, this.WX + 32, ry + 3.5, { size: 8, color: '#f4e8cc' });
-        text(ctx, rows[i].sub, this.WX + 32, ry + 13, { size: 6, color: '#a0d2ac' });
+      for (let i = 0; i < rows.length && i < 5; i++) {
+        const ry = Y + 44 + i * 31;
+        const hov = my > ry && my < ry + 28 && mx > X + 12 && mx < X + WW - 12;
+        // card
+        ctx.save();
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(X + 12, ry, WW - 24, 28, 3); else ctx.rect(X + 12, ry, WW - 24, 28);
+        ctx.fillStyle = hov ? '#f6e4c2' : '#eddcba';
+        ctx.fill();
+        ctx.strokeStyle = hov ? '#b07a3c' : 'rgba(122,74,48,0.45)';
+        ctx.lineWidth = hov ? 1.6 : 1;
+        ctx.stroke();
+        ctx.restore();
+        // icon well
+        ctx.fillStyle = 'rgba(122,74,48,0.16)';
+        ctx.beginPath(); ctx.arc(X + 30, ry + 14, 11, 0, TAU); ctx.fill();
+        drawItemIcon(ctx, rows[i].art, X + 30, ry + 14, 18);
+        text(ctx, rows[i].label, X + 47, ry + 5, { size: 8, color: '#4a3020', shadow: false });
+        text(ctx, rows[i].sub, X + 47, ry + 16, { size: 7, color: '#2f7a4a', shadow: false });
+        // go chevron
+        ctx.fillStyle = hov ? '#7a4a2c' : '#b09070';
+        ctx.beginPath();
+        ctx.moveTo(X + WW - 26, ry + 10); ctx.lineTo(X + WW - 20, ry + 14); ctx.lineTo(X + WW - 26, ry + 18);
+        ctx.closePath(); ctx.fill();
       }
-      text(ctx, 'crack: tap when the marker hits center  *  polish: rub!', this.WX + this.WW / 2, this.WY + this.WH - 14, { size: 6, color: '#8a7758', align: 'center' });
+      text(ctx, 'crack for meat  *  polish for shine', X + WW / 2, Y + HH - 14, { size: 6.5, color: '#9a7a5a', align: 'center', shadow: false });
       return;
     }
 
-    // shared: the item, big, on a work cloth
-    const cx = this.WX + this.WW / 2, cy = this.WY + 104;
-    ctx.fillStyle = '#5f4a2e';
-    ctx.beginPath(); ctx.ellipse(cx, cy + 26, 62, 12, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#7a6240';
-    ctx.beginPath(); ctx.ellipse(cx, cy + 24, 54, 9, 0, 0, TAU); ctx.fill();
-    // the shell itself, big on the work cloth — cracked open on success
+    // ---- working view -------------------------------------------------------------
+    const cx = X + WW / 2, cy = Y + 108;
+    text(ctx, (this.mode === 'crack' ? 'CRACKING' : 'POLISHING') + '  ~  ' + ITEMS[this.item].name
+      + '  x' + (G.storage[this.item] || 0), cx, Y + 30, { size: 8, color: '#6a4420', align: 'center', shadow: false });
+    // work surface
+    ctx.fillStyle = '#c9ab82';
+    ctx.beginPath(); ctx.ellipse(cx, cy + 34, 76, 15, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#dcc09a';
+    ctx.beginPath(); ctx.ellipse(cx, cy + 31, 66, 11, 0, 0, TAU); ctx.fill();
+
     const showOpen = this.result && this.result.good > 0 && this.mode === 'crack';
     const artName = showOpen ? ('open_' + (NODE_ART[this.item] || 'clam'))
       : (this.mode === 'polish' && this.result ? ITEM_ART[BENCH_POLISH[this.item]] : ITEM_ART[this.item]) || 'shell_clam';
@@ -189,71 +224,66 @@ const Bench = {
     if (this.result) {
       const rp = 1 + Math.sin(clamp(0.9 - this.resultT, 0, 0.9) * Math.PI) * 0.12;
       ctx.scale(rp, rp);
-      // starburst behind the reveal
       ctx.save();
       ctx.rotate(this.resultT * 1.5);
-      ctx.fillStyle = `rgba(255,246,200,${clamp(this.resultT, 0, 0.55)})`;
+      ctx.fillStyle = `rgba(255,236,170,${clamp(this.resultT, 0, 0.5)})`;
       for (let i = 0; i < 6; i++) {
         ctx.rotate(TAU / 6);
-        ctx.beginPath(); ctx.moveTo(0, -18); ctx.lineTo(5, -44); ctx.lineTo(-5, -44); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(6, -50); ctx.lineTo(-6, -50); ctx.closePath(); ctx.fill();
       }
       ctx.restore();
     }
-    drawAC(ctx, artName, 0, 0, 62);
+    drawAC(ctx, artName, 0, 0, 66);
     ctx.restore();
 
     if (this.mode === 'crack') {
-      text(ctx, `Cracking: ${ITEMS[this.item].name}  (x${G.storage[this.item]})`, cx, this.WY + 28, { size: 8, color: '#f4e8cc', align: 'center' });
-      // sweep bar
-      const bw = 180, bx = cx - bw / 2, by = this.WY + 158;
-      rrect(ctx, bx - 2, by - 2, bw + 4, 16, '#181008', '#7e5c34');
-      ctx.fillStyle = '#2c1f12';
+      const bw = 210, bx = cx - bw / 2, by = Y + 166;
+      // track
+      ctx.save();
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(bx - 3, by - 3, bw + 6, 18, 3); else ctx.rect(bx - 3, by - 3, bw + 6, 18);
+      ctx.fillStyle = '#5a3a22'; ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = '#3a2414';
       ctx.fillRect(bx, by, bw, 12);
-      // zones
-      ctx.fillStyle = '#3f6a3f';
+      ctx.fillStyle = '#4a7a46';
       ctx.fillRect(bx + bw * 0.33, by, bw * 0.34, 12);
-      ctx.fillStyle = '#4fae5e';
+      ctx.fillStyle = '#68c268';
       ctx.fillRect(bx + bw * 0.43, by, bw * 0.14, 12);
-      ctx.fillStyle = 'rgba(200,255,210,0.6)';
-      ctx.fillRect(bx + bw * 0.43, by, bw * 0.14, 1.5);
+      ctx.fillStyle = 'rgba(220,255,220,0.55)';
+      ctx.fillRect(bx + bw * 0.43, by, bw * 0.14, 2);
       // marker
       const mxp = bx + this.crackPos * bw;
       ctx.fillStyle = '#ffe66e';
-      ctx.fillRect(mxp - 1, by - 4, 2, 20);
-      ctx.beginPath(); ctx.moveTo(mxp, by - 5); ctx.lineTo(mxp - 4, by - 10); ctx.lineTo(mxp + 4, by - 10); ctx.closePath(); ctx.fill();
+      ctx.fillRect(mxp - 1.2, by - 5, 2.4, 22);
+      ctx.beginPath(); ctx.moveTo(mxp, by - 6); ctx.lineTo(mxp - 5, by - 13); ctx.lineTo(mxp + 5, by - 13); ctx.closePath(); ctx.fill();
       if (!this.result)
-        text(ctx, TouchUI.enabled ? 'TAP when the marker is centered!' : 'CLICK when the marker is centered!', cx, by + 22, { size: 7, color: '#ffe6b0', align: 'center' });
+        text(ctx, TouchUI.enabled ? 'TAP in the green!' : 'CLICK in the green!', cx, by + 20, { size: 8, color: '#6a4420', align: 'center', shadow: false });
     } else if (this.mode === 'polish') {
-      text(ctx, `Polishing: ${ITEMS[this.item].name}  (x${G.storage[this.item]})`, cx, this.WY + 28, { size: 8, color: '#f4e8cc', align: 'center' });
-      // shine meter
-      const bw = 180, bx = cx - bw / 2, by = this.WY + 162;
-      rrect(ctx, bx - 2, by - 2, bw + 4, 12, '#181008', '#7e5c34');
-      ctx.fillStyle = '#2c1f12';
+      const bw = 210, bx = cx - bw / 2, by = Y + 170;
+      ctx.save();
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(bx - 3, by - 3, bw + 6, 14, 3); else ctx.rect(bx - 3, by - 3, bw + 6, 14);
+      ctx.fillStyle = '#5a3a22'; ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = '#3a2414';
       ctx.fillRect(bx, by, bw, 8);
       const grad = ctx.createLinearGradient(bx, 0, bx + bw, 0);
       grad.addColorStop(0, '#8ff0d8'); grad.addColorStop(1, '#fffdf4');
       ctx.fillStyle = grad;
       ctx.fillRect(bx, by, bw * this.shine, 8);
-      // rub sparkles
       for (const s of this.sparkles) {
         ctx.fillStyle = `rgba(255,255,240,${clamp(s.t * 2, 0, 1)})`;
         ctx.fillRect(s.x, s.y, 1.5, 1.5);
-        ctx.fillRect(s.x - 1.5, s.y + 1.5, 1, 1);
       }
-      // gleam sweep on the item as shine grows
-      ctx.save();
-      ctx.globalAlpha = this.shine * 0.5;
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(cx - 40 + this.shine * 60, cy - 30, 4, 60);
-      ctx.restore();
       if (!this.result)
-        text(ctx, TouchUI.enabled ? 'RUB it back and forth!' : 'Hold and RUB side to side!', cx, by + 18, { size: 7, color: '#ffe6b0', align: 'center' });
+        text(ctx, TouchUI.enabled ? 'RUB back and forth!' : 'Hold and RUB side to side!', cx, by + 16, { size: 8, color: '#6a4420', align: 'center', shadow: false });
     }
 
     if (this.result) {
-      const col = this.result.good === 2 ? '#a0f2b4' : (this.result.good === 1 ? '#ffe6b0' : '#e88a8a');
-      text(ctx, this.result.msg, cx, this.WY + 62, { size: 11, color: col, align: 'center' });
+      const col = this.result.good === 2 ? '#2f7a4a' : (this.result.good === 1 ? '#8a6420' : '#a83030');
+      text(ctx, this.result.msg, cx, Y + 46, { size: 12, color: col, align: 'center', shadow: false });
     }
-    text(ctx, '[Esc] back', this.WX + 12, this.WY + this.WH - 14, { size: 6, color: '#8a7758' });
+    text(ctx, '[Esc] back', X + 14, Y + HH - 14, { size: 6.5, color: '#9a7a5a', shadow: false });
   },
 };

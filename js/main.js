@@ -5,7 +5,8 @@ let G = null;
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-ctx.imageSmoothingEnabled = false;
+ctx.imageSmoothingEnabled = true;
+ctx.imageSmoothingQuality = 'high';
 
 const Input = {
   keys: {}, pressed: new Set(),
@@ -299,37 +300,44 @@ const Game = {
   },
 
   drawHUD(c) {
-    // left panel: hearts over coin purse
-    const pw = Math.max(G.maxHearts * 9 + 12, 58);
-    uiPanel(c, 4, 4, pw, 27, 0.8);
+    // left: hearts + purse
+    const pw = Math.max(G.maxHearts * 10 + 14, 62);
+    uiPanel(c, 6, 6, pw, 30, 0.9, true);
     for (let i = 0; i < G.maxHearts; i++) {
       const kind = G.hearts >= i + 1 ? 'full' : (G.hearts >= i + 0.5 ? 'half' : 'empty');
-      drawHeart(c, 9 + i * 9, 8, kind);
+      drawHeart(c, 11 + i * 10, 10, kind);
     }
-    drawSpr(c, SPR.coin, 8, 16.5);
-    text(c, `${G.money}`, 18, 17, { size: 8, color: '#ffe66e' });
-    // right panel: day + sun/moon dial
-    uiPanel(c, W - 68, 4, 64, 18, 0.8);
-    text(c, `Day ${G.day}`, W - 9, 9, { size: 8, color: '#efe0bc', align: 'right' });
-    // dial: dot travels an arc across a tiny horizon
-    const dx = W - 57, dy = 16, dr = 7;
-    c.fillStyle = 'rgba(230,200,150,0.4)';
-    c.fillRect(dx - dr, dy, dr * 2, PIX);
+    drawAC(c, 'shell_pearl', 15, 27, 12);
+    text(c, `${G.money}`, 24, 22.5, { size: 9, color: '#6a4420', shadow: false });
+
+    // right: day + time dial
+    uiPanel(c, W - 74, 6, 68, 20, 0.9, true);
+    text(c, `Day ${G.day}`, W - 12, 11, { size: 8, color: '#6a4420', align: 'right', shadow: false });
+    const dx = W - 60, dy = 20, dr = 8;
+    c.strokeStyle = 'rgba(122,74,48,0.4)'; c.lineWidth = 1;
+    c.beginPath(); c.arc(dx, dy, dr, Math.PI, 0); c.stroke();
     const day = G.clock > 0.06 && G.clock < 0.66;
     const tt = day ? (G.clock - 0.06) / 0.6 : clamp((G.clock >= 0.66 ? G.clock - 0.66 : G.clock + 0.34) / 0.4, 0, 1);
     const a = Math.PI + tt * Math.PI;
-    c.fillStyle = day ? '#ffe66e' : '#dfe4ee';
-    c.fillRect(dx + Math.cos(a) * dr - 1, dy + Math.sin(a) * dr - 1, 2, 2);
+    c.fillStyle = day ? '#e8a93c' : '#8a9ab8';
+    c.beginPath(); c.arc(dx + Math.cos(a) * dr, dy + Math.sin(a) * dr, 2.4, 0, TAU); c.fill();
     if (this.scene !== DiveScene && !TouchUI.enabled)
-      text(c, '[H] help', W - 9, 24, { size: 6, color: 'rgba(220,230,240,0.55)', align: 'right' });
-    // current goal banner: the plan, always in view
+      text(c, '[H] help', W - 12, 29, { size: 6.5, color: 'rgba(255,255,255,0.75)', align: 'right' });
+
+    // centre: current goal
     const goalTxt = G.goal < GOALS.length ? GOALS[G.goal].name : 'Living the dream';
-    const star = G.goal < GOALS.length ? '*' : '★';
-    const gw = textWidth(c, `${star} ${goalTxt}`, 6.5) + 12;
-    c.globalAlpha = 0.9;
-    uiPanel(c, W / 2 - gw / 2, 4, gw, 12, 0.9, true);
-    text(c, `${star} ${goalTxt}`, W / 2, 7, { size: 6.5, color: '#6a4420', align: 'center', shadow: false });
-    c.globalAlpha = 1;
+    const gw = textWidth(c, goalTxt, 7) + 28;
+    uiPanel(c, W / 2 - gw / 2, 6, gw, 15, 0.92, true);
+    c.fillStyle = '#e8a93c';
+    c.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const ang = -Math.PI / 2 + i * TAU / 5;
+      const ang2 = ang + TAU / 10;
+      c.lineTo(W / 2 - gw / 2 + 11 + Math.cos(ang) * 4, 13.5 + Math.sin(ang) * 4);
+      c.lineTo(W / 2 - gw / 2 + 11 + Math.cos(ang2) * 1.8, 13.5 + Math.sin(ang2) * 1.8);
+    }
+    c.closePath(); c.fill();
+    text(c, goalTxt, W / 2 + 6, 9.5, { size: 7, color: '#6a4420', align: 'center', shadow: false });
   },
 
   drawToasts(c) {
@@ -441,7 +449,7 @@ const TitleScene = {
 
   draw(c) {
     // the painted sea, alive
-    drawA(c, `bg_surf${Math.floor(this.time * 7) % 10}`, -30 + Math.sin(this.time * 0.2) * 6, 0, 540, 270);
+    drawA(c, `bg_surf${Math.floor(this.time * 6) % 8}`, -30 + Math.sin(this.time * 0.2) * 6, 0, 540, 270);
     // shark fin drive-by (a promise of things to come)
     if (this.fin) {
       c.fillStyle = '#141c26';
@@ -577,7 +585,9 @@ ctx.fillRect(0, 0, W, H);
 text(ctx, 'loading the sea...', W / 2, H / 2 - 4, { size: 10, color: '#9fc4d4', align: 'center' });
 ctx.restore();
 loadAssets(() => {
-  Game.scene = TitleScene;
-  TitleScene.enter();
+  // straight into the game — no menu
+  if (Game.hasSave()) Game.load(); else Game.newGame();
+  Game.scene = WorldScene;
+  WorldScene.enter({});
   requestAnimationFrame(frame);
 });

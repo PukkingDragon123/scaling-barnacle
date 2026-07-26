@@ -2,8 +2,9 @@
 'use strict';
 
 const W = 480, H = 270;   // logical resolution: all game code works in these units
-const DPX = 2;            // art density: device texels per logical unit
+const DPX = 3;            // art density: device texels per logical unit
 const PIX = 1 / DPX;      // one device texel, in logical units (for fine detail)
+const APIX = 0.5;         // texel size of hand-authored sprites, in logical units
 const TAU = Math.PI * 2;
 
 const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
@@ -95,7 +96,7 @@ function bandedFill(ctx, x, y, w, h, from, to, bands = 10, dither = true) {
 // Draw a sprite authored at DPX density at its logical size, snapped to the
 // device-texel grid so it stays crisp.
 function drawSpr(ctx, img, x, y) {
-  ctx.drawImage(img, Math.round(x * DPX) / DPX, Math.round(y * DPX) / DPX, img.width / DPX, img.height / DPX);
+  ctx.drawImage(img, Math.round(x * DPX) / DPX, Math.round(y * DPX) / DPX, img.width * APIX, img.height * APIX);
 }
 
 // Rounded UI panel. Dark driftwood by default; light=true gives warm parchment
@@ -145,7 +146,7 @@ function drawHeart(ctx, x, y, kind) {
       let col = pal[ch];
       if (kind === 'half' && c > 6) col = { o: '#1d1016', r: '#3a2330', h: '#4a2f3e' }[ch];
       ctx.fillStyle = col;
-      ctx.fillRect(x + c * PIX, y + r * PIX, PIX, PIX);
+      ctx.fillRect(x + c * APIX, y + r * APIX, APIX, APIX);
     }
   }
 }
