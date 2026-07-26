@@ -13,7 +13,7 @@ const DECK_Y = 176;
 
 // Every structure is anchored by its MEASURED deck-surface line (fraction of
 // sprite height) so nothing floats: deck surfaces all land exactly on DECK_Y.
-const HOUSE_X = 44, HOUSE_W = 116, HOUSE_DECK = 0.42;
+const HOUSE_X = 30, HOUSE_W = 150, HOUSE_DECK = 0.641;   // house_top: hut + its boards only
 const PIER_START = 128, SEG_W = 88, PIER_DECK = 0.035;   // dock_11 trestle module
 
 // place a sprite so its deck surface sits on DECK_Y
@@ -39,7 +39,7 @@ const WorldScene = {
 
   worldW() { return this.endX() + 80; },
   endX() { return 300 + G.bridge * 200; },
-  houseTop() { return DECK_Y - assetH('house_ext', HOUSE_W) * 0.557; },
+  houseTop() { return DECK_Y - assetH('house_top', HOUSE_W) * HOUSE_DECK; },
 
   enter(opts) {
     this.time = 0;
@@ -62,9 +62,9 @@ const WorldScene = {
 
   spots() {
     const s = [
-      { x: 82, label: 'Enter House', act: () => Game.go(HouseScene, {}) },
+      { x: 88, label: 'Enter House', act: () => Game.go(HouseScene, {}) },
       { x: 232, label: 'ClamNet  (sell & shop)', act: () => { Shop.openUI(); } },
-      { x: 296, label: 'Workbench  (crack & polish)', act: () => { Bench.openUI(); } },
+      { x: 300, label: 'Workbench  (crack & polish)', act: () => { Bench.openUI(); } },
     ];
     for (let i = 0; i < G.bridge; i++) {
       s.push({
@@ -78,6 +78,7 @@ const WorldScene = {
 
   update(dt) {
     this.time += dt;
+    SKY.update(dt, this.time);
     let mv = 0;
     if (Input.keys['KeyA'] || Input.keys['ArrowLeft']) mv -= 1;
     if (Input.keys['KeyD'] || Input.keys['ArrowRight']) mv += 1;
@@ -122,21 +123,9 @@ const WorldScene = {
     const nite = nightness(G.clock);
     this._lampGlows = [];
 
-    // the painted sea (animated), light horizontal parallax
-    drawA(ctx, `bg_surf${Math.floor(this.time * 6) % 8}`, -20 - cam * 0.055, 0, 540, 270);
-
-    // night stars + moon over the painted sky
-    if (nite > 0.2) {
-      for (const st of this.stars) {
-        const tw = 0.4 + 0.6 * Math.abs(Math.sin(this.time * 0.8 + st.p));
-        ctx.fillStyle = `rgba(230,238,255,${nite * tw * 0.8})`;
-        ctx.fillRect(Math.round(st.x), Math.round(st.y), st.big ? 1 : PIX, st.big ? 1 : PIX);
-      }
-      ctx.fillStyle = `rgba(232,236,242,${nite})`;
-      ctx.beginPath(); ctx.arc(W - 90, 42, 8, 0, TAU); ctx.fill();
-      ctx.fillStyle = `rgba(160,175,205,${nite})`;
-      ctx.fillRect(W - 94, 40, 2, 2); ctx.fillRect(W - 88, 44, 1.5, 1.5);
-    }
+    // coded pixel-art sky and sea
+    SKY.drawSky(ctx, G.clock, this.time, cam);
+    SKY.drawSea(ctx, G.clock, this.time, cam);
 
     ctx.save();
     ctx.translate(-cam, 0);
@@ -156,7 +145,7 @@ const WorldScene = {
     }
 
     // ---- the house, its platform flush with the pier deck --------------------------
-    const hh = drawOnDeck(ctx, 'house_ext', HOUSE_X, HOUSE_W, HOUSE_DECK);
+    const hh = drawOnDeck(ctx, 'house_top', HOUSE_X, HOUSE_W, HOUSE_DECK);
     const hy = DECK_Y - hh * HOUSE_DECK;
     if (G.house >= 2) {
       const bx0 = HOUSE_X + HOUSE_W * 0.30, bx1 = HOUSE_X + HOUSE_W * 0.72, by = hy + hh * 0.10;
@@ -203,13 +192,38 @@ const WorldScene = {
       ctx.beginPath(); ctx.arc(232, topY - 5, 14, 0, TAU); ctx.fill();
     }
 
-    // ---- Workbench: desk + barrel + crate on the deck --------------------------------
-    const bH = drawStanding(ctx, 'furn_5', 296, 36, 1);
+    // ---- Workbench: sturdy counter with a vice, hammer and crate -----------------
+    const bH = drawStanding(ctx, 'furn_2', 300, 44, 1);
     const bTop = DECK_Y - bH + 1;
-    drawAC(ctx, 'shell_clam', 289, bTop - 4, 9);
-    drawAC(ctx, 'shell_scallop', 301, bTop - 4, 8);
-    drawStanding(ctx, 'furn_9', 318, 14, 1);
-    drawStanding(ctx, 'furn_17', 271, 14, 1);
+    // a second slab on top makes it read as a work counter, not a dining table
+    ctx.fillStyle = '#7a5230';
+    ctx.fillRect(300 - 24, bTop - 3.5, 48, 4);
+    ctx.fillStyle = '#96683c';
+    ctx.fillRect(300 - 24, bTop - 3.5, 48, 1.2);
+    ctx.fillStyle = 'rgba(40,22,10,0.45)';
+    ctx.fillRect(300 - 24, bTop + 0.2, 48, PIX * 2);
+    // metal vice clamped to the left end
+    ctx.fillStyle = '#3e454c';
+    ctx.fillRect(281, bTop - 9, 9, 6);
+    ctx.fillStyle = '#5d666e';
+    ctx.fillRect(281, bTop - 9, 9, 1.6);
+    ctx.fillStyle = '#2a3036';
+    ctx.fillRect(284.5, bTop - 12, 2.4, 3.4);
+    // hammer resting on the counter
+    ctx.save();
+    ctx.translate(305, bTop - 5.5);
+    ctx.rotate(-0.32);
+    ctx.fillStyle = '#8a6238';
+    ctx.fillRect(0, 0, 11, 1.8);
+    ctx.fillStyle = '#4a5258';
+    ctx.fillRect(9.5, -2.4, 4, 5.6);
+    ctx.restore();
+    // shells waiting to be worked
+    drawAC(ctx, 'shell_clam', 296, bTop - 7, 10);
+    drawAC(ctx, 'shell_scallop', 310, bTop - 7, 9);
+    // crate + toolbox beside it
+    drawStanding(ctx, 'furn_7', 273, 15, 1);
+    drawStanding(ctx, 'furn_17', 328, 15, 1);
 
     // drone landing pad
     ctx.fillStyle = 'rgba(60,68,72,0.9)';
@@ -230,8 +244,8 @@ const WorldScene = {
     }
 
     // ---- player: the uploaded otter, with squash & stretch ---------------------------
-    const OTTER_WALK = ['o3_4', 'o3_5', 'o3_6', 'o3_7'];
-    const OTTER_IDLE = ['o3_0', 'o3_1', 'o3_2', 'o3_3'];
+    const OTTER_WALK = ['o4_4', 'o4_5', 'o4_6', 'o4_7'];
+    const OTTER_IDLE = ['o4_0', 'o4_1', 'o4_2', 'o4_3'];
     const walking = this.walkT > 0 && this.idleT < 0.1;
     let frameN = 0, sqx = 1, sqy = 1, hop = 0;
     if (walking) {
@@ -283,8 +297,8 @@ const WorldScene = {
       ctx.save();
       ctx.translate(-cam, 0);
       // hut window glow
-      const hh2 = assetH('house_ext', HOUSE_W);
-      const hy2 = DECK_Y - hh2 * 0.557;
+      const hh2 = assetH('house_top', HOUSE_W);
+      const hy2 = DECK_Y - hh2 * HOUSE_DECK;
       ctx.fillStyle = `rgba(255,214,120,${nite * 0.18})`;
       ctx.beginPath(); ctx.arc(HOUSE_X + HOUSE_W * 0.63, hy2 + hh2 * 0.38, 15, 0, TAU); ctx.fill();
       // dock lanterns

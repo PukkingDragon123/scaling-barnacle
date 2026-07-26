@@ -70,12 +70,32 @@ def despeckle(im, min_alpha_run=3):
     return im
 
 
+def punch(im, sat=1.30, mul=0.90):
+    """Bake richer colour and a touch of shade into an asset, so the game can
+    look saturated and moody without a per-frame filter pass."""
+    im = im.convert('RGBA')
+    px = im.load()
+    w, h = im.size
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a == 0:
+                continue
+            lum = 0.299 * r + 0.587 * g + 0.114 * b
+            r = int(max(0, min(255, (lum + (r - lum) * sat) * mul)))
+            g = int(max(0, min(255, (lum + (g - lum) * sat) * mul)))
+            b = int(max(0, min(255, (lum + (b - lum) * sat) * mul)))
+            px[x, y] = (r, g, b, a)
+    return im
+
+
 def trim(im):
     box = im.getbbox()
     return im.crop(box) if box else im
 
 
 def save(name, im):
+    im = punch(im)
     path = os.path.join(OUT, name + '.png')
     im.save(path, optimize=True)
     manifest[name] = {'w': im.size[0], 'h': im.size[1]}
@@ -163,6 +183,7 @@ def gif_frames(src, name, count, box=None, target=None, step_offset=0):
             fr = fr.crop(box)
         if target:
             fr = fr.resize(target, Image.LANCZOS)
+        fr = punch(fr.convert('RGBA'), 1.26, 0.88).convert('RGB')
         path = os.path.join(OUT, f'{name}{j}.jpg')
         fr.save(path, quality=82, optimize=True)
         manifest[f'{name}{j}'] = {'w': fr.size[0], 'h': fr.size[1], 'ext': 'jpg'}
@@ -182,11 +203,12 @@ grid_slice('D4666433-3C9F-4DFB-990E-05C6F744C3B7.png', 4, 3,
             'eel_0', 'eel_1', 'eel_2', 'eel_3',
             'urchin_0', 'urchin_1', 'urchin_2', 'urchin_3'], target_h=110)
 
-print('otter sheet (idle / walk / run / swim / dive)...')
-grid_slice('IMG_4466.jpeg', 4, 3,
-           ['o3_0', 'o3_1', 'o3_2', 'o3_3',
-            'o3_4', 'o3_5', 'o3_6', 'o3_7',
-            'o3_8', 'o3_9', 'o3_swim', 'o3_dive'], tol=52, target_h=104)
+print('diver otter sheet (idle / walk / run / swim / dive / hold)...')
+grid_slice('A33C234D-8DAF-45A2-8B3B-C6C04C0F366F.png', 4, 4,
+           ['o4_0', 'o4_1', 'o4_2', 'o4_3',
+            'o4_4', 'o4_5', 'o4_6', 'o4_7',
+            'o4_run', 'o4_run2', 'o4_swim', 'o4_dive',
+            'o4_swim2', 'o4_grab', 'o4_basket', 'o4_hold'], tol=24, target_h=112)
 
 print('drone poses...')
 grid_slice('94E66AAE-4813'[:0] + '94E66AAE-6E7E-4813-A583-EED25CC7193B.png', 4, 2,
@@ -204,9 +226,14 @@ pole = trim(key_bg(Image.open(os.path.join(ROOT, '59157A61-FA0E-450E-A739-A006F2
 pole = pole.resize((round(pole.size[0] * 0.72), round(pole.size[1] * 0.72)), Image.LANCZOS)
 save('pole', pole)
 
-print('house exterior...')
+print('house exterior (full + cropped top: hut and platform only)...')
 hx = despeckle(trim(key_bg(Image.open(os.path.join(ROOT, '840E2071-1BC2-437D-BF2C-FE6478FF1DA3.jpeg')), tol=46)))
 save('house_ext', hx)
+# the stilts are the pier's job — keep only the hut and the boards it stands on,
+# then upscale so the detail holds at a bigger on-screen size
+top = trim(hx.crop((0, 0, hx.size[0], round(hx.size[1] * 0.60))))
+top = top.resize((round(top.size[0] * 2.2), round(top.size[1] * 2.2)), Image.LANCZOS)
+save('house_top', top)
 
 print('house interior...')
 hi = trim(key_bg(Image.open(os.path.join(ROOT, '2DD3E769-96DE-4F19-9812-7A79465BF57B.png')), tol=30))
@@ -225,7 +252,6 @@ for i, b in enumerate(components(fu, min_area=500)):
 
 print('animated backgrounds...')
 # sunny surface: 1000x500 -> cover 960x540 (scale to 1080x540, center crop)
-gif_frames('IMG_4440.gif', 'bg_surf', 8, target=(1620, 810))
 # deep water: crop the signature band off the top, keep a tall slab for parallax
 gif_frames('IMG_4439.gif', 'bg_deep', 8, box=(0, 130, 1300, 1300), target=(1440, 1296))
 # god rays band

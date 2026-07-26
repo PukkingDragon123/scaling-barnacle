@@ -449,7 +449,9 @@ const TitleScene = {
 
   draw(c) {
     // the painted sea, alive
-    drawA(c, `bg_surf${Math.floor(this.time * 6) % 8}`, -30 + Math.sin(this.time * 0.2) * 6, 0, 540, 270);
+    SKY.update(0, this.time);
+    SKY.drawSky(c, 0.62, this.time, 0);
+    SKY.drawSea(c, 0.62, this.time, 0);
     // shark fin drive-by (a promise of things to come)
     if (this.fin) {
       c.fillStyle = '#141c26';
@@ -560,6 +562,26 @@ function frame(now) {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
   if (Game.scene) Game.scene.draw(ctx);
+  // colour grade the world (never the UI): richer colour, deeper shadows.
+  // Re-draw the finished frame through a filter — blend modes would scramble hue.
+  if (Game.scene) {
+    ctx.save();
+    // two cheap full-screen passes (saturation is baked into the art itself)
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.fillStyle = 'rgba(74,120,150,0.20)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = '#c9c2d4';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'source-over';
+    // corner vignette to seat the scene
+    const vg = ctx.createRadialGradient(W / 2, H * 0.52, H * 0.40, W / 2, H * 0.52, H * 1.05);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(6,8,26,0.46)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
   if (Shop.open) Shop.draw(ctx);
   if (Bench.open) Bench.draw(ctx);
   if (G && Game.scene !== TitleScene) Game.drawHUD(ctx);

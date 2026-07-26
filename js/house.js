@@ -84,19 +84,17 @@ const HouseScene = {
     const FLOOR = this.FLOOR;
     const nite = nightness(G.clock);
 
-    // sea behind the cutaway
-    drawA(ctx, `bg_surf${Math.floor(this.time * 6) % 8}`, -30, 0, 540, 270);
-    if (nite > 0.2) {
-      ctx.fillStyle = `rgba(8,12,38,${nite * 0.4})`;
-      ctx.fillRect(0, 0, W, H);
-    }
+    // coded sky + sea behind the cutaway
+    SKY.update(0, this.time);
+    SKY.drawSky(ctx, G.clock, this.time, 0);
+    SKY.drawSea(ctx, G.clock, this.time, 0);
 
     // the painted interior
     drawA(ctx, 'house_int', 0, 0, 480);
 
     // ---- player -------------------------------------------------------------------------
-    const OTTER_WALK = ['o3_4', 'o3_5', 'o3_6', 'o3_7'];
-    const OTTER_IDLE = ['o3_0', 'o3_1', 'o3_2', 'o3_3'];
+    const OTTER_WALK = ['o4_4', 'o4_5', 'o4_6', 'o4_7'];
+    const OTTER_IDLE = ['o4_0', 'o4_1', 'o4_2', 'o4_3'];
     const walking = this.walkT > 0 && this.idleT < 0.1;
     let frameN = 0, sqx = 1, sqy = 1, hop = 0;
     if (walking) {
