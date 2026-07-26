@@ -1,6 +1,14 @@
 // ---- house interior: the painted cutaway, furnished with the uploaded props ----
 'use strict';
 
+// The hut sprite shown whole, fitted by height. Measured off the art: the porch
+// deck slab runs y 292..321 of 434, and spans x 0.104..0.892 — so the boards you
+// stand on are at 0.70 of the sprite height, between those two edges.
+const HUT_H = 252, HUT_W = Math.round(HUT_H * 575 / 434);
+const HUT_X = Math.round((W - HUT_W) / 2), HUT_Y = 8;
+const PORCH_L = HUT_X + HUT_W * 0.135, PORCH_R = HUT_X + HUT_W * 0.865;
+const BED_X = Math.round(PORCH_L + 50), TABLE_X = Math.round(PORCH_R - 44);
+
 const HouseScene = {
   customCursor: false,
   px: 380, dir: -1, walkT: 0, idleT: 0, time: 0,
@@ -8,29 +16,29 @@ const HouseScene = {
   aquaFish: [],
   embers: [],
 
-  FLOOR: 236,
+  FLOOR: 184,      // the porch boards, measured off the hut sprite
 
   enter(opts) {
     this.time = 0;
     this.sleeping = false;
     if (opts && opts.wake) {
-      this.px = 140;
+      this.px = BED_X;
       Game.toast('You wake up at home. Your bag is gone...');
       Game.toast(`Day ${G.day}.`);
     } else {
-      this.px = 360; this.dir = -1;
+      this.px = Math.round(PORCH_R - 16); this.dir = -1;
     }
     SND.setScene('house');
   },
 
   spots() {
     const s = [
-      { x: 132, label: 'Sleep  (next day, beds regrow)', act: () => this.sleep() },
-      { x: 392, label: 'Go Outside', act: () => Game.go(WorldScene, { fromHouse: true }) },
+      { x: BED_X, label: 'Sleep  (next day, beds regrow)', act: () => this.sleep() },
+      { x: Math.round(PORCH_R - 12), label: 'Go Outside', act: () => Game.go(WorldScene, { fromHouse: true }) },
     ];
     if (G.decor.gramophone) {
       s.push({
-        x: 330, label: G.musicOn ? 'Gramophone: ON' : 'Gramophone: OFF',
+        x: Math.round(TABLE_X + 30), label: G.musicOn ? 'Gramophone: ON' : 'Gramophone: OFF',
         act: () => { G.musicOn = !G.musicOn; SND.click(); Game.toast(G.musicOn ? 'Music on.' : 'Music off.'); },
       });
     }
@@ -64,7 +72,7 @@ const HouseScene = {
     if (Input.keys['KeyD'] || Input.keys['ArrowRight']) mv += 1;
     if (mv !== 0) {
       this.dir = mv;
-      this.px = clamp(this.px + mv * 92 * dt, 96, 400);
+      this.px = clamp(this.px + mv * 92 * dt, PORCH_L + 8, PORCH_R - 8);
       this.walkT += dt * 9;
       this.idleT = 0;
     } else this.idleT += dt;
@@ -88,22 +96,18 @@ const HouseScene = {
     drawA(ctx, `ocean${Math.floor(this.time * 8) % 12}`, -30, 0, 540, 270);
     SKY.tint(ctx, G.clock, this.time);
 
-    // the hut, zoomed so the room fills the frame — its porch floor is the floor
-    const rw = 640;                      // wider than the screen: we are inside it
-    const rh = assetH('hut_room', rw);
-    // the porch floor line sits at ~0.925 of the cropped sprite
-    drawA(ctx, 'hut_room', (W - rw) / 2, FLOOR - rh * 0.925, rw, rh);
+    // the whole hut sprite, unzoomed — you see the roof, the porch and the stilts
+    drawA(ctx, 'hut_full', HUT_X, HUT_Y, HUT_W, HUT_H);
 
-    // carry the floorboards down to the bottom edge so no sea peeks under them
-    const fy = FLOOR - rh * 0.925 + rh - 2;
-    if (fy < H) {
-      ctx.fillStyle = '#a8542f';           // matched to the sprite's last floor row
-      ctx.fillRect(0, fy, W, H - fy);
-      ctx.fillStyle = 'rgba(94,52,24,0.30)';
-      for (let bx = -8; bx < W; bx += 21) ctx.fillRect(bx, fy, 1, H - fy);
-      ctx.fillStyle = 'rgba(60,32,14,0.22)';
-      ctx.fillRect(0, H - 3, W, 3);
-    }
+    // furniture, standing on the porch boards
+    const stand = (name, cx, w) => {
+      const h = assetH(name, w);
+      drawA(ctx, name, cx - w / 2, FLOOR - h + 1, w, h);
+    };
+    stand('furn_0', BED_X, 62);          // the bed
+    const tblH = assetH('furn_2', 40);
+    stand('furn_2', TABLE_X, 40);        // the table
+    drawAC(ctx, 'furn_14', TABLE_X + 6, FLOOR - tblH - 5, 10);   // a lantern on it
 
     // ---- player -------------------------------------------------------------------------
     const OTTER_WALK = ['o4_4', 'o4_5', 'o4_6', 'o4_7'];

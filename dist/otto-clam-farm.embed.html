@@ -222,7 +222,7 @@
 
   <div class="stage" data-fit>
     <div class="viewport">
-      <div id="wrap"><canvas id="game" width="1440" height="810"></canvas></div>
+      <div id="wrap"><canvas id="game" width="1920" height="1080"></canvas></div>
     </div>
   </div>
 
@@ -279,7 +279,7 @@ const ASSET_DATA = {"crust_pearl":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgA
 // ---- shared helpers ----------------------------------------------------
 
 const W = 480, H = 270;   // logical resolution: all game code works in these units
-const DPX = 3;            // art density: device texels per logical unit
+const DPX = 4;            // art density: device texels per logical unit
 const PIX = 1 / DPX;      // one device texel, in logical units (for fine detail)
 const APIX = 0.5;         // texel size of hand-authored sprites, in logical units
 const TAU = Math.PI * 2;
@@ -634,53 +634,10 @@ const SKY = {
     // warm low sun at either end of the day
     const warm = clamp(1 - Math.abs(clock - 0.615) / 0.13, 0, 1)
                + clamp(1 - Math.abs(clock - 0.155) / 0.10, 0, 1);
-    if (warm > 0.01) {
-      // the low sun itself, sliding along the horizon
-      const set = clock > 0.4;
-      const tt = set ? clamp((clock - 0.50) / 0.16, 0, 1) : 1 - clamp((clock - 0.09) / 0.14, 0, 1);
-      const side = set ? W * (0.58 + tt * 0.30) : W * (0.42 - tt * 0.30);
-      const sy = HZ - 30 + tt * 30;
-      // repaint the sky as a sunset ramp — multiplying a blue sky only turns it
-      // green, so this lays real colour over it and lets the clouds read through
-      const gs2 = ctx.createLinearGradient(0, 0, 0, HZ + 2);
-      gs2.addColorStop(0, `rgba(74,84,166,${warm * 0.46})`);
-      gs2.addColorStop(0.38, `rgba(196,104,132,${warm * 0.50})`);
-      gs2.addColorStop(0.72, `rgba(255,132,84,${warm * 0.58})`);
-      gs2.addColorStop(1, `rgba(255,190,110,${warm * 0.66})`);
-      ctx.fillStyle = gs2;
-      ctx.fillRect(0, 0, W, HZ + 2);
-      // and warm the water under it
-      const gw = ctx.createLinearGradient(0, HZ, 0, H);
-      gw.addColorStop(0, `rgba(255,178,104,${warm * 0.46})`);
-      gw.addColorStop(0.5, `rgba(226,124,96,${warm * 0.30})`);
-      gw.addColorStop(1, `rgba(150,86,110,${warm * 0.26})`);
-      ctx.fillStyle = gw;
-      ctx.fillRect(0, HZ, W, H - HZ);
-      // haze around the disc
-      const gs = ctx.createRadialGradient(side, sy, 4, side, sy, 92);
-      gs.addColorStop(0, `rgba(255,226,150,${warm * 0.62})`);
-      gs.addColorStop(0.45, `rgba(255,178,96,${warm * 0.22})`);
-      gs.addColorStop(1, 'rgba(255,160,80,0)');
-      ctx.fillStyle = gs;
-      ctx.fillRect(side - 92, sy - 92, 184, 184);   // only where the halo reaches
-      // the disc reddens as it drops
-      ctx.fillStyle = `rgba(255,${Math.round(246 - tt * 62)},${Math.round(214 - tt * 118)},${warm * 0.95})`;
-      ctx.beginPath(); ctx.arc(side, sy, 12, 0, TAU); ctx.fill();
-      // the glitter path it lays on the water: broken pixel dashes, no hard cone.
-      // One fillStyle for the lot — a per-dash colour string costs real frame time.
-      ctx.fillStyle = '#fff0c4';
-      for (let y = HZ + 2; y < H; y += 3) {
-        const d = (y - HZ) / (H - HZ);
-        const sp = 9 + d * 34;
-        ctx.globalAlpha = warm * (1 - d * 0.75) * 0.42;
-        for (let k = -2; k <= 2; k++) {
-          const jx = Math.sin(y * 0.9 + k * 2.1 + time * 2.6) * sp * 0.5;
-          const lw = Math.max(1, (2.6 - Math.abs(k) * 0.7) * (1 + d * 1.4));
-          ctx.fillRect(Math.round(side + jx + k * sp * 0.34), y, lw, 1);
-        }
-      }
-      ctx.globalAlpha = 1;
-    }
+    // no sun disc: the light is all in the sky and on the water. The wash is
+    // baked per 5%-of-warm step — three full-screen gradients per frame at
+    // device density is more than the budget allows.
+    if (warm > 0.01) ctx.drawImage(this.warmCanvas(warm), 0, 0, W, H);
     if (nite > 0.01) {
       // night: deepen and cool, keeping the water readable
       ctx.save();
@@ -688,29 +645,68 @@ const SKY = {
       ctx.fillStyle = `rgba(${Math.round(lerp(255, 60, nite))},${Math.round(lerp(255, 78, nite))},${Math.round(lerp(255, 150, nite))},1)`;
       ctx.fillRect(0, 0, W, H);
       ctx.restore();
-      // stars over the sky half
+      // stars over the sky half — globalAlpha instead of a colour string each
+      ctx.fillStyle = '#ecf2ff';
       const rng = mulberry32(99);
       for (let i = 0; i < 70; i++) {
         const sx = rng() * W, sy = rng() * (HZ - 10), ph = rng() * TAU;
         const tw = 0.45 + 0.55 * Math.abs(Math.sin(time * 0.9 + ph));
-        ctx.fillStyle = `rgba(236,242,255,${nite * tw * 0.9})`;
+        ctx.globalAlpha = nite * tw * 0.9;
         ctx.fillRect(Math.round(sx), Math.round(sy), rng() < 0.2 ? 1 : PIX, rng() < 0.2 ? 1 : PIX);
       }
-      // moon
-      const mt = clamp((clock >= 0.72 ? clock - 0.72 : clock + 0.28) / 0.37, 0, 1);
-      const mx = 40 + mt * (W - 80), my = HZ - 22 - Math.sin(mt * Math.PI) * (HZ - 52);
-      ctx.fillStyle = `rgba(226,236,255,${nite * 0.16})`;
-      ctx.beginPath(); ctx.arc(mx, my, 20, 0, TAU); ctx.fill();
-      ctx.fillStyle = `rgba(238,244,255,${nite})`;
-      ctx.beginPath(); ctx.arc(mx, my, 8, 0, TAU); ctx.fill();
-      ctx.fillStyle = `rgba(150,168,205,${nite})`;
-      ctx.fillRect(mx - 3, my - 2, 2.4, 2.4); ctx.fillRect(mx + 2, my + 2, 1.6, 1.6);
+      ctx.globalAlpha = 1;
+      // no moon disc — just a cold sheen on the water so the night still reads
+      const gm = ctx.createLinearGradient(0, HZ - 4, 0, HZ + 20);
+      gm.addColorStop(0, 'rgba(190,214,255,0)');
+      gm.addColorStop(0.35, `rgba(200,220,255,${nite * 0.13})`);
+      gm.addColorStop(1, 'rgba(170,196,240,0)');
+      ctx.fillStyle = gm;
+      ctx.fillRect(0, HZ - 4, W, 24);
     }
     // a couple of wind streaks so the air feels alive
     for (const g of this.gusts) {
       ctx.fillStyle = `rgba(255,255,255,${clamp(g.t, 0, 1) * 0.16})`;
       ctx.fillRect(g.x, g.y, g.len, PIX);
     }
+  },
+
+  // ---- the golden-hour wash, cached per warmth step --------------------------
+  warmCanvas(warm) {
+    const key = Math.round(clamp(warm, 0, 1) * 20);
+    if (this._wKey === key && this._wCv) return this._wCv;
+    if (!this._wCv) {
+      this._wCv = document.createElement('canvas');
+      this._wCv.width = W * DPX; this._wCv.height = H * DPX;
+      this._wCtx = this._wCv.getContext('2d');
+      this._wCtx.scale(DPX, DPX);
+    }
+    const c = this._wCtx, HZ = this.OCEAN_HZ, k = key / 20;
+    c.clearRect(0, 0, W, H);
+    // the sky as a sunset ramp — multiplying a blue sky only turns it green, so
+    // this lays real colour over it and lets the clouds read through
+    const gs = c.createLinearGradient(0, 0, 0, HZ + 2);
+    gs.addColorStop(0, `rgba(74,84,166,${k * 0.46})`);
+    gs.addColorStop(0.38, `rgba(196,104,132,${k * 0.50})`);
+    gs.addColorStop(0.72, `rgba(255,132,84,${k * 0.58})`);
+    gs.addColorStop(1, `rgba(255,190,110,${k * 0.66})`);
+    c.fillStyle = gs;
+    c.fillRect(0, 0, W, HZ + 2);
+    // and the water under it
+    const gw = c.createLinearGradient(0, HZ, 0, H);
+    gw.addColorStop(0, `rgba(255,178,104,${k * 0.46})`);
+    gw.addColorStop(0.5, `rgba(226,124,96,${k * 0.30})`);
+    gw.addColorStop(1, `rgba(150,86,110,${k * 0.26})`);
+    c.fillStyle = gw;
+    c.fillRect(0, HZ, W, H - HZ);
+    // a bright band of low light right along the waterline
+    const gh = c.createLinearGradient(0, HZ - 8, 0, HZ + 26);
+    gh.addColorStop(0, 'rgba(255,224,160,0)');
+    gh.addColorStop(0.3, `rgba(255,232,178,${k * 0.34})`);
+    gh.addColorStop(1, 'rgba(255,206,140,0)');
+    c.fillStyle = gh;
+    c.fillRect(0, HZ - 8, W, 34);
+    this._wKey = key;
+    return this._wCv;
   },
 
   // ---- the sky, cached per palette step ---------------------------------------
@@ -1027,7 +1023,7 @@ const PILINGS = [
 
 const BUILDS = {
   bridge2: { name: 'Bridge East — Mid Piling',  price: 400,
-             desc: 'Richer beds: oysters! Barracudas patrol here.' },
+             desc: 'Richer beds out here: oysters!' },
   bridge3: { name: 'Bridge Far — Deep Piling',  price: 1200,
              desc: 'Abalone & pearls. Something big lives down there.' },
   house2:  { name: 'House: Cozy Cabin',  price: 500,  desc: 'Warm walls, second window.' },
@@ -1690,9 +1686,8 @@ const DiveScene = {
   camY: 0, maxCam: 0, camVel: 0,
   air: 0, airMax: 0, airBeepT: 0,
   bag: {}, bagCount: 0, bagPulse: 0,
-  particles: [], floaters: [], flyIcons: [], fish: [], snow: [], bubbles: [],
+  particles: [], floaters: [], flyIcons: [], snow: [], bubbles: [],
   combo: 0, comboT: 0, scrapeT: 0,
-  barra: null,
   shark: null, sharkCooldown: 45, sharkRollT: 1,
   whaleT: 25,
   gloom: 0, gloomTarget: 0,
@@ -1706,7 +1701,6 @@ const DiveScene = {
     this.time = 0;
     this.camY = 0; this.camVel = 0;
     this.maxCam = 1e9;   // the sea has no floor — your O2 does
-    this.scars = [];
     this.reward = null;
     this.airMax = TANKS[G.gear.tank].air;
     this.air = this.airMax;
@@ -1722,8 +1716,6 @@ const DiveScene = {
     this.sharkCooldown = rand(40, 70);
     this.sharkRollT = 1;
     this.whaleT = rand(20, 50);
-    this.barra = { state: 'idle', t: rand(8, 16), y: 0, x: 0, dir: 1, hit: false };
-    this.pry = null;          // active pry minigame { n, t, speed, win, marker }
     this.numbT = 0;           // jellyfish sting lockout
     this.surfaceT = 0;        // held-up-at-top timer
     this.genChunks = 0;
@@ -1738,27 +1730,9 @@ const DiveScene = {
         wy: rand(120, 900), vy: rand(6, 13), sway: rand(TAU), r: rand(8, 13), cd: 0,
       });
     }
-    // schools of little fish weaving behind the piling
-    this.schools = [];
-    for (let s = 0; s < 2; s++) {
-      const members = [];
-      const count = irand(5, 8);
-      for (let i = 0; i < count; i++) members.push({ ox: -i * 7 - rand(0, 4), oy: rand(-8, 8), ph: rand(TAU) });
-      this.schools.push({ x: rand(0, W), y: rand(40, H - 40), dir: Math.random() < 0.5 ? 1 : -1, speed: rand(22, 34), ph: rand(TAU), members, flee: false });
-    }
     // night plankton
     this.plankton = [];
     for (let i = 0; i < 26; i++) this.plankton.push({ x: rand(W), y: rand(H), v: rand(2, 6), ph: rand(TAU) });
-    // ambient fish
-    this.fish = [];
-    for (let i = 0; i < 9; i++) {
-      const left = Math.random() < 0.5;
-      this.fish.push({
-        x: left ? rand(0, this.WALL_X - 10) : rand(this.WALL_X + this.WALL_W + 10, W),
-        y: rand(20, H - 20), vx: rand(6, 18) * (Math.random() < 0.5 ? 1 : -1),
-        size: rand(3, 6), phase: rand(TAU), flee: false, alpha: 1, side: left ? 0 : 1,
-      });
-    }
     this.snow = [];
     for (let i = 0; i < 40; i++) this.snow.push({ x: rand(W), y: rand(H), v: rand(3, 9), drift: rand(TAU) });
     SND.setScene('dive');
@@ -1943,13 +1917,12 @@ const DiveScene = {
       });
     }
     this.particles.push({ x: n.x, y: n.y, t: 0.35, ring: true, r: 2, vr: 52, col: 'rgba(255,255,255,0.8)' });
-    // remember the harvest for the rest of the day + leave a scraped scar decal
+    // remember the harvest for the rest of the day
     if (n.id !== undefined) {
       if (!G.harvested) G.harvested = {};
       if (!G.harvested[this.p]) G.harvested[this.p] = [];
       G.harvested[this.p].push(n.id);
     }
-    this.scars.push({ x: n.x, y: n.y, rx: n.r * 0.8, ry: n.r * 0.6 });
     // stardew-style reward pop: the shell rises, shining, then dives into the bag
     this.reward = { art: ITEM_ART[drop] || 'shell_clam', name: ITEMS[drop].name, t: 0, x: clamp(n.x, 60, W - 60), y: n.y - this.camY, extra: gained.length > 1 };
 
@@ -1980,7 +1953,6 @@ const DiveScene = {
   startShark() {
     this.shark = { state: 'omen', t: 4.2, x: -220, y: H * 0.35, s: 0.55, alpha: 0, sus: 0, dir: 1, bit: false };
     this.gloomTarget = 0.5;
-    for (const f of this.fish) f.flee = true;
     SND.setScene('shark');
     this.msgSet('...the water goes quiet.', 3);
   },
@@ -2268,45 +2240,6 @@ const DiveScene = {
       }
     }
 
-    // ---- schools of fish ---------------------------------------------------------
-    for (const s of this.schools) {
-      if (this.shark && !s.flee) { s.flee = true; s.speed *= 4; }
-      if (!this.shark && s.flee) { s.flee = false; s.speed = rand(22, 34); }
-      s.x += s.dir * s.speed * dt;
-      s.y += Math.sin(this.time * 0.5 + s.ph) * 8 * dt - (this.camY - before) * 0.2;
-      s.y = clamp(s.y, 20, H - 20);
-      if (s.x < -80) { s.x = W + 80; s.y = rand(40, H - 40); }
-      if (s.x > W + 80) { s.x = -80; s.y = rand(40, H - 40); }
-    }
-
-    // barracuda (only past the first piling, or at night)
-    if (this.p >= 1 || isNight(G.clock)) {
-      const b = this.barra;
-      b.t -= dt;
-      if (b.state === 'idle' && b.t <= 0 && !this.shark) {
-        b.state = 'warn'; b.t = 0.85;
-        b.y = clamp(Input.mouse.y, 20, H - 20);
-        b.dir = Math.random() < 0.5 ? 1 : -1;
-        b.hit = false;
-        SND.warn();
-      } else if (b.state === 'warn' && b.t <= 0) {
-        b.state = 'dash'; b.t = 0.55;
-        b.x = b.dir > 0 ? -50 : W + 50;
-      } else if (b.state === 'dash') {
-        b.x += b.dir * ((W + 120) / 0.55) * dt;
-        // on touch, a lifted finger means the paw is pulled back — safe
-        const pawOut = Input.mouse.down || !TouchUI.enabled;
-        if (!b.hit && pawOut && Math.abs(Input.mouse.x - b.x) < 26 && Math.abs(Input.mouse.y - b.y) < 20) {
-          b.hit = true;
-          this.hurtPlayer(1);
-          SND.bite();
-          this.spillBag(3);
-          this.msgSet('Barracuda bite!');
-        }
-        if (b.t <= 0) { b.state = 'idle'; b.t = rand(9, 22); }
-      }
-    }
-
     // shark
     this.updateShark(dt);
 
@@ -2343,23 +2276,6 @@ const DiveScene = {
     this.bubbles = this.bubbles.filter(bu => bu.y > -5);
     if (Math.random() < dt * 0.8)
       this.bubbles.push({ x: rand(W), y: H + 4, r: rand(1, 3), v: rand(12, 26), wob: rand(TAU) });
-
-    // fish
-    for (const f of this.fish) {
-      if (f.flee) {
-        f.vx = (f.vx > 0 ? 1 : -1) * 160;
-        f.alpha = Math.max(0, f.alpha - dt * 1.5);
-      }
-      f.x += f.vx * eff;
-      f.y += Math.sin(this.time * 2 + f.phase) * 6 * eff - dcam * 0.25;
-      const inWall = f.x > this.WALL_X - 8 && f.x < this.WALL_X + this.WALL_W + 8;
-      if (!f.flee && (f.x < 4 || f.x > W - 4 || inWall)) f.vx *= -1;
-      if (f.y < 6 || f.y > H - 6) f.y = clamp(f.y, 6, H - 6);
-      if (f.flee && (f.x < -30 || f.x > W + 30)) {
-        // respawn later, calm
-        if (!this.shark) { f.flee = false; f.alpha = 1; f.x = f.side ? W - 10 : 10; }
-      }
-    }
 
     // marine snow
     for (const s of this.snow) {
@@ -2561,35 +2477,6 @@ const DiveScene = {
     // shark far pass (behind wall)
     if (this.shark && this.shark.state === 'pass') this.drawShark(ctx, this.shark);
 
-    // ambient fish
-    for (const f of this.fish) {
-      if (f.alpha <= 0) continue;
-      ctx.save();
-      ctx.globalAlpha = f.alpha * 0.8;
-      ctx.fillStyle = '#0e2c3a';
-      const fd = f.vx > 0 ? 1 : -1;
-      ctx.translate(f.x, f.y);
-      ctx.scale(fd, 1);
-      ctx.beginPath(); ctx.ellipse(0, 0, f.size, f.size * 0.45, 0, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(-f.size, 0); ctx.lineTo(-f.size - 3, -2); ctx.lineTo(-f.size - 3, 2); ctx.closePath(); ctx.fill();
-      ctx.restore();
-    }
-
-    // schools of little fish weaving behind the piling
-    for (const s of this.schools) {
-      for (const m of s.members) {
-        const fx = s.x + m.ox * s.dir;
-        const fy = s.y + m.oy + Math.sin(this.time * 3 + m.ph) * 2.2;
-        ctx.save();
-        ctx.translate(fx, fy);
-        ctx.scale(s.dir, 1);
-        ctx.fillStyle = 'rgba(122,172,192,0.55)';
-        ctx.beginPath(); ctx.ellipse(0, 0, 2.8, 1.2, 0, 0, TAU); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(-2.6, 0); ctx.lineTo(-4.4, -1.4); ctx.lineTo(-4.4, 1.4); ctx.closePath(); ctx.fill();
-        ctx.restore();
-      }
-    }
-
     // the great pole, tiled forever downward
     const poleW = 208;
     const poleH = assetH('pole', poleW);
@@ -2597,16 +2484,6 @@ const DiveScene = {
     for (let ti = Math.floor(this.camY / poleH); ti * poleH < this.camY + H; ti++) {
       drawA(ctx, 'pole', px0, ti * poleH - this.camY, poleW, poleH);
     }
-    // freshly-scraped scars where shells used to sit
-    for (const s of this.scars) {
-      const sy2 = s.y - this.camY;
-      if (sy2 < -20 || sy2 > H + 20) continue;
-      ctx.fillStyle = 'rgba(96,52,38,0.55)';
-      ctx.beginPath(); ctx.ellipse(s.x, sy2, s.rx, s.ry, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = 'rgba(196,132,96,0.4)';
-      ctx.beginPath(); ctx.ellipse(s.x, sy2, s.rx * 0.6, s.ry * 0.6, 0, 0, TAU); ctx.fill();
-    }
-
     // nodes
     for (const n of this.nodes) {
       if (!n.alive) continue;
@@ -2705,45 +2582,6 @@ const DiveScene = {
         ctx.fillStyle = `rgba(122,242,232,${0.25 + tw * 0.45})`;
         ctx.fillRect(pl.x + Math.sin(this.time * 0.7 + pl.ph) * 4, py, PIX * 2, PIX * 2);
       }
-    }
-
-    // barracuda
-    const b = this.barra;
-    if (b && b.state === 'warn') {
-      const bx = b.dir > 0 ? 10 : W - 14;
-      if (Math.sin(this.time * 18) > 0) text(ctx, '!', bx, b.y - 6, { size: 14, color: '#ff5a4a', align: 'center' });
-    } else if (b && b.state === 'dash') {
-      ctx.save();
-      ctx.translate(b.x, b.y);
-      ctx.scale(b.dir, 1);
-      // motion streaks
-      ctx.fillStyle = 'rgba(122,158,172,0.28)';
-      ctx.fillRect(-58, -2, 26, 1);
-      ctx.fillRect(-48, 1, 18, 1);
-      ctx.fillRect(-52, -4.5, 14, 1);
-      // body with belly sheen
-      ctx.fillStyle = '#33505c';
-      ctx.beginPath(); ctx.ellipse(0, 0, 27, 5.5, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#5a7e8c';
-      ctx.beginPath(); ctx.ellipse(2, 1.5, 23, 3, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#8fb0ba';
-      ctx.beginPath(); ctx.ellipse(4, 2.4, 18, 1.4, 0, 0, TAU); ctx.fill();
-      // tail + fins
-      ctx.fillStyle = '#20343c';
-      ctx.beginPath(); ctx.moveTo(-25, 0); ctx.lineTo(-36, -7); ctx.lineTo(-33, 0); ctx.lineTo(-36, 7); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(-4, -4.5); ctx.lineTo(2, -9); ctx.lineTo(7, -4.5); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(0, 4.5); ctx.lineTo(4, 8); ctx.lineTo(9, 4.5); ctx.closePath(); ctx.fill();
-      // toothy jaw + eye
-      ctx.strokeStyle = '#141f26'; ctx.lineWidth = PIX * 2;
-      ctx.beginPath(); ctx.moveTo(26, 1.5); ctx.lineTo(16, 3.5); ctx.stroke();
-      ctx.fillStyle = '#e8e4da';
-      ctx.fillRect(19, 1.5, 1, 1.5);
-      ctx.fillRect(22, 1.2, 1, 1.5);
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(20, -2.5, 2, 2);
-      ctx.fillStyle = '#0a0f14';
-      ctx.fillRect(20.7, -2, 1, 1);
-      ctx.restore();
     }
 
     // darkness of the deep (with headlamp hole)
@@ -3010,8 +2848,14 @@ const DECK_Y = 214;   // the dock sits low in frame, water filling the bottom
 
 // Every structure is anchored by its MEASURED deck-surface line (fraction of
 // sprite height) so nothing floats: deck surfaces all land exactly on DECK_Y.
-const HOUSE_X = 30, HOUSE_W = 124, HOUSE_DECK = 0.425;   // the uploaded hut, background-free
-const PIER_START = 128, SEG_W = 88, PIER_DECK = 0.035;   // dock_11 trestle module
+// deck fractions are measured off the art (topmost row of the widest slab),
+// not eyeballed: house_clean's deck top is row 277 of 598, dock_11's is 7 of 199
+const HOUSE_X = 30, HOUSE_W = 124, HOUSE_DECK = 0.4632;  // the uploaded hut, background-free
+const PIER_START = 128, SEG_W = 88, PIER_DECK = 0.0352;  // dock_11 trestle module
+// the house's own deck spans these x, so the walk range and the pier both
+// start from its solid boards rather than its stairs
+const HOUSE_DECK_L = HOUSE_X + HOUSE_W * 0.2096;
+const HOUSE_DECK_R = HOUSE_X + HOUSE_W * 0.8977;
 
 // place a sprite so its deck surface sits on DECK_Y
 function drawOnDeck(ctx, name, x, w, deckFrac) {
@@ -3081,7 +2925,7 @@ const WorldScene = {
     if (Input.keys['KeyD'] || Input.keys['ArrowRight']) mv += 1;
     if (mv !== 0) {
       this.dir = mv;
-      this.px = clamp(this.px + mv * 92 * dt, 52, this.endX() - 10);
+      this.px = clamp(this.px + mv * 92 * dt, HOUSE_DECK_L + 4, this.endX() - 10);
       this.walkT += dt * 9;
       this.idleT = 0;
       this.dustT -= dt;
@@ -3332,6 +3176,14 @@ const WorldScene = {
 /* ===== js/house.js ===== */
 // ---- house interior: the painted cutaway, furnished with the uploaded props ----
 
+// The hut sprite shown whole, fitted by height. Measured off the art: the porch
+// deck slab runs y 292..321 of 434, and spans x 0.104..0.892 — so the boards you
+// stand on are at 0.70 of the sprite height, between those two edges.
+const HUT_H = 252, HUT_W = Math.round(HUT_H * 575 / 434);
+const HUT_X = Math.round((W - HUT_W) / 2), HUT_Y = 8;
+const PORCH_L = HUT_X + HUT_W * 0.135, PORCH_R = HUT_X + HUT_W * 0.865;
+const BED_X = Math.round(PORCH_L + 50), TABLE_X = Math.round(PORCH_R - 44);
+
 const HouseScene = {
   customCursor: false,
   px: 380, dir: -1, walkT: 0, idleT: 0, time: 0,
@@ -3339,29 +3191,29 @@ const HouseScene = {
   aquaFish: [],
   embers: [],
 
-  FLOOR: 236,
+  FLOOR: 184,      // the porch boards, measured off the hut sprite
 
   enter(opts) {
     this.time = 0;
     this.sleeping = false;
     if (opts && opts.wake) {
-      this.px = 140;
+      this.px = BED_X;
       Game.toast('You wake up at home. Your bag is gone...');
       Game.toast(`Day ${G.day}.`);
     } else {
-      this.px = 360; this.dir = -1;
+      this.px = Math.round(PORCH_R - 16); this.dir = -1;
     }
     SND.setScene('house');
   },
 
   spots() {
     const s = [
-      { x: 132, label: 'Sleep  (next day, beds regrow)', act: () => this.sleep() },
-      { x: 392, label: 'Go Outside', act: () => Game.go(WorldScene, { fromHouse: true }) },
+      { x: BED_X, label: 'Sleep  (next day, beds regrow)', act: () => this.sleep() },
+      { x: Math.round(PORCH_R - 12), label: 'Go Outside', act: () => Game.go(WorldScene, { fromHouse: true }) },
     ];
     if (G.decor.gramophone) {
       s.push({
-        x: 330, label: G.musicOn ? 'Gramophone: ON' : 'Gramophone: OFF',
+        x: Math.round(TABLE_X + 30), label: G.musicOn ? 'Gramophone: ON' : 'Gramophone: OFF',
         act: () => { G.musicOn = !G.musicOn; SND.click(); Game.toast(G.musicOn ? 'Music on.' : 'Music off.'); },
       });
     }
@@ -3395,7 +3247,7 @@ const HouseScene = {
     if (Input.keys['KeyD'] || Input.keys['ArrowRight']) mv += 1;
     if (mv !== 0) {
       this.dir = mv;
-      this.px = clamp(this.px + mv * 92 * dt, 96, 400);
+      this.px = clamp(this.px + mv * 92 * dt, PORCH_L + 8, PORCH_R - 8);
       this.walkT += dt * 9;
       this.idleT = 0;
     } else this.idleT += dt;
@@ -3419,22 +3271,18 @@ const HouseScene = {
     drawA(ctx, `ocean${Math.floor(this.time * 8) % 12}`, -30, 0, 540, 270);
     SKY.tint(ctx, G.clock, this.time);
 
-    // the hut, zoomed so the room fills the frame — its porch floor is the floor
-    const rw = 640;                      // wider than the screen: we are inside it
-    const rh = assetH('hut_room', rw);
-    // the porch floor line sits at ~0.925 of the cropped sprite
-    drawA(ctx, 'hut_room', (W - rw) / 2, FLOOR - rh * 0.925, rw, rh);
+    // the whole hut sprite, unzoomed — you see the roof, the porch and the stilts
+    drawA(ctx, 'hut_full', HUT_X, HUT_Y, HUT_W, HUT_H);
 
-    // carry the floorboards down to the bottom edge so no sea peeks under them
-    const fy = FLOOR - rh * 0.925 + rh - 2;
-    if (fy < H) {
-      ctx.fillStyle = '#a8542f';           // matched to the sprite's last floor row
-      ctx.fillRect(0, fy, W, H - fy);
-      ctx.fillStyle = 'rgba(94,52,24,0.30)';
-      for (let bx = -8; bx < W; bx += 21) ctx.fillRect(bx, fy, 1, H - fy);
-      ctx.fillStyle = 'rgba(60,32,14,0.22)';
-      ctx.fillRect(0, H - 3, W, 3);
-    }
+    // furniture, standing on the porch boards
+    const stand = (name, cx, w) => {
+      const h = assetH(name, w);
+      drawA(ctx, name, cx - w / 2, FLOOR - h + 1, w, h);
+    };
+    stand('furn_0', BED_X, 62);          // the bed
+    const tblH = assetH('furn_2', 40);
+    stand('furn_2', TABLE_X, 40);        // the table
+    drawAC(ctx, 'furn_14', TABLE_X + 6, FLOOR - tblH - 5, 10);   // a lantern on it
 
     // ---- player -------------------------------------------------------------------------
     const OTTER_WALK = ['o4_4', 'o4_5', 'o4_6', 'o4_7'];
@@ -4095,7 +3943,26 @@ const Bench = {
 let G = null;
 
 const canvas = document.getElementById('game');
+// the backing store always follows DPX, so bumping the density is a one-liner
+canvas.width = W * DPX;
+canvas.height = H * DPX;
 const ctx = canvas.getContext('2d');
+
+// The corner vignette, rendered once at device density and blitted every frame.
+let _vigCv = null;
+function vignette() {
+  if (_vigCv) return _vigCv;
+  _vigCv = document.createElement('canvas');
+  _vigCv.width = W * DPX; _vigCv.height = H * DPX;
+  const c = _vigCv.getContext('2d');
+  c.scale(DPX, DPX);
+  const vg = c.createRadialGradient(W / 2, H * 0.52, H * 0.40, W / 2, H * 0.52, H * 1.05);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(6,10,30,0.38)');
+  c.fillStyle = vg;
+  c.fillRect(0, 0, W, H);
+  return _vigCv;
+}
 ctx.imageSmoothingEnabled = true;
 ctx.imageSmoothingQuality = 'high';
 
@@ -4461,7 +4328,6 @@ const Game = {
       ['  let go in the green! No button gets you home:', '#d8ccb4'],
       ['  SWIM UP before your O2 runs out.', '#ffe6b0'],
       ['  Urchins sting, jellyfish numb, eels lunge from dens,', '#d8ccb4'],
-      ['  a red "!" is a barracuda -- lift your paw!', '#d8ccb4'],
       ['  If the water goes quiet... DON\'T. MOVE.', '#e8434c'],
       ['  Tap anywhere to close this guide.', '#8a9484'],
     ] : [
@@ -4475,7 +4341,6 @@ const Game = {
       ['  pry -- release in the green! W/S ... swim.', '#d8ccb4'],
       ['  No surface button: SWIM UP before O2 runs out.', '#ffe6b0'],
       ['  Urchins sting, jellyfish numb, eels lunge from dens,', '#d8ccb4'],
-      ['  a red "!" is a barracuda -- move your paw!', '#d8ccb4'],
       ['  If the water goes quiet... DON\'T. MOVE.', '#e8434c'],
       ['  M ... mute      H ... close this guide', '#8a9484'],
     ];
@@ -4662,12 +4527,9 @@ function frame(now) {
     ctx.fillStyle = 'rgba(46,96,132,0.16)';
     ctx.fillRect(0, 0, W, H);
     ctx.globalCompositeOperation = 'source-over';
-    // corner vignette to seat the scene
-    const vg = ctx.createRadialGradient(W / 2, H * 0.52, H * 0.40, W / 2, H * 0.52, H * 1.05);
-    vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(6,10,30,0.38)');
-    ctx.fillStyle = vg;
-    ctx.fillRect(0, 0, W, H);
+    // corner vignette to seat the scene, baked once — evaluating a radial
+    // gradient over every device pixel each frame is far too expensive
+    ctx.drawImage(vignette(), 0, 0, W, H);
     ctx.restore();
   }
   // the HUD goes under the modals — a full-screen panel would collide with it

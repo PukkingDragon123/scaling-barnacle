@@ -9,9 +9,8 @@ const DiveScene = {
   camY: 0, maxCam: 0, camVel: 0,
   air: 0, airMax: 0, airBeepT: 0,
   bag: {}, bagCount: 0, bagPulse: 0,
-  particles: [], floaters: [], flyIcons: [], fish: [], snow: [], bubbles: [],
+  particles: [], floaters: [], flyIcons: [], snow: [], bubbles: [],
   combo: 0, comboT: 0, scrapeT: 0,
-  barra: null,
   shark: null, sharkCooldown: 45, sharkRollT: 1,
   whaleT: 25,
   gloom: 0, gloomTarget: 0,
@@ -25,7 +24,6 @@ const DiveScene = {
     this.time = 0;
     this.camY = 0; this.camVel = 0;
     this.maxCam = 1e9;   // the sea has no floor — your O2 does
-    this.scars = [];
     this.reward = null;
     this.airMax = TANKS[G.gear.tank].air;
     this.air = this.airMax;
@@ -41,8 +39,6 @@ const DiveScene = {
     this.sharkCooldown = rand(40, 70);
     this.sharkRollT = 1;
     this.whaleT = rand(20, 50);
-    this.barra = { state: 'idle', t: rand(8, 16), y: 0, x: 0, dir: 1, hit: false };
-    this.pry = null;          // active pry minigame { n, t, speed, win, marker }
     this.numbT = 0;           // jellyfish sting lockout
     this.surfaceT = 0;        // held-up-at-top timer
     this.genChunks = 0;
@@ -57,27 +53,9 @@ const DiveScene = {
         wy: rand(120, 900), vy: rand(6, 13), sway: rand(TAU), r: rand(8, 13), cd: 0,
       });
     }
-    // schools of little fish weaving behind the piling
-    this.schools = [];
-    for (let s = 0; s < 2; s++) {
-      const members = [];
-      const count = irand(5, 8);
-      for (let i = 0; i < count; i++) members.push({ ox: -i * 7 - rand(0, 4), oy: rand(-8, 8), ph: rand(TAU) });
-      this.schools.push({ x: rand(0, W), y: rand(40, H - 40), dir: Math.random() < 0.5 ? 1 : -1, speed: rand(22, 34), ph: rand(TAU), members, flee: false });
-    }
     // night plankton
     this.plankton = [];
     for (let i = 0; i < 26; i++) this.plankton.push({ x: rand(W), y: rand(H), v: rand(2, 6), ph: rand(TAU) });
-    // ambient fish
-    this.fish = [];
-    for (let i = 0; i < 9; i++) {
-      const left = Math.random() < 0.5;
-      this.fish.push({
-        x: left ? rand(0, this.WALL_X - 10) : rand(this.WALL_X + this.WALL_W + 10, W),
-        y: rand(20, H - 20), vx: rand(6, 18) * (Math.random() < 0.5 ? 1 : -1),
-        size: rand(3, 6), phase: rand(TAU), flee: false, alpha: 1, side: left ? 0 : 1,
-      });
-    }
     this.snow = [];
     for (let i = 0; i < 40; i++) this.snow.push({ x: rand(W), y: rand(H), v: rand(3, 9), drift: rand(TAU) });
     SND.setScene('dive');
@@ -262,13 +240,12 @@ const DiveScene = {
       });
     }
     this.particles.push({ x: n.x, y: n.y, t: 0.35, ring: true, r: 2, vr: 52, col: 'rgba(255,255,255,0.8)' });
-    // remember the harvest for the rest of the day + leave a scraped scar decal
+    // remember the harvest for the rest of the day
     if (n.id !== undefined) {
       if (!G.harvested) G.harvested = {};
       if (!G.harvested[this.p]) G.harvested[this.p] = [];
       G.harvested[this.p].push(n.id);
     }
-    this.scars.push({ x: n.x, y: n.y, rx: n.r * 0.8, ry: n.r * 0.6 });
     // stardew-style reward pop: the shell rises, shining, then dives into the bag
     this.reward = { art: ITEM_ART[drop] || 'shell_clam', name: ITEMS[drop].name, t: 0, x: clamp(n.x, 60, W - 60), y: n.y - this.camY, extra: gained.length > 1 };
 
@@ -299,7 +276,6 @@ const DiveScene = {
   startShark() {
     this.shark = { state: 'omen', t: 4.2, x: -220, y: H * 0.35, s: 0.55, alpha: 0, sus: 0, dir: 1, bit: false };
     this.gloomTarget = 0.5;
-    for (const f of this.fish) f.flee = true;
     SND.setScene('shark');
     this.msgSet('...the water goes quiet.', 3);
   },
@@ -587,45 +563,6 @@ const DiveScene = {
       }
     }
 
-    // ---- schools of fish ---------------------------------------------------------
-    for (const s of this.schools) {
-      if (this.shark && !s.flee) { s.flee = true; s.speed *= 4; }
-      if (!this.shark && s.flee) { s.flee = false; s.speed = rand(22, 34); }
-      s.x += s.dir * s.speed * dt;
-      s.y += Math.sin(this.time * 0.5 + s.ph) * 8 * dt - (this.camY - before) * 0.2;
-      s.y = clamp(s.y, 20, H - 20);
-      if (s.x < -80) { s.x = W + 80; s.y = rand(40, H - 40); }
-      if (s.x > W + 80) { s.x = -80; s.y = rand(40, H - 40); }
-    }
-
-    // barracuda (only past the first piling, or at night)
-    if (this.p >= 1 || isNight(G.clock)) {
-      const b = this.barra;
-      b.t -= dt;
-      if (b.state === 'idle' && b.t <= 0 && !this.shark) {
-        b.state = 'warn'; b.t = 0.85;
-        b.y = clamp(Input.mouse.y, 20, H - 20);
-        b.dir = Math.random() < 0.5 ? 1 : -1;
-        b.hit = false;
-        SND.warn();
-      } else if (b.state === 'warn' && b.t <= 0) {
-        b.state = 'dash'; b.t = 0.55;
-        b.x = b.dir > 0 ? -50 : W + 50;
-      } else if (b.state === 'dash') {
-        b.x += b.dir * ((W + 120) / 0.55) * dt;
-        // on touch, a lifted finger means the paw is pulled back — safe
-        const pawOut = Input.mouse.down || !TouchUI.enabled;
-        if (!b.hit && pawOut && Math.abs(Input.mouse.x - b.x) < 26 && Math.abs(Input.mouse.y - b.y) < 20) {
-          b.hit = true;
-          this.hurtPlayer(1);
-          SND.bite();
-          this.spillBag(3);
-          this.msgSet('Barracuda bite!');
-        }
-        if (b.t <= 0) { b.state = 'idle'; b.t = rand(9, 22); }
-      }
-    }
-
     // shark
     this.updateShark(dt);
 
@@ -662,23 +599,6 @@ const DiveScene = {
     this.bubbles = this.bubbles.filter(bu => bu.y > -5);
     if (Math.random() < dt * 0.8)
       this.bubbles.push({ x: rand(W), y: H + 4, r: rand(1, 3), v: rand(12, 26), wob: rand(TAU) });
-
-    // fish
-    for (const f of this.fish) {
-      if (f.flee) {
-        f.vx = (f.vx > 0 ? 1 : -1) * 160;
-        f.alpha = Math.max(0, f.alpha - dt * 1.5);
-      }
-      f.x += f.vx * eff;
-      f.y += Math.sin(this.time * 2 + f.phase) * 6 * eff - dcam * 0.25;
-      const inWall = f.x > this.WALL_X - 8 && f.x < this.WALL_X + this.WALL_W + 8;
-      if (!f.flee && (f.x < 4 || f.x > W - 4 || inWall)) f.vx *= -1;
-      if (f.y < 6 || f.y > H - 6) f.y = clamp(f.y, 6, H - 6);
-      if (f.flee && (f.x < -30 || f.x > W + 30)) {
-        // respawn later, calm
-        if (!this.shark) { f.flee = false; f.alpha = 1; f.x = f.side ? W - 10 : 10; }
-      }
-    }
 
     // marine snow
     for (const s of this.snow) {
@@ -880,35 +800,6 @@ const DiveScene = {
     // shark far pass (behind wall)
     if (this.shark && this.shark.state === 'pass') this.drawShark(ctx, this.shark);
 
-    // ambient fish
-    for (const f of this.fish) {
-      if (f.alpha <= 0) continue;
-      ctx.save();
-      ctx.globalAlpha = f.alpha * 0.8;
-      ctx.fillStyle = '#0e2c3a';
-      const fd = f.vx > 0 ? 1 : -1;
-      ctx.translate(f.x, f.y);
-      ctx.scale(fd, 1);
-      ctx.beginPath(); ctx.ellipse(0, 0, f.size, f.size * 0.45, 0, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(-f.size, 0); ctx.lineTo(-f.size - 3, -2); ctx.lineTo(-f.size - 3, 2); ctx.closePath(); ctx.fill();
-      ctx.restore();
-    }
-
-    // schools of little fish weaving behind the piling
-    for (const s of this.schools) {
-      for (const m of s.members) {
-        const fx = s.x + m.ox * s.dir;
-        const fy = s.y + m.oy + Math.sin(this.time * 3 + m.ph) * 2.2;
-        ctx.save();
-        ctx.translate(fx, fy);
-        ctx.scale(s.dir, 1);
-        ctx.fillStyle = 'rgba(122,172,192,0.55)';
-        ctx.beginPath(); ctx.ellipse(0, 0, 2.8, 1.2, 0, 0, TAU); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(-2.6, 0); ctx.lineTo(-4.4, -1.4); ctx.lineTo(-4.4, 1.4); ctx.closePath(); ctx.fill();
-        ctx.restore();
-      }
-    }
-
     // the great pole, tiled forever downward
     const poleW = 208;
     const poleH = assetH('pole', poleW);
@@ -916,16 +807,6 @@ const DiveScene = {
     for (let ti = Math.floor(this.camY / poleH); ti * poleH < this.camY + H; ti++) {
       drawA(ctx, 'pole', px0, ti * poleH - this.camY, poleW, poleH);
     }
-    // freshly-scraped scars where shells used to sit
-    for (const s of this.scars) {
-      const sy2 = s.y - this.camY;
-      if (sy2 < -20 || sy2 > H + 20) continue;
-      ctx.fillStyle = 'rgba(96,52,38,0.55)';
-      ctx.beginPath(); ctx.ellipse(s.x, sy2, s.rx, s.ry, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = 'rgba(196,132,96,0.4)';
-      ctx.beginPath(); ctx.ellipse(s.x, sy2, s.rx * 0.6, s.ry * 0.6, 0, 0, TAU); ctx.fill();
-    }
-
     // nodes
     for (const n of this.nodes) {
       if (!n.alive) continue;
@@ -1024,45 +905,6 @@ const DiveScene = {
         ctx.fillStyle = `rgba(122,242,232,${0.25 + tw * 0.45})`;
         ctx.fillRect(pl.x + Math.sin(this.time * 0.7 + pl.ph) * 4, py, PIX * 2, PIX * 2);
       }
-    }
-
-    // barracuda
-    const b = this.barra;
-    if (b && b.state === 'warn') {
-      const bx = b.dir > 0 ? 10 : W - 14;
-      if (Math.sin(this.time * 18) > 0) text(ctx, '!', bx, b.y - 6, { size: 14, color: '#ff5a4a', align: 'center' });
-    } else if (b && b.state === 'dash') {
-      ctx.save();
-      ctx.translate(b.x, b.y);
-      ctx.scale(b.dir, 1);
-      // motion streaks
-      ctx.fillStyle = 'rgba(122,158,172,0.28)';
-      ctx.fillRect(-58, -2, 26, 1);
-      ctx.fillRect(-48, 1, 18, 1);
-      ctx.fillRect(-52, -4.5, 14, 1);
-      // body with belly sheen
-      ctx.fillStyle = '#33505c';
-      ctx.beginPath(); ctx.ellipse(0, 0, 27, 5.5, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#5a7e8c';
-      ctx.beginPath(); ctx.ellipse(2, 1.5, 23, 3, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#8fb0ba';
-      ctx.beginPath(); ctx.ellipse(4, 2.4, 18, 1.4, 0, 0, TAU); ctx.fill();
-      // tail + fins
-      ctx.fillStyle = '#20343c';
-      ctx.beginPath(); ctx.moveTo(-25, 0); ctx.lineTo(-36, -7); ctx.lineTo(-33, 0); ctx.lineTo(-36, 7); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(-4, -4.5); ctx.lineTo(2, -9); ctx.lineTo(7, -4.5); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(0, 4.5); ctx.lineTo(4, 8); ctx.lineTo(9, 4.5); ctx.closePath(); ctx.fill();
-      // toothy jaw + eye
-      ctx.strokeStyle = '#141f26'; ctx.lineWidth = PIX * 2;
-      ctx.beginPath(); ctx.moveTo(26, 1.5); ctx.lineTo(16, 3.5); ctx.stroke();
-      ctx.fillStyle = '#e8e4da';
-      ctx.fillRect(19, 1.5, 1, 1.5);
-      ctx.fillRect(22, 1.2, 1, 1.5);
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(20, -2.5, 2, 2);
-      ctx.fillStyle = '#0a0f14';
-      ctx.fillRect(20.7, -2, 1, 1);
-      ctx.restore();
     }
 
     // darkness of the deep (with headlamp hole)

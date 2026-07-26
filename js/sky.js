@@ -131,53 +131,10 @@ const SKY = {
     // warm low sun at either end of the day
     const warm = clamp(1 - Math.abs(clock - 0.615) / 0.13, 0, 1)
                + clamp(1 - Math.abs(clock - 0.155) / 0.10, 0, 1);
-    if (warm > 0.01) {
-      // the low sun itself, sliding along the horizon
-      const set = clock > 0.4;
-      const tt = set ? clamp((clock - 0.50) / 0.16, 0, 1) : 1 - clamp((clock - 0.09) / 0.14, 0, 1);
-      const side = set ? W * (0.58 + tt * 0.30) : W * (0.42 - tt * 0.30);
-      const sy = HZ - 30 + tt * 30;
-      // repaint the sky as a sunset ramp — multiplying a blue sky only turns it
-      // green, so this lays real colour over it and lets the clouds read through
-      const gs2 = ctx.createLinearGradient(0, 0, 0, HZ + 2);
-      gs2.addColorStop(0, `rgba(74,84,166,${warm * 0.46})`);
-      gs2.addColorStop(0.38, `rgba(196,104,132,${warm * 0.50})`);
-      gs2.addColorStop(0.72, `rgba(255,132,84,${warm * 0.58})`);
-      gs2.addColorStop(1, `rgba(255,190,110,${warm * 0.66})`);
-      ctx.fillStyle = gs2;
-      ctx.fillRect(0, 0, W, HZ + 2);
-      // and warm the water under it
-      const gw = ctx.createLinearGradient(0, HZ, 0, H);
-      gw.addColorStop(0, `rgba(255,178,104,${warm * 0.46})`);
-      gw.addColorStop(0.5, `rgba(226,124,96,${warm * 0.30})`);
-      gw.addColorStop(1, `rgba(150,86,110,${warm * 0.26})`);
-      ctx.fillStyle = gw;
-      ctx.fillRect(0, HZ, W, H - HZ);
-      // haze around the disc
-      const gs = ctx.createRadialGradient(side, sy, 4, side, sy, 92);
-      gs.addColorStop(0, `rgba(255,226,150,${warm * 0.62})`);
-      gs.addColorStop(0.45, `rgba(255,178,96,${warm * 0.22})`);
-      gs.addColorStop(1, 'rgba(255,160,80,0)');
-      ctx.fillStyle = gs;
-      ctx.fillRect(side - 92, sy - 92, 184, 184);   // only where the halo reaches
-      // the disc reddens as it drops
-      ctx.fillStyle = `rgba(255,${Math.round(246 - tt * 62)},${Math.round(214 - tt * 118)},${warm * 0.95})`;
-      ctx.beginPath(); ctx.arc(side, sy, 12, 0, TAU); ctx.fill();
-      // the glitter path it lays on the water: broken pixel dashes, no hard cone.
-      // One fillStyle for the lot — a per-dash colour string costs real frame time.
-      ctx.fillStyle = '#fff0c4';
-      for (let y = HZ + 2; y < H; y += 3) {
-        const d = (y - HZ) / (H - HZ);
-        const sp = 9 + d * 34;
-        ctx.globalAlpha = warm * (1 - d * 0.75) * 0.42;
-        for (let k = -2; k <= 2; k++) {
-          const jx = Math.sin(y * 0.9 + k * 2.1 + time * 2.6) * sp * 0.5;
-          const lw = Math.max(1, (2.6 - Math.abs(k) * 0.7) * (1 + d * 1.4));
-          ctx.fillRect(Math.round(side + jx + k * sp * 0.34), y, lw, 1);
-        }
-      }
-      ctx.globalAlpha = 1;
-    }
+    // no sun disc: the light is all in the sky and on the water. The wash is
+    // baked per 5%-of-warm step — three full-screen gradients per frame at
+    // device density is more than the budget allows.
+    if (warm > 0.01) ctx.drawImage(this.warmCanvas(warm), 0, 0, W, H);
     if (nite > 0.01) {
       // night: deepen and cool, keeping the water readable
       ctx.save();
@@ -185,29 +142,68 @@ const SKY = {
       ctx.fillStyle = `rgba(${Math.round(lerp(255, 60, nite))},${Math.round(lerp(255, 78, nite))},${Math.round(lerp(255, 150, nite))},1)`;
       ctx.fillRect(0, 0, W, H);
       ctx.restore();
-      // stars over the sky half
+      // stars over the sky half — globalAlpha instead of a colour string each
+      ctx.fillStyle = '#ecf2ff';
       const rng = mulberry32(99);
       for (let i = 0; i < 70; i++) {
         const sx = rng() * W, sy = rng() * (HZ - 10), ph = rng() * TAU;
         const tw = 0.45 + 0.55 * Math.abs(Math.sin(time * 0.9 + ph));
-        ctx.fillStyle = `rgba(236,242,255,${nite * tw * 0.9})`;
+        ctx.globalAlpha = nite * tw * 0.9;
         ctx.fillRect(Math.round(sx), Math.round(sy), rng() < 0.2 ? 1 : PIX, rng() < 0.2 ? 1 : PIX);
       }
-      // moon
-      const mt = clamp((clock >= 0.72 ? clock - 0.72 : clock + 0.28) / 0.37, 0, 1);
-      const mx = 40 + mt * (W - 80), my = HZ - 22 - Math.sin(mt * Math.PI) * (HZ - 52);
-      ctx.fillStyle = `rgba(226,236,255,${nite * 0.16})`;
-      ctx.beginPath(); ctx.arc(mx, my, 20, 0, TAU); ctx.fill();
-      ctx.fillStyle = `rgba(238,244,255,${nite})`;
-      ctx.beginPath(); ctx.arc(mx, my, 8, 0, TAU); ctx.fill();
-      ctx.fillStyle = `rgba(150,168,205,${nite})`;
-      ctx.fillRect(mx - 3, my - 2, 2.4, 2.4); ctx.fillRect(mx + 2, my + 2, 1.6, 1.6);
+      ctx.globalAlpha = 1;
+      // no moon disc — just a cold sheen on the water so the night still reads
+      const gm = ctx.createLinearGradient(0, HZ - 4, 0, HZ + 20);
+      gm.addColorStop(0, 'rgba(190,214,255,0)');
+      gm.addColorStop(0.35, `rgba(200,220,255,${nite * 0.13})`);
+      gm.addColorStop(1, 'rgba(170,196,240,0)');
+      ctx.fillStyle = gm;
+      ctx.fillRect(0, HZ - 4, W, 24);
     }
     // a couple of wind streaks so the air feels alive
     for (const g of this.gusts) {
       ctx.fillStyle = `rgba(255,255,255,${clamp(g.t, 0, 1) * 0.16})`;
       ctx.fillRect(g.x, g.y, g.len, PIX);
     }
+  },
+
+  // ---- the golden-hour wash, cached per warmth step --------------------------
+  warmCanvas(warm) {
+    const key = Math.round(clamp(warm, 0, 1) * 20);
+    if (this._wKey === key && this._wCv) return this._wCv;
+    if (!this._wCv) {
+      this._wCv = document.createElement('canvas');
+      this._wCv.width = W * DPX; this._wCv.height = H * DPX;
+      this._wCtx = this._wCv.getContext('2d');
+      this._wCtx.scale(DPX, DPX);
+    }
+    const c = this._wCtx, HZ = this.OCEAN_HZ, k = key / 20;
+    c.clearRect(0, 0, W, H);
+    // the sky as a sunset ramp — multiplying a blue sky only turns it green, so
+    // this lays real colour over it and lets the clouds read through
+    const gs = c.createLinearGradient(0, 0, 0, HZ + 2);
+    gs.addColorStop(0, `rgba(74,84,166,${k * 0.46})`);
+    gs.addColorStop(0.38, `rgba(196,104,132,${k * 0.50})`);
+    gs.addColorStop(0.72, `rgba(255,132,84,${k * 0.58})`);
+    gs.addColorStop(1, `rgba(255,190,110,${k * 0.66})`);
+    c.fillStyle = gs;
+    c.fillRect(0, 0, W, HZ + 2);
+    // and the water under it
+    const gw = c.createLinearGradient(0, HZ, 0, H);
+    gw.addColorStop(0, `rgba(255,178,104,${k * 0.46})`);
+    gw.addColorStop(0.5, `rgba(226,124,96,${k * 0.30})`);
+    gw.addColorStop(1, `rgba(150,86,110,${k * 0.26})`);
+    c.fillStyle = gw;
+    c.fillRect(0, HZ, W, H - HZ);
+    // a bright band of low light right along the waterline
+    const gh = c.createLinearGradient(0, HZ - 8, 0, HZ + 26);
+    gh.addColorStop(0, 'rgba(255,224,160,0)');
+    gh.addColorStop(0.3, `rgba(255,232,178,${k * 0.34})`);
+    gh.addColorStop(1, 'rgba(255,206,140,0)');
+    c.fillStyle = gh;
+    c.fillRect(0, HZ - 8, W, 34);
+    this._wKey = key;
+    return this._wCv;
   },
 
   // ---- the sky, cached per palette step ---------------------------------------

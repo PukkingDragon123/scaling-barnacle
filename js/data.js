@@ -62,7 +62,7 @@ const PILINGS = [
 
 const BUILDS = {
   bridge2: { name: 'Bridge East — Mid Piling',  price: 400,
-             desc: 'Richer beds: oysters! Barracudas patrol here.' },
+             desc: 'Richer beds out here: oysters!' },
   bridge3: { name: 'Bridge Far — Deep Piling',  price: 1200,
              desc: 'Abalone & pearls. Something big lives down there.' },
   house2:  { name: 'House: Cozy Cabin',  price: 500,  desc: 'Warm walls, second window.' },

@@ -13,8 +13,14 @@ const DECK_Y = 214;   // the dock sits low in frame, water filling the bottom
 
 // Every structure is anchored by its MEASURED deck-surface line (fraction of
 // sprite height) so nothing floats: deck surfaces all land exactly on DECK_Y.
-const HOUSE_X = 30, HOUSE_W = 124, HOUSE_DECK = 0.425;   // the uploaded hut, background-free
-const PIER_START = 128, SEG_W = 88, PIER_DECK = 0.035;   // dock_11 trestle module
+// deck fractions are measured off the art (topmost row of the widest slab),
+// not eyeballed: house_clean's deck top is row 277 of 598, dock_11's is 7 of 199
+const HOUSE_X = 30, HOUSE_W = 124, HOUSE_DECK = 0.4632;  // the uploaded hut, background-free
+const PIER_START = 128, SEG_W = 88, PIER_DECK = 0.0352;  // dock_11 trestle module
+// the house's own deck spans these x, so the walk range and the pier both
+// start from its solid boards rather than its stairs
+const HOUSE_DECK_L = HOUSE_X + HOUSE_W * 0.2096;
+const HOUSE_DECK_R = HOUSE_X + HOUSE_W * 0.8977;
 
 // place a sprite so its deck surface sits on DECK_Y
 function drawOnDeck(ctx, name, x, w, deckFrac) {
@@ -84,7 +90,7 @@ const WorldScene = {
     if (Input.keys['KeyD'] || Input.keys['ArrowRight']) mv += 1;
     if (mv !== 0) {
       this.dir = mv;
-      this.px = clamp(this.px + mv * 92 * dt, 52, this.endX() - 10);
+      this.px = clamp(this.px + mv * 92 * dt, HOUSE_DECK_L + 4, this.endX() - 10);
       this.walkT += dt * 9;
       this.idleT = 0;
       this.dustT -= dt;

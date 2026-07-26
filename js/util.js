@@ -2,7 +2,7 @@
 'use strict';
 
 const W = 480, H = 270;   // logical resolution: all game code works in these units
-const DPX = 3;            // art density: device texels per logical unit
+const DPX = 4;            // art density: device texels per logical unit
 const PIX = 1 / DPX;      // one device texel, in logical units (for fine detail)
 const APIX = 0.5;         // texel size of hand-authored sprites, in logical units
 const TAU = Math.PI * 2;

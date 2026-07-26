@@ -4,7 +4,26 @@
 let G = null;
 
 const canvas = document.getElementById('game');
+// the backing store always follows DPX, so bumping the density is a one-liner
+canvas.width = W * DPX;
+canvas.height = H * DPX;
 const ctx = canvas.getContext('2d');
+
+// The corner vignette, rendered once at device density and blitted every frame.
+let _vigCv = null;
+function vignette() {
+  if (_vigCv) return _vigCv;
+  _vigCv = document.createElement('canvas');
+  _vigCv.width = W * DPX; _vigCv.height = H * DPX;
+  const c = _vigCv.getContext('2d');
+  c.scale(DPX, DPX);
+  const vg = c.createRadialGradient(W / 2, H * 0.52, H * 0.40, W / 2, H * 0.52, H * 1.05);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(6,10,30,0.38)');
+  c.fillStyle = vg;
+  c.fillRect(0, 0, W, H);
+  return _vigCv;
+}
 ctx.imageSmoothingEnabled = true;
 ctx.imageSmoothingQuality = 'high';
 
@@ -370,7 +389,6 @@ const Game = {
       ['  let go in the green! No button gets you home:', '#d8ccb4'],
       ['  SWIM UP before your O2 runs out.', '#ffe6b0'],
       ['  Urchins sting, jellyfish numb, eels lunge from dens,', '#d8ccb4'],
-      ['  a red "!" is a barracuda -- lift your paw!', '#d8ccb4'],
       ['  If the water goes quiet... DON\'T. MOVE.', '#e8434c'],
       ['  Tap anywhere to close this guide.', '#8a9484'],
     ] : [
@@ -384,7 +402,6 @@ const Game = {
       ['  pry -- release in the green! W/S ... swim.', '#d8ccb4'],
       ['  No surface button: SWIM UP before O2 runs out.', '#ffe6b0'],
       ['  Urchins sting, jellyfish numb, eels lunge from dens,', '#d8ccb4'],
-      ['  a red "!" is a barracuda -- move your paw!', '#d8ccb4'],
       ['  If the water goes quiet... DON\'T. MOVE.', '#e8434c'],
       ['  M ... mute      H ... close this guide', '#8a9484'],
     ];
@@ -571,12 +588,9 @@ function frame(now) {
     ctx.fillStyle = 'rgba(46,96,132,0.16)';
     ctx.fillRect(0, 0, W, H);
     ctx.globalCompositeOperation = 'source-over';
-    // corner vignette to seat the scene
-    const vg = ctx.createRadialGradient(W / 2, H * 0.52, H * 0.40, W / 2, H * 0.52, H * 1.05);
-    vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(6,10,30,0.38)');
-    ctx.fillStyle = vg;
-    ctx.fillRect(0, 0, W, H);
+    // corner vignette to seat the scene, baked once — evaluating a radial
+    // gradient over every device pixel each frame is far too expensive
+    ctx.drawImage(vignette(), 0, 0, W, H);
     ctx.restore();
   }
   // the HUD goes under the modals — a full-screen panel would collide with it
