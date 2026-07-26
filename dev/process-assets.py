@@ -70,6 +70,98 @@ def despeckle(im, min_alpha_run=3):
     return im
 
 
+def global_key(im, tol=34):
+    """Remove EVERY pixel near the sheet background, not just the border-connected
+    ones — sprite sheets trap background inside enclosed shapes (between beams,
+    under a roof) that a flood fill can never reach."""
+    im = im.convert('RGBA')
+    w, h = im.size
+    px = im.load()
+    corners = [px[0, 0], px[w - 1, 0], px[0, h - 1], px[w - 1, h - 1]]
+    br = sum(c[0] for c in corners) / 4
+    bg = sum(c[1] for c in corners) / 4
+    bb = sum(c[2] for c in corners) / 4
+    t2 = tol * tol * 3
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a == 0:
+                continue
+            if (r - br) ** 2 + (g - bg) ** 2 + (b - bb) ** 2 < t2:
+                px[x, y] = (0, 0, 0, 0)
+    return im
+
+
+def defringe(im, bg=None, tol=70, passes=2):
+    """Flood fill leaves a rim of half-background pixels; drop any edge pixel
+    that is still close to the background colour."""
+    im = im.convert('RGBA')
+    w, h = im.size
+    px = im.load()
+    if bg is None:
+        # estimate from whatever transparent neighbours remain
+        bg = (139, 146, 168)
+    t2 = tol * tol * 3
+    for _ in range(passes):
+        doomed = []
+        for y in range(h):
+            for x in range(w):
+                if px[x, y][3] == 0:
+                    continue
+                edge = False
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    xx, yy = x + dx, y + dy
+                    if xx < 0 or yy < 0 or xx >= w or yy >= h or px[xx, yy][3] == 0:
+                        edge = True
+                        break
+                if not edge:
+                    continue
+                r, g, b, a = px[x, y]
+                d = (r - bg[0]) ** 2 + (g - bg[1]) ** 2 + (b - bg[2]) ** 2
+                if d < t2:
+                    doomed.append((x, y))
+        if not doomed:
+            break
+        for x, y in doomed:
+            px[x, y] = (0, 0, 0, 0)
+    return im
+
+
+def biggest_blob(im):
+    """Keep only the largest connected shape — kills bleed from the neighbouring
+    cell when a sprite sheet's grid does not divide evenly."""
+    im = im.convert('RGBA')
+    w, h = im.size
+    px = im.load()
+    seen = bytearray(w * h)
+    best, bestn = None, 0
+    for sy in range(h):
+        for sx in range(w):
+            if seen[sy * w + sx] or px[sx, sy][3] == 0:
+                continue
+            q = deque([(sx, sy)])
+            seen[sy * w + sx] = 1
+            cells = []
+            while q:
+                x, y = q.popleft()
+                cells.append((x, y))
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
+                    xx, yy = x + dx, y + dy
+                    if 0 <= xx < w and 0 <= yy < h and not seen[yy * w + xx] and px[xx, yy][3] > 0:
+                        seen[yy * w + xx] = 1
+                        q.append((xx, yy))
+            if len(cells) > bestn:
+                bestn, best = len(cells), cells
+    if not best:
+        return im
+    keep = set(best)
+    for y in range(h):
+        for x in range(w):
+            if px[x, y][3] and (x, y) not in keep:
+                px[x, y] = (0, 0, 0, 0)
+    return im
+
+
 def punch(im, sat=1.30, mul=0.90):
     """Bake richer colour and a touch of shade into an asset, so the game can
     look saturated and moody without a per-frame filter pass."""
@@ -102,8 +194,11 @@ def save(name, im):
     print(f'  {name}: {im.size[0]}x{im.size[1]} ({os.path.getsize(path)//1024}KB)')
 
 
-def grid_slice(src, cols, rows, names, tol=34, target_h=None, target_w=None):
+def grid_slice(src, cols, rows, names, tol=34, target_h=None, target_w=None,
+               solo=False, defr=False, inset=0):
     im = key_bg(Image.open(os.path.join(ROOT, src)), tol)
+    if defr:
+        im = defringe(im)
     w, h = im.size
     cw, ch = w / cols, h / rows
     i = 0
@@ -111,7 +206,12 @@ def grid_slice(src, cols, rows, names, tol=34, target_h=None, target_w=None):
         for c in range(cols):
             if i >= len(names):
                 break
-            cell = trim(im.crop((int(c * cw), int(r * ch), int((c + 1) * cw), int((r + 1) * ch))))
+            box = (int(c * cw) + inset, int(r * ch) + inset,
+                   int((c + 1) * cw) - inset, int((r + 1) * ch) - inset)
+            cell = im.crop(box)
+            if solo:
+                cell = biggest_blob(cell)
+            cell = trim(cell)
             if names[i]:
                 cell = despeckle(cell)
                 if target_h and cell.size[1] > target_h:
@@ -208,7 +308,7 @@ grid_slice('A33C234D-8DAF-45A2-8B3B-C6C04C0F366F.png', 4, 4,
            ['o4_0', 'o4_1', 'o4_2', 'o4_3',
             'o4_4', 'o4_5', 'o4_6', 'o4_7',
             'o4_run', 'o4_run2', 'o4_swim', 'o4_dive',
-            'o4_swim2', 'o4_grab', 'o4_basket', 'o4_hold'], tol=24, target_h=112)
+            'o4_swim2', 'o4_grab', 'o4_basket', 'o4_hold'], tol=24, target_h=112, solo=True, inset=4)
 
 print('drone poses...')
 grid_slice('94E66AAE-4813'[:0] + '94E66AAE-6E7E-4813-A583-EED25CC7193B.png', 4, 2,
@@ -235,18 +335,29 @@ top = trim(hx.crop((0, 0, hx.size[0], round(hx.size[1] * 0.60))))
 top = top.resize((round(top.size[0] * 2.2), round(top.size[1] * 2.2)), Image.LANCZOS)
 save('house_top', top)
 
+print('new open-front hut (interior scene) + workbench prop...')
+hut = defringe(trim(global_key(Image.open(os.path.join(ROOT, '044A2D24-7F4F-4661-A7BB-C5E89EC3CD66.png')), 42)))
+save('hut_full', hut)
+# the room itself: crop away the stilts, keep the porch floor and everything above
+room = trim(hut.crop((0, 0, hut.size[0], round(hut.size[1] * 0.70))))
+room = room.resize((round(room.size[0] * 1.7), round(room.size[1] * 1.7)), Image.LANCZOS)
+save('hut_room', room)
+
+wb = defringe(trim(global_key(Image.open(os.path.join(ROOT, 'IMG_4468.jpeg')), 48)), tol=88, passes=3)
+save('workbench', wb)
+
 print('house interior...')
 hi = trim(key_bg(Image.open(os.path.join(ROOT, '2DD3E769-96DE-4F19-9812-7A79465BF57B.png')), tol=30))
 hi = hi.resize((1440, round(hi.size[1] * 1440 / hi.size[0])), Image.LANCZOS)
 save('house_int', hi)
 
 print('dock modules (components)...')
-dk = key_bg(Image.open(os.path.join(ROOT, '5EE6640E-E83B-4DA3-BFAD-E80A0066A61C.png')))
+dk = defringe(global_key(Image.open(os.path.join(ROOT, '5EE6640E-E83B-4DA3-BFAD-E80A0066A61C.png')), 40), (162, 168, 182))
 for i, b in enumerate(components(dk)):
     save(f'dock_{i}', trim(dk.crop(tuple(b))))
 
 print('furniture (components)...')
-fu = key_bg(Image.open(os.path.join(ROOT, '175C57F7-66B8-4C75-A0DB-5DC747AEBA78.png')))
+fu = defringe(global_key(Image.open(os.path.join(ROOT, '175C57F7-66B8-4C75-A0DB-5DC747AEBA78.png')), 40))
 for i, b in enumerate(components(fu, min_area=500)):
     save(f'furn_{i}', trim(fu.crop(tuple(b))))
 

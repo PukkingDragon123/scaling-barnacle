@@ -566,18 +566,15 @@ function frame(now) {
   // Re-draw the finished frame through a filter — blend modes would scramble hue.
   if (Game.scene) {
     ctx.save();
-    // two cheap full-screen passes (saturation is baked into the art itself)
+    // one gentle contrast pass — a global multiply would grey out the whites
     ctx.globalCompositeOperation = 'overlay';
-    ctx.fillStyle = 'rgba(74,120,150,0.20)';
-    ctx.fillRect(0, 0, W, H);
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.fillStyle = '#c9c2d4';
+    ctx.fillStyle = 'rgba(46,96,132,0.16)';
     ctx.fillRect(0, 0, W, H);
     ctx.globalCompositeOperation = 'source-over';
     // corner vignette to seat the scene
     const vg = ctx.createRadialGradient(W / 2, H * 0.52, H * 0.40, W / 2, H * 0.52, H * 1.05);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(6,8,26,0.46)');
+    vg.addColorStop(1, 'rgba(6,10,30,0.38)');
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, W, H);
     ctx.restore();

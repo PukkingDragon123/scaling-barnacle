@@ -8,25 +8,25 @@ const HouseScene = {
   aquaFish: [],
   embers: [],
 
-  FLOOR: 143,
+  FLOOR: 236,
 
   enter(opts) {
     this.time = 0;
     this.sleeping = false;
     if (opts && opts.wake) {
-      this.px = 150;
+      this.px = 140;
       Game.toast('You wake up at home. Your bag is gone...');
       Game.toast(`Day ${G.day}.`);
     } else {
-      this.px = 400; this.dir = -1;
+      this.px = 360; this.dir = -1;
     }
     SND.setScene('house');
   },
 
   spots() {
     const s = [
-      { x: 128, label: 'Sleep  (next day, beds regrow)', act: () => this.sleep() },
-      { x: 428, label: 'Go Outside', act: () => Game.go(WorldScene, { fromHouse: true }) },
+      { x: 132, label: 'Sleep  (next day, beds regrow)', act: () => this.sleep() },
+      { x: 392, label: 'Go Outside', act: () => Game.go(WorldScene, { fromHouse: true }) },
     ];
     if (G.decor.gramophone) {
       s.push({
@@ -64,7 +64,7 @@ const HouseScene = {
     if (Input.keys['KeyD'] || Input.keys['ArrowRight']) mv += 1;
     if (mv !== 0) {
       this.dir = mv;
-      this.px = clamp(this.px + mv * 92 * dt, 108, 446);
+      this.px = clamp(this.px + mv * 92 * dt, 96, 400);
       this.walkT += dt * 9;
       this.idleT = 0;
     } else this.idleT += dt;
@@ -89,8 +89,11 @@ const HouseScene = {
     SKY.drawSky(ctx, G.clock, this.time, 0);
     SKY.drawSea(ctx, G.clock, this.time, 0);
 
-    // the painted interior
-    drawA(ctx, 'house_int', 0, 0, 480);
+    // the hut, zoomed so the room fills the frame — its porch floor is the floor
+    const rw = 640;                      // wider than the screen: we are inside it
+    const rh = assetH('hut_room', rw);
+    // the porch floor line sits at ~0.925 of the cropped sprite
+    drawA(ctx, 'hut_room', (W - rw) / 2, FLOOR - rh * 0.925, rw, rh);
 
     // ---- player -------------------------------------------------------------------------
     const OTTER_WALK = ['o4_4', 'o4_5', 'o4_6', 'o4_7'];

@@ -138,14 +138,6 @@ const DiveScene = {
           seed: Math.floor(rng() * 99999), alive, shake: 0, phase: rng() * TAU, clampT: 0,
         });
       }
-      // living decoration: starfish + anemones make the pole feel inhabited
-      if (rng() < 0.45) {
-        this.nodes.push({
-          kind: 'star', decor: true, alive: true,
-          x: this.WALL_X + 18 + rng() * (this.WALL_W - 36), y: wy + rng() * 30,
-          r: 5.5 + rng() * 3.5, seed: Math.floor(rng() * 99999), phase: rng() * TAU,
-        });
-      }
     }
     // one moray den per chunk or so, once past the shallows
     if (y0 > 220 && rng() < 0.7) {
@@ -699,7 +691,6 @@ const DiveScene = {
 
   // ---- drawing ---------------------------------------------------------------
   drawNode(ctx, n, sy) {
-    if (n.kind === 'star') { this.drawStar(ctx, n, sy); return; }
     if (n.kind === 'eelhole') { this.drawEelhole(ctx, n, sy); return; }
     const sx = n.x + (n.shake > 0 ? rand(-1.3, 1.3) : 0);
     const jy = sy + (n.shake > 0 ? rand(-1, 1) : 0);
@@ -740,35 +731,6 @@ const DiveScene = {
     ctx.restore();
   },
 
-  drawStar(ctx, n, sy) {
-    ctx.save();
-    ctx.translate(Math.round(n.x * DPX) / DPX, Math.round(sy * DPX) / DPX);
-    const wig = Math.sin(this.time * 0.7 + n.phase) * 0.07;
-    ctx.rotate(n.phase + wig);
-    const cols = [['#e8735a', '#f2957e'], ['#d85a8a', '#e87aa8'], ['#c86a3c', '#e88a5c']];
-    const [base, light] = cols[n.seed % 3];
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath(); ctx.ellipse(1, 1.2, n.r * 1.1, n.r * 0.9, 0, 0, TAU); ctx.fill();
-    for (let i = 0; i < 5; i++) {
-      const a = i / 5 * TAU - Math.PI / 2;
-      ctx.fillStyle = base;
-      ctx.beginPath();
-      ctx.ellipse(Math.cos(a) * n.r * 0.5, Math.sin(a) * n.r * 0.5, n.r * 0.52, n.r * 0.24, a, 0, TAU);
-      ctx.fill();
-    }
-    ctx.fillStyle = base;
-    ctx.beginPath(); ctx.arc(0, 0, n.r * 0.42, 0, TAU); ctx.fill();
-    ctx.fillStyle = light;
-    ctx.beginPath(); ctx.arc(-0.5, -0.5, n.r * 0.24, 0, TAU); ctx.fill();
-    // bumps down each arm
-    ctx.fillStyle = light;
-    for (let i = 0; i < 5; i++) {
-      const a = i / 5 * TAU - Math.PI / 2;
-      ctx.fillRect(Math.cos(a) * n.r * 0.55, Math.sin(a) * n.r * 0.55, 1, 1);
-      ctx.fillRect(Math.cos(a) * n.r * 0.8, Math.sin(a) * n.r * 0.8, PIX * 2, PIX * 2);
-    }
-    ctx.restore();
-  },
 
 
   drawEelhole(ctx, n, sy) {

@@ -9,11 +9,11 @@ function nightness(clock) {
 }
 
 const PILING_X = [460, 640, 820];
-const DECK_Y = 176;
+const DECK_Y = 214;   // the dock sits low in frame, water filling the bottom
 
 // Every structure is anchored by its MEASURED deck-surface line (fraction of
 // sprite height) so nothing floats: deck surfaces all land exactly on DECK_Y.
-const HOUSE_X = 30, HOUSE_W = 150, HOUSE_DECK = 0.641;   // house_top: hut + its boards only
+const HOUSE_X = 36, HOUSE_W = 112, HOUSE_DECK = 0.427;   // dock_0 from the dock sheet
 const PIER_START = 128, SEG_W = 88, PIER_DECK = 0.035;   // dock_11 trestle module
 
 // place a sprite so its deck surface sits on DECK_Y
@@ -39,7 +39,7 @@ const WorldScene = {
 
   worldW() { return this.endX() + 80; },
   endX() { return 300 + G.bridge * 200; },
-  houseTop() { return DECK_Y - assetH('house_top', HOUSE_W) * HOUSE_DECK; },
+  houseTop() { return DECK_Y - assetH('dock_0', HOUSE_W) * HOUSE_DECK; },
 
   enter(opts) {
     this.time = 0;
@@ -145,7 +145,7 @@ const WorldScene = {
     }
 
     // ---- the house, its platform flush with the pier deck --------------------------
-    const hh = drawOnDeck(ctx, 'house_top', HOUSE_X, HOUSE_W, HOUSE_DECK);
+    const hh = drawOnDeck(ctx, 'dock_0', HOUSE_X, HOUSE_W, HOUSE_DECK);
     const hy = DECK_Y - hh * HOUSE_DECK;
     if (G.house >= 2) {
       const bx0 = HOUSE_X + HOUSE_W * 0.30, bx1 = HOUSE_X + HOUSE_W * 0.72, by = hy + hh * 0.10;
@@ -192,38 +192,11 @@ const WorldScene = {
       ctx.beginPath(); ctx.arc(232, topY - 5, 14, 0, TAU); ctx.fill();
     }
 
-    // ---- Workbench: sturdy counter with a vice, hammer and crate -----------------
-    const bH = drawStanding(ctx, 'furn_2', 300, 44, 1);
-    const bTop = DECK_Y - bH + 1;
-    // a second slab on top makes it read as a work counter, not a dining table
-    ctx.fillStyle = '#7a5230';
-    ctx.fillRect(300 - 24, bTop - 3.5, 48, 4);
-    ctx.fillStyle = '#96683c';
-    ctx.fillRect(300 - 24, bTop - 3.5, 48, 1.2);
-    ctx.fillStyle = 'rgba(40,22,10,0.45)';
-    ctx.fillRect(300 - 24, bTop + 0.2, 48, PIX * 2);
-    // metal vice clamped to the left end
-    ctx.fillStyle = '#3e454c';
-    ctx.fillRect(281, bTop - 9, 9, 6);
-    ctx.fillStyle = '#5d666e';
-    ctx.fillRect(281, bTop - 9, 9, 1.6);
-    ctx.fillStyle = '#2a3036';
-    ctx.fillRect(284.5, bTop - 12, 2.4, 3.4);
-    // hammer resting on the counter
-    ctx.save();
-    ctx.translate(305, bTop - 5.5);
-    ctx.rotate(-0.32);
-    ctx.fillStyle = '#8a6238';
-    ctx.fillRect(0, 0, 11, 1.8);
-    ctx.fillStyle = '#4a5258';
-    ctx.fillRect(9.5, -2.4, 4, 5.6);
-    ctx.restore();
-    // shells waiting to be worked
-    drawAC(ctx, 'shell_clam', 296, bTop - 7, 10);
-    drawAC(ctx, 'shell_scallop', 310, bTop - 7, 9);
-    // crate + toolbox beside it
-    drawStanding(ctx, 'furn_7', 273, 15, 1);
-    drawStanding(ctx, 'furn_17', 328, 15, 1);
+    // ---- Workbench: the uploaded bench, standing on the deck ---------------------
+    const bH = drawStanding(ctx, 'workbench', 300, 40, 2);
+    const bTop = DECK_Y - bH + 2;
+    drawAC(ctx, 'shell_clam', 292, bTop + 3, 9);
+    drawAC(ctx, 'shell_scallop', 306, bTop + 3, 8);
 
     // drone landing pad
     ctx.fillStyle = 'rgba(60,68,72,0.9)';
@@ -297,7 +270,7 @@ const WorldScene = {
       ctx.save();
       ctx.translate(-cam, 0);
       // hut window glow
-      const hh2 = assetH('house_top', HOUSE_W);
+      const hh2 = assetH('dock_0', HOUSE_W);
       const hy2 = DECK_Y - hh2 * HOUSE_DECK;
       ctx.fillStyle = `rgba(255,214,120,${nite * 0.18})`;
       ctx.beginPath(); ctx.arc(HOUSE_X + HOUSE_W * 0.63, hy2 + hh2 * 0.38, 15, 0, TAU); ctx.fill();
