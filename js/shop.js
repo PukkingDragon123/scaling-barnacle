@@ -64,7 +64,7 @@ const Shop = {
         any = true;
         total += n * ITEMS[k].price;
         push({
-          icon: SPR.icons[k],
+          art: k,
           label: `${ITEMS[k].name}  x${n}`,
           sub: `$${ITEMS[k].price} each`,
           btn: `SELL $${n * ITEMS[k].price}`,
@@ -75,27 +75,28 @@ const Shop = {
       else push({ label: 'SELL EVERYTHING', sub: 'one big crate', btn: `$${total}`, act: () => this.sellKeys(ITEM_KEYS) });
     } else if (this.tab === 1) {
       // GEAR
-      const tier = (arr, cur, name, applyKey) => {
+      const tier = (arr, cur, applyKey, gart) => {
         if (cur + 1 < arr.length) {
           const nx = arr[cur + 1];
           push({
-            label: nx.name, sub: `${nx.desc}  (now: ${arr[cur].name})`,
+            gart, label: nx.name, sub: `${nx.desc}  (now: ${arr[cur].name})`,
             btn: `$${nx.price}`, price: nx.price,
             act: () => this.buy(nx.price, () => { G.gear[applyKey]++; }, nx.name),
           });
         } else {
-          push({ label: arr[cur].name, sub: 'Top of the line.', btn: 'MAX' });
+          push({ gart, label: arr[cur].name, sub: 'Top of the line.', btn: 'MAX' });
         }
       };
-      tier(SCRAPERS, G.gear.scraper, 'scraper', 'scraper');
-      tier(PRYBARS, G.gear.pry, 'pry', 'pry');
-      tier(TANKS, G.gear.tank, 'tank', 'tank');
-      tier(SUITS, G.gear.suit, 'suit', 'suit');
-      tier(BAGS, G.gear.bag, 'bag', 'bag');
+      tier(SCRAPERS, G.gear.scraper, 'scraper', 'g_scraper');
+      tier(PRYBARS, G.gear.pry, 'pry', 'g_crowbar');
+      tier(TANKS, G.gear.tank, 'tank', 'g_tank');
+      tier(SUITS, G.gear.suit, 'suit', 'g_suit');
+      tier(BAGS, G.gear.bag, 'bag', 'g_netbag');
+      const singleArt = { lamp: 'g_torch', gloves: 'g_plier' };
       for (const key of ['lamp', 'gloves']) {
         const it = GEAR_SINGLES[key];
-        if (G.gear[key]) push({ label: it.name, sub: it.desc, btn: 'OWNED' });
-        else push({ label: it.name, sub: it.desc, btn: `$${it.price}`, price: it.price, act: () => this.buy(it.price, () => { G.gear[key] = true; }, it.name) });
+        if (G.gear[key]) push({ gart: singleArt[key], label: it.name, sub: it.desc, btn: 'OWNED' });
+        else push({ gart: singleArt[key], label: it.name, sub: it.desc, btn: `$${it.price}`, price: it.price, act: () => this.buy(it.price, () => { G.gear[key] = true; }, it.name) });
       }
     } else if (this.tab === 2) {
       // BUILD
@@ -213,7 +214,8 @@ const Shop = {
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.fillRect(this.WX + 8, ry + 20.5, this.WW - 16, PIX);
       let lx = this.WX + 14;
-      if (r.icon) { drawSpr(ctx, r.icon, lx, ry + 6); lx += 12; }
+      if (r.art) { drawItemIcon(ctx, r.art, lx + 6, ry + 10.5, 13); lx += 15; }
+      else if (r.gart) { drawAC(ctx, r.gart, lx + 6, ry + 10.5, 13); lx += 15; }
       text(ctx, r.label, lx, ry + 3, { size: 8, color: '#f4e8cc' });
       if (r.sub) text(ctx, r.sub, lx, ry + 12, { size: 6, color: '#a89272' });
       if (r.btn) {

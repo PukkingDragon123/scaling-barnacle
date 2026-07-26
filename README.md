@@ -75,12 +75,16 @@ on shells to scrape, tap the paw button to interact).
 Progress autosaves to `localStorage`.
 
 ## Tech
-Vanilla JavaScript + Canvas. Game logic runs in 480x270 logical units while
-the canvas renders at 960x540 ("hi-bit" pixel art: twice the hand-placed
-texel density, same chunky look). All sprites are hand-authored pixel grids
-or procedural canvas drawing; skies and seas are dithered color bands, not
-CSS gradients; all audio (music included) is synthesized live with
-WebAudio — there are zero binary assets in the game itself.
+Vanilla JavaScript + Canvas (480x270 logical units on a 960x540 canvas).
+The game is drawn almost entirely from a hand-painted pixel-art asset pack
+(see `assets/`): animated sea and underwater backgrounds, a modular dock
+kit, the stilt house inside and out, a three-state shell set
+(crusted / harvested / cracked-open), critters, gear icons, and an otter
+walk cycle. `dev/process-assets.py` slices the raw sheets (background
+keying, grid/component splitting, GIF frame extraction) into game-ready
+files; the single-file build inlines everything as data URIs. Audio is
+still synthesized live with WebAudio. Dive depth is now endless — chunked
+procedural generation down the great pole, with a depth chart on screen.
 
 | File | What's in it |
 |---|---|

@@ -27,6 +27,18 @@ const parts = order.map((src) => {
   return `\n/* ===== ${src} ===== */\n${code.replace(/^'use strict';\n/m, '')}`;
 });
 
+// inline every image asset as a data URI so the single file plays from anywhere
+const manifestPath = path.join(ROOT, 'assets', 'manifest.json');
+if (fs.existsSync(manifestPath)) {
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const entries = Object.entries(manifest).map(([n, m]) => {
+    const ext = m.ext || 'png';
+    const b64 = fs.readFileSync(path.join(ROOT, 'assets', `${n}.${ext}`)).toString('base64');
+    return `${JSON.stringify(n)}:"data:image/${ext === 'jpg' ? 'jpeg' : ext};base64,${b64}"`;
+  });
+  parts.splice(1, 0, `\n/* ===== inlined assets (${entries.length}) ===== */\nconst ASSET_DATA = {${entries.join(',')}};\n`);
+}
+
 const out = `<!DOCTYPE html>
 <html lang="en">
 <head>

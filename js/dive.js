@@ -24,7 +24,9 @@ const DiveScene = {
     this.p = p;
     this.time = 0;
     this.camY = 0; this.camVel = 0;
-    this.maxCam = PILINGS[p].depth - H + 40;
+    this.maxCam = 1e9;   // the sea has no floor — your O2 does
+    this.scars = [];
+    this.reward = null;
     this.airMax = TANKS[G.gear.tank].air;
     this.air = this.airMax;
     this.airBeepT = 0;
@@ -43,15 +45,16 @@ const DiveScene = {
     this.pry = null;          // active pry minigame { n, t, speed, win, marker }
     this.numbT = 0;           // jellyfish sting lockout
     this.surfaceT = 0;        // held-up-at-top timer
-    this.nodes = this.gen(p);
-    this.buildWall();
+    this.genChunks = 0;
+    this.nodes = [];
+    this.ensureDepth(H * 2);
     // jellyfish drift up through the water column
     this.jellies = [];
-    const jcount = 2 + (p >= 1 ? 1 : 0) + (p >= 2 ? 1 : 0);
+    const jcount = 3 + (p >= 1 ? 1 : 0);
     for (let i = 0; i < jcount; i++) {
       this.jellies.push({
         x: Math.random() < 0.6 ? (Math.random() < 0.5 ? rand(20, this.WALL_X - 20) : rand(this.WALL_X + this.WALL_W + 20, W - 20)) : rand(this.WALL_X, this.WALL_X + this.WALL_W),
-        wy: rand(120, PILINGS[p].depth), vy: rand(6, 13), sway: rand(TAU), r: rand(8, 13), cd: 0,
+        wy: rand(120, 900), vy: rand(6, 13), sway: rand(TAU), r: rand(8, 13), cd: 0,
       });
     }
     // schools of little fish weaving behind the piling
@@ -91,147 +94,78 @@ const DiveScene = {
     }
   },
 
-  // ---- node generation: sparse, big, staged ----------------------------------
-  gen(p) {
-    const def = PILINGS[p];
-    const rng = mulberry32(G.seeds[p] * 7919 + p * 101 + 13);
-    const nodes = [];
-    const rows = Math.floor((def.depth - 110) / 56);
-    for (let r = 0; r < rows; r++) {
-      const d = r / rows;
-      const count = rng() < 0.35 ? 2 : 1;
+  // ---- endless chunked generation: the deeper you go, the richer it gets --------
+  depthFrac() { return clamp((this.camY + this.p * 350) / 1600, 0, 1); },
+
+  ensureDepth(y) {
+    const CH = 560;
+    while (this.genChunks * CH < y + H) this.genChunk(this.genChunks++);
+  },
+
+  genChunk(ci) {
+    const p = this.p;
+    const CH = 560;
+    const rng = mulberry32(G.seeds[p] * 7919 + p * 101 + ci * 131 + 13);
+    const harvested = new Set(G.harvested && G.harvested[p] ? G.harvested[p] : []);
+    const y0 = ci * CH;
+    for (let r = 0; r < 10; r++) {
+      const wy = y0 + r * 56 + rng() * 24;
+      if (wy < 84) continue;
+      const depth = wy + p * 350;
+      const d = clamp(depth / 1400, 0, 1);
+      const count = rng() < 0.3 + d * 0.25 ? 2 : 1;
       for (let i = 0; i < count; i++) {
         const kind = weightedPick([
-          ['clam', 5 - 2.5 * d],
+          ['clam', 5 - 3 * d],
           ['mussel', 1.2 + 1.5 * d],
-          ['barnacle', 2.2],
-          ['oyster', (p >= 1) ? 0.5 + 2.2 * d : (d > 0.55 ? 0.7 : 0)],
-          ['abalone', (p >= 2 && d > 0.45) ? 2.2 * d : 0],
-          ['urchin', 0.4 + 1.5 * d + 0.3 * p],
+          ['barnacle', Math.max(0.6, 2.2 - d)],
+          ['oyster', depth > 320 ? 0.5 + 2.4 * d : 0],
+          ['abalone', depth > 750 ? 2.6 * d : 0],
+          ['urchin', 0.4 + 1.6 * d],
         ], rng());
         const nd = NODE_DEFS[kind];
-        nodes.push({
+        const id = ci * 100 + r * 4 + i;
+        const aliveRoll = rng();
+        const alive = !harvested.has(id) && (kind === 'urchin'
+          || aliveRoll < clamp(G.growth[p] * (0.55 + 0.9 * Math.min(1, wy / 1500)), 0, 1));
+        this.nodes.push({
+          id,
           x: this.WALL_X + 28 + rng() * (this.WALL_W - 56) + (count === 2 ? (i === 0 ? -34 : 34) : 0),
-          y: 84 + r * 56 + rng() * 24,
+          y: wy,
           kind, r: nd.r * (0.9 + rng() * 0.25),
           hp: Math.max(1, nd.crust), maxHp: Math.max(1, nd.crust),
           stage: nd.crust > 0 ? 'crusted' : 'exposed',
-          seed: Math.floor(rng() * 99999), alive: true, shake: 0, phase: rng() * TAU, clampT: 0,
+          seed: Math.floor(rng() * 99999), alive, shake: 0, phase: rng() * TAU, clampT: 0,
         });
       }
-      // living decoration: starfish + anemones make the wall feel inhabited
+      // living decoration: starfish + anemones make the pole feel inhabited
       if (rng() < 0.45) {
-        nodes.push({
+        this.nodes.push({
           kind: 'star', decor: true, alive: true,
-          x: this.WALL_X + 18 + rng() * (this.WALL_W - 36), y: 84 + r * 56 + rng() * 40,
+          x: this.WALL_X + 18 + rng() * (this.WALL_W - 36), y: wy + rng() * 30,
           r: 5.5 + rng() * 3.5, seed: Math.floor(rng() * 99999), phase: rng() * TAU,
         });
       }
       if (rng() < 0.3) {
-        nodes.push({
+        this.nodes.push({
           kind: 'anemone', decor: true, alive: true,
           x: rng() < 0.5 ? this.WALL_X + 8 + rng() * 10 : this.WALL_X + this.WALL_W - 18 + rng() * 10,
-          y: 84 + r * 56 + rng() * 40,
+          y: wy + rng() * 30,
           r: 5 + rng() * 3, seed: Math.floor(rng() * 99999), phase: rng() * TAU,
         });
       }
     }
-    // moray eel dens, deeper half only
-    for (let y = def.depth * 0.35; y < def.depth - 100; y += 300 + rng() * 160) {
-      nodes.push({
+    // one moray den per chunk or so, once past the shallows
+    if (y0 > 220 && rng() < 0.7) {
+      this.nodes.push({
         kind: 'eelhole', decor: true, alive: true,
-        x: this.WALL_X + 34 + rng() * (this.WALL_W - 68), y: y + rng() * 60,
+        x: this.WALL_X + 34 + rng() * (this.WALL_W - 68), y: y0 + 80 + rng() * (CH - 160),
         r: 12, seed: Math.floor(rng() * 99999), phase: rng() * TAU,
         eel: { state: 'hidden', t: 3 + rng() * 5 },
       });
     }
-    // regrowth: shallow slots are the least likely to have come back — the good
-    // beds are always a little deeper than you'd like
-    const harv = nodes.filter(n => !n.decor && n.kind !== 'urchin');
-    const scored = harv.map(n => ({ n, s: rng() * (0.55 + 0.9 * (n.y / def.depth)) }));
-    scored.sort((a, b) => a.s - b.s);
-    const dead = Math.round((1 - clamp(G.growth[p], 0, 1)) * scored.length);
-    for (let i = 0; i < dead; i++) scored[i].n.alive = false;
-    this.totalHarv = Math.max(1, scored.length);
-    return nodes;
   },
 
-  buildWall() {
-    const depth = PILINGS[this.p].depth;
-    const cwL = this.WALL_W + 24;   // logical width; canvas is DPX-dense
-    const cv = document.createElement('canvas');
-    cv.width = cwL * DPX; cv.height = depth * DPX;
-    const c = cv.getContext('2d');
-    c.scale(DPX, DPX);
-    const rng = mulberry32(G.seeds[this.p] * 31 + 7);
-    // wood base with per-plank tones (grain runs vertically on a piling)
-    c.fillStyle = '#42311f';
-    c.fillRect(0, 0, cwL, depth);
-    for (let x = 12; x < cwL - 12; x += 34) {
-      c.fillStyle = ['#453322', '#3d2d1c', '#48361f'][Math.floor(rng() * 3)];
-      c.fillRect(x + 2, 0, 32, depth);
-      c.fillStyle = '#2c1f10';
-      c.fillRect(x, 0, 2, depth);
-    }
-    // long vertical grain streaks
-    for (let i = 0; i < depth * 1.2; i++) {
-      c.fillStyle = rng() < 0.5 ? 'rgba(96,72,44,0.45)' : 'rgba(40,28,16,0.45)';
-      c.fillRect(12 + rng() * (cwL - 24), rng() * depth, PIX, 3 + rng() * 14);
-    }
-    // knots with check-cracks below
-    for (let i = 0; i < depth / 30; i++) {
-      const kx = 18 + rng() * (cwL - 36), ky = rng() * depth;
-      c.strokeStyle = 'rgba(26,18,10,0.8)'; c.lineWidth = PIX * 2;
-      c.beginPath(); c.ellipse(kx, ky, 2.5, 1.6, 0.3, 0, TAU); c.stroke();
-      c.beginPath(); c.moveTo(kx, ky + 2); c.lineTo(kx + rng() * 4 - 2, ky + 6 + rng() * 7); c.stroke();
-    }
-    // cross beams with bolts + rust streaks
-    for (let y = 100; y < depth; y += 150) {
-      c.fillStyle = '#2c2013';
-      c.fillRect(6, y, cwL - 12, 9);
-      c.fillStyle = '#4c3a24';
-      c.fillRect(6, y, cwL - 12, 2);
-      c.fillStyle = 'rgba(0,0,0,0.4)';
-      c.fillRect(6, y + 8, cwL - 12, 1);
-      for (let bx = 24; bx < cwL - 16; bx += 44) {
-        c.fillStyle = '#6a5a48';
-        c.beginPath(); c.arc(bx, y + 4.5, 1.6, 0, TAU); c.fill();
-        c.fillStyle = '#8a7458';
-        c.fillRect(bx - 0.5, y + 3.5, 1, 1);
-        c.fillStyle = 'rgba(140,80,40,0.4)';
-        c.fillRect(bx - 1, y + 9, 2, 8 + rng() * 12);
-      }
-    }
-    // algae blotches (greener near the sunlit top)
-    for (let i = 0; i < depth / 2.2; i++) {
-      const ay = rng() * depth, d = ay / depth;
-      c.fillStyle = `rgba(${44 - d * 24},${104 - d * 60},${56 - d * 34},${0.2 + rng() * 0.3})`;
-      const w = 2 + rng() * 13;
-      c.fillRect(12 + rng() * (cwL - 24 - w), ay, w, 1.5 + rng() * 4);
-    }
-    // moss tufts hanging off the plank seams
-    for (let i = 0; i < depth / 26; i++) {
-      const my = rng() * depth;
-      const mx = 12 + Math.floor(rng() * 5) * 34 + rng() * 4;
-      c.fillStyle = 'rgba(60,120,70,0.5)';
-      c.beginPath(); c.ellipse(mx, my, 2 + rng() * 3, 1.5, 0, 0, TAU); c.fill();
-      c.fillRect(mx - 1, my, 1, 3 + rng() * 5);
-    }
-    // crust speckles
-    for (let i = 0; i < depth; i++) {
-      c.fillStyle = rng() < 0.5 ? 'rgba(150,150,140,0.3)' : 'rgba(205,200,185,0.2)';
-      c.fillRect(12 + rng() * (cwL - 24), rng() * depth, 1, 1);
-    }
-    // rounded-off dark edges
-    c.fillStyle = 'rgba(0,0,0,0.5)';
-    c.fillRect(0, 0, 12, depth);
-    c.fillRect(cwL - 12, 0, 12, depth);
-    c.fillStyle = 'rgba(0,0,0,0.22)';
-    c.fillRect(12, 0, 5, depth);
-    c.fillRect(cwL - 17, 0, 5, depth);
-    this.wallCanvas = cv;
-    this.wallCtx = c;   // kept for stamping scrape scars
-  },
 
   // ---- helpers --------------------------------------------------------------
   bagValue() {
@@ -314,7 +248,7 @@ const DiveScene = {
     const drop = NODE_DEFS[n.kind].drop;
     const gained = [drop];
     // loose pearls are a rare dive treat — most come from cracking at the bench
-    if (n.kind === 'oyster' && Math.random() < 0.04) gained.push('pearl');
+    if (n.kind === 'oyster' && Math.random() < 0.04 + this.depthFrac() * 0.05) gained.push('pearl');
     for (const it of gained) {
       this.bag[it] = (this.bag[it] || 0) + 1;
       this.bagCount++;
@@ -344,26 +278,16 @@ const DiveScene = {
       });
     }
     this.particles.push({ x: n.x, y: n.y, t: 0.35, ring: true, r: 2, vr: 52, col: 'rgba(255,255,255,0.8)' });
-    // stamp a freshly-scraped scar into the piling wood
-    if (this.wallCtx) {
-      const sx = n.x - (this.WALL_X - 12), sy = n.y;
-      const c = this.wallCtx;
-      c.fillStyle = 'rgba(126,98,60,0.92)';
-      c.beginPath(); c.ellipse(sx, sy, n.r * 0.8, n.r * 0.6, 0, 0, TAU); c.fill();
-      c.strokeStyle = 'rgba(58,42,24,0.85)'; c.lineWidth = PIX * 2;
-      c.beginPath(); c.ellipse(sx, sy, n.r * 0.8, n.r * 0.6, 0, 0, TAU); c.stroke();
-      c.fillStyle = 'rgba(150,150,140,0.55)';
-      for (let i = 0; i < 5; i++) {
-        const a = rand(TAU);
-        c.fillRect(sx + Math.cos(a) * n.r * 0.72, sy + Math.sin(a) * n.r * 0.5, 1, 1);
-      }
-      c.fillStyle = 'rgba(96,72,44,0.5)';
-      c.fillRect(sx - PIX, sy - n.r * 0.4, PIX, n.r * 0.8);
+    // remember the harvest for the rest of the day + leave a scraped scar decal
+    if (n.id !== undefined) {
+      if (!G.harvested) G.harvested = {};
+      if (!G.harvested[this.p]) G.harvested[this.p] = [];
+      G.harvested[this.p].push(n.id);
     }
-    this.floaters.push({ x: n.x, y: n.y - 8, t: 1, txt: '+' + ITEMS[drop].name, col: '#fff' });
-    for (const it of gained) {
-      this.flyIcons.push({ img: SPR.icons[it], x: n.x, y: n.y - this.camY, t: 0, rot: rand(-0.4, 0.4), vr: rand(-5, 5) });
-    }
+    this.scars.push({ x: n.x, y: n.y, rx: n.r * 0.8, ry: n.r * 0.6 });
+    // stardew-style reward pop: the shell rises, shining, then dives into the bag
+    this.reward = { art: ITEM_ART[drop] || 'shell_clam', name: ITEMS[drop].name, t: 0, x: clamp(n.x, 60, W - 60), y: n.y - this.camY, extra: gained.length > 1 };
+
     if (navigator.vibrate) { try { navigator.vibrate(this.combo >= 5 ? 22 : 12); } catch (e) {} }
     this.slowT = 0.06;
     this.shakeT = Math.max(this.shakeT, 0.05);
@@ -377,8 +301,6 @@ const DiveScene = {
       count += this.bag[k];
       value += ITEMS[k].price * this.bag[k];
     }
-    // remember regrowth state (and apply an overnight regrow that happened mid-dive)
-    this.exitGrowth();
     if (G.flags.pendingRegrow) Game.newDayRegrow(true);
     SND.splash();
     SND.setScene('surface');
@@ -388,10 +310,6 @@ const DiveScene = {
     Game.go(WorldScene, { at: this.p });
   },
 
-  exitGrowth() {
-    const alive = this.nodes.filter(n => !n.decor && n.kind !== 'urchin' && n.alive).length;
-    G.growth[this.p] = alive / this.totalHarv;
-  },
 
   // ---- shark event -----------------------------------------------------------
   startShark() {
@@ -409,7 +327,7 @@ const DiveScene = {
       this.sharkRollT -= dt;
       if (this.sharkCooldown <= 0 && this.sharkRollT <= 0) {
         this.sharkRollT = 1;
-        const depthFrac = this.camY / Math.max(1, this.maxCam);
+        const depthFrac = this.depthFrac();
         const pch = 0.004 + 0.012 * depthFrac + (isNight(G.clock) ? 0.008 : 0)
           + 0.004 * this.p + Math.min(0.004, this.bagValue() / 30000);
         if (Math.random() < pch) this.startShark();
@@ -503,7 +421,6 @@ const DiveScene = {
         G.stats.deaths++;
         G.hearts = G.maxHearts;
         this.bag = {}; this.bagCount = 0;
-        this.exitGrowth();
         G.day++; G.clock = 0.3;
         Game.newDayRegrow(true);
         Game.save();
@@ -532,6 +449,17 @@ const DiveScene = {
       this.hurtPlayer(1);
       if (!this.over) this.surface(true);
       return;
+    }
+
+    // the sea keeps going: generate more pole as you descend
+    this.ensureDepth(this.camY + H);
+    // reward pop lifecycle
+    if (this.reward) {
+      this.reward.t += dt;
+      if (this.reward.t > 1.0) {
+        this.flyIcons.push({ art: this.reward.art, x: this.reward.x, y: this.reward.y - 26, t: 0, rot: rand(-0.4, 0.4), vr: rand(-5, 5) });
+        this.reward = null;
+      }
     }
 
     // surfacing: no magic button — swim to the top and keep kicking
@@ -631,7 +559,7 @@ const DiveScene = {
     for (const j of this.jellies) {
       j.wy -= j.vy * dt;
       j.x += Math.sin(this.time * 0.9 + j.sway) * 7 * dt;
-      if (j.wy < -30) { j.wy = this.maxCam + H + 20; j.x = rand(20, W - 20); }
+      if (j.wy < this.camY - 160) { j.wy = this.camY + H + rand(40, 160); j.x = rand(20, W - 20); }
       if (j.cd > 0) j.cd -= dt;
       const sy = j.wy - this.camY;
       if (sy > -20 && sy < H + 20 && j.cd <= 0) {
@@ -721,7 +649,7 @@ const DiveScene = {
     this.whaleT -= dt;
     if (this.whaleT <= 0) {
       this.whaleT = rand(35, 80);
-      if (this.camY / Math.max(1, this.maxCam) > 0.4 && !this.shark) {
+      if (this.depthFrac() > 0.4 && !this.shark) {
         SND.whale();
         if (Math.random() < 0.4) this.msgSet('...you hear something, far away.', 3);
       }
@@ -787,212 +715,36 @@ const DiveScene = {
     ctx.save();
     ctx.translate(Math.round(sx * DPX) / DPX, Math.round(jy * DPX) / DPX);
     if (n.clampT > 0) ctx.scale(1, 0.88);   // clamped down tight
-    const rng = mulberry32(n.seed);
-    const r = n.r;
+    ctx.rotate(((n.seed % 5) - 2) * 0.05);
+    const w = n.r * 2.35;
+    // soft contact shadow — grown on, not floating
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(1, 1.6, n.r * 1.02, n.r * 0.78, 0, 0, TAU); ctx.fill();
 
-    // every node is GROWN ON the wood: drop shadow + encrusted attachment ring
-    ctx.fillStyle = 'rgba(0,0,0,0.32)';
-    ctx.beginPath(); ctx.ellipse(0.8, 1.4, r * 1.02, r * 0.78, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = 'rgba(134,128,114,0.55)';
-    ctx.beginPath(); ctx.ellipse(0, 0.6, r * 1.05, r * 0.82, 0, 0, TAU); ctx.fill();
-    for (let i = 0; i < 6; i++) {
-      const a = rng() * TAU;
-      ctx.fillStyle = i % 2 ? 'rgba(184,180,164,0.7)' : 'rgba(92,88,78,0.7)';
-      ctx.fillRect(Math.cos(a) * r * 0.95, 0.6 + Math.sin(a) * r * 0.72, 1, 1);
-    }
-
-    if (n.kind === 'clam') {
-      const tone = Math.floor(rng() * 3);
-      const base = ['#c9a06a', '#d9b98a', '#b98f5c'][tone];
-      const ridge = ['#8a6a3c', '#9a7a4c', '#7a5c30'][tone];
-      const sheen = ['#ecd8ac', '#f2e2bc', '#dcc494'][tone];
-      const fan = (s) => {
-        ctx.beginPath();
-        ctx.moveTo(0, r * 0.65 * s);
-        ctx.quadraticCurveTo(-r * 1.15 * s, r * 0.35 * s, -r * 0.85 * s, -r * 0.28 * s);
-        ctx.quadraticCurveTo(0, -r * 1.0 * s, r * 0.85 * s, -r * 0.28 * s);
-        ctx.quadraticCurveTo(r * 1.15 * s, r * 0.35 * s, 0, r * 0.65 * s);
-        ctx.closePath();
-      };
-      ctx.fillStyle = '#4a2f16';
-      fan(1); ctx.fill();
-      ctx.fillStyle = base;
-      fan(0.86); ctx.fill();
-      // concentric growth rings from the umbo
-      ctx.strokeStyle = `rgba(122,92,48,0.75)`; ctx.lineWidth = PIX * 2;
-      for (let g = 0.35; g < 0.85; g += 0.24) {
-        ctx.beginPath();
-        ctx.arc(0, r * 0.55, r * g, Math.PI * 1.12, Math.PI * 1.88);
-        ctx.stroke();
-      }
-      // radial ribs
-      ctx.strokeStyle = ridge; ctx.lineWidth = PIX * 2;
-      for (let a = -2; a <= 2; a++) {
-        ctx.beginPath(); ctx.moveTo(0, r * 0.5);
-        ctx.lineTo(Math.sin(a * 0.38) * r * 0.8, r * 0.5 - Math.cos(a * 0.38) * r * 1.25);
-        ctx.stroke();
-      }
-      // sheen + umbo knob
-      ctx.fillStyle = sheen;
-      ctx.fillRect(-r * 0.45, -r * 0.55, r * 0.32, PIX * 2);
-      ctx.fillStyle = '#4a2f16';
-      ctx.beginPath(); ctx.arc(0, r * 0.55, r * 0.18, 0, TAU); ctx.fill();
-    } else if (n.kind === 'mussel') {
-      // byssus threads first — the little anchors that make it look attached
-      ctx.strokeStyle = 'rgba(214,202,170,0.65)'; ctx.lineWidth = PIX;
-      for (let i = 0; i < 3; i++) {
-        const a = rng() * 1.4 + 1.0;
-        ctx.beginPath(); ctx.moveTo(0, r * 0.25);
-        ctx.lineTo(Math.cos(a + Math.PI / 2) * r * 1.25, r * 0.4 + Math.sin(a) * r * 0.5);
-        ctx.stroke();
-      }
-      ctx.save(); ctx.rotate(rng() * 0.9 - 0.45);
-      ctx.fillStyle = '#0b1020';
-      ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.55, 0.6, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#26335e';
-      ctx.beginPath(); ctx.ellipse(0.2, 0.2, r - 1.2, r * 0.55 - 1.2, 0.6, 0, TAU); ctx.fill();
-      // growth bands along the shell
-      ctx.strokeStyle = 'rgba(10,14,28,0.7)'; ctx.lineWidth = PIX;
-      ctx.beginPath(); ctx.ellipse(0.6, 0.6, r * 0.62, r * 0.3, 0.6, 0, TAU); ctx.stroke();
-      ctx.beginPath(); ctx.ellipse(1.0, 1.0, r * 0.34, r * 0.15, 0.6, 0, TAU); ctx.stroke();
-      // rim light along the top edge
-      ctx.strokeStyle = '#7c92cc'; ctx.lineWidth = PIX * 2;
-      ctx.beginPath(); ctx.ellipse(0, 0, r - 1.2, r * 0.55 - 1.2, 0.6, Math.PI * 1.15, Math.PI * 1.7); ctx.stroke();
-      ctx.restore();
-    } else if (n.kind === 'barnacle') {
-      // volcano cone with wall plates
-      ctx.fillStyle = '#5c6462';
-      ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#a8b0ac';
-      ctx.beginPath(); ctx.arc(-0.3, -0.3, r - 1.2, 0, TAU); ctx.fill();
-      // radial plate seams
-      ctx.strokeStyle = 'rgba(74,84,80,0.8)'; ctx.lineWidth = PIX * 2;
-      for (let i = 0; i < 6; i++) {
-        const a = i / 6 * TAU + rng();
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * r * 0.45, Math.sin(a) * r * 0.45);
-        ctx.lineTo(Math.cos(a) * (r - 1), Math.sin(a) * (r - 1));
-        ctx.stroke();
-      }
-      // crater with a hint of the critter inside
-      ctx.fillStyle = '#232b29';
-      ctx.beginPath(); ctx.ellipse(0, 0.4, r * 0.42, r * 0.34, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = 'rgba(200,180,140,0.5)';
-      ctx.fillRect(-1, 0, PIX * 2, PIX * 2);
-      // sunlit rim
-      ctx.strokeStyle = 'rgba(230,232,228,0.65)'; ctx.lineWidth = PIX * 2;
-      ctx.beginPath(); ctx.arc(-0.3, -0.3, r - 1.2, Math.PI * 1.1, Math.PI * 1.65); ctx.stroke();
-    } else if (n.kind === 'oyster') {
-      // layered ruffled shell
-      const rot = rng() * 0.8 - 0.4;
-      ctx.save(); ctx.rotate(rot);
-      const layers = [
-        [r * 1.0, r * 0.8, '#333d33'],
-        [r * 0.92, r * 0.72, '#5f6d5c'],
-        [r * 0.72, r * 0.56, '#78876f'],
-        [r * 0.5, r * 0.4, '#9aac90'],
-      ];
-      for (let i = 0; i < layers.length; i++) {
-        const [lx, ly, col] = layers[i];
-        ctx.fillStyle = col;
-        ctx.beginPath(); ctx.ellipse(i * 0.5, i * 0.35, lx, ly, 0, 0, TAU); ctx.fill();
-      }
-      // ruffle chips on the lip
-      ctx.fillStyle = 'rgba(226,230,218,0.8)';
-      for (let i = 0; i < 4; i++) {
-        const a = rng() * Math.PI - Math.PI / 2;
-        ctx.fillRect(Math.cos(a) * r * 0.85, Math.sin(a) * r * 0.65, 1, 1);
-      }
-      ctx.strokeStyle = 'rgba(38,46,38,0.85)'; ctx.lineWidth = PIX * 2;
-      ctx.beginPath(); ctx.moveTo(-r * 0.8, 0.8); ctx.quadraticCurveTo(0, 1.8, r * 0.8, 0.4); ctx.stroke();
-      ctx.restore();
-    } else if (n.kind === 'abalone') {
-      const rot = 0.3;
-      ctx.save(); ctx.rotate(rot);
-      ctx.fillStyle = '#14332c';
-      ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.7, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#3f8f7f';
-      ctx.beginPath(); ctx.ellipse(0.2, 0.2, r - 1.2, r * 0.7 - 1.2, 0, 0, TAU); ctx.fill();
-      // iridescent patches
-      const cols = ['#6cc9ad', '#b48ac2', '#93d4c2', '#d0c26e'];
-      for (let i = 0; i < 8; i++) {
-        ctx.fillStyle = cols[Math.floor(rng() * cols.length)];
-        ctx.fillRect((rng() - 0.5) * r * 1.3, (rng() - 0.5) * r * 0.85, 1.2, 1.2);
-      }
-      // moving mother-of-pearl shimmer
-      const shm = Math.sin(this.time * 1.4 + n.phase) * r * 0.5;
-      ctx.fillStyle = 'rgba(240,255,250,0.35)';
-      ctx.fillRect(shm - 1, -r * 0.45, 2, r * 0.9);
-      // row of respiratory holes along the upper edge
-      ctx.fillStyle = '#0e2620';
-      for (let i = 0; i < 4; i++)
-        ctx.beginPath(), ctx.arc(-r * 0.55 + i * r * 0.34, -r * 0.38, 0.8, 0, TAU), ctx.fill();
-      ctx.restore();
-    } else if (n.kind === 'urchin') {
-      const wig = Math.sin(this.time * 1.5 + n.phase) * 0.1;
-      // two-layer spikes: thick dark base, thin light tip
-      for (let i = 0; i < 14; i++) {
-        const a = i / 14 * TAU + wig + (i % 2) * 0.1;
-        const len = r + 2.5 + (i % 3);
-        ctx.strokeStyle = '#2c1a44'; ctx.lineWidth = PIX * 3;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * r * 0.4, Math.sin(a) * r * 0.4);
-        ctx.lineTo(Math.cos(a) * len * 0.75, Math.sin(a) * len * 0.75);
-        ctx.stroke();
-        ctx.strokeStyle = '#6a4a9e'; ctx.lineWidth = PIX;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * len * 0.7, Math.sin(a) * len * 0.7);
-        ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
-        ctx.stroke();
-      }
-      ctx.fillStyle = '#221238';
-      ctx.beginPath(); ctx.arc(0, 0, r * 0.72, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#42285f';
-      ctx.beginPath(); ctx.arc(-0.8, -0.8, r * 0.5, 0, TAU); ctx.fill();
-      // dotted test pattern
-      ctx.fillStyle = 'rgba(150,110,200,0.6)';
-      for (let i = 0; i < 5; i++) {
-        const a = rng() * TAU;
-        ctx.fillRect(Math.cos(a) * r * 0.4, Math.sin(a) * r * 0.4, PIX * 2, PIX * 2);
-      }
-      // hint of danger when hovered
+    if (n.kind === 'urchin') {
+      const pulse = 1 + Math.sin(this.time * 1.5 + n.phase) * 0.04;
+      drawAC(ctx, `urchin_${n.seed % 4}`, 0, 0, w * pulse);
       const dx = Input.mouse.x - n.x, dy = (Input.mouse.y + this.camY) - n.y;
-      if (dx * dx + dy * dy < (r + 10) * (r + 10)) {
+      if (dx * dx + dy * dy < (n.r + 10) * (n.r + 10)) {
         ctx.strokeStyle = 'rgba(232,60,60,0.55)';
         ctx.lineWidth = PIX * 2;
-        ctx.beginPath(); ctx.arc(0, 0, r + 5, 0, TAU); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, n.r + 5, 0, TAU); ctx.stroke();
       }
-    }
-    // crust overlay: lumps chip away one by one as you scrape
-    if (n.stage === 'crusted') {
-      const frac = n.hp / n.maxHp;
-      const crng = mulberry32(n.seed + 9);
-      const lumps = 9;
-      const visible = Math.ceil(lumps * frac);
-      for (let i = 0; i < lumps; i++) {
-        // draw all rng values first so lump shapes stay stable as they vanish
-        const a = crng() * TAU;
-        const rr = crng() * n.r * 0.72;
-        const lr = n.r * (0.3 + crng() * 0.3);
-        const rot = crng() * 2;
-        if (i >= visible) continue;
-        ctx.fillStyle = ['#6e7d6a', '#8a9484', '#5c6a58'][i % 3];
-        ctx.beginPath(); ctx.ellipse(Math.cos(a) * rr, Math.sin(a) * rr * 0.75, lr, lr * 0.75, rot, 0, TAU); ctx.fill();
-        ctx.fillStyle = 'rgba(200,208,196,0.5)';
-        ctx.fillRect(Math.cos(a) * rr - lr * 0.3, Math.sin(a) * rr * 0.75 - lr * 0.4, 1.5, 1);
+    } else {
+      const art = NODE_ART[n.kind];
+      // the clean shell underneath...
+      drawAC(ctx, `shell_${art}`, 0, 0, w);
+      // ...revealed as the crust chips away
+      if (n.stage === 'crusted') {
+        ctx.globalAlpha = clamp(n.hp / n.maxHp, 0, 1);
+        drawAC(ctx, `crust_${art}`, 0, 0, w * 1.06);
+        ctx.globalAlpha = 1;
       }
-      // dusting of grit over everything still crusted
-      ctx.fillStyle = 'rgba(150,158,146,0.5)';
-      for (let i = 0; i < visible; i++) {
-        const a = crng() * TAU, rr = crng() * n.r * 0.9;
-        ctx.fillRect(Math.cos(a) * rr, Math.sin(a) * rr * 0.75, 1, 1);
+      if (n.stage === 'exposed') {
+        ctx.strokeStyle = `rgba(160,242,180,${0.28 + Math.sin(this.time * 3 + n.phase) * 0.16})`;
+        ctx.lineWidth = PIX * 2;
+        ctx.beginPath(); ctx.ellipse(0, 0.5, n.r * 1.16, n.r * 0.95, 0, 0, TAU); ctx.stroke();
       }
-    }
-    // exposed and ready to pry: soft beckoning glow
-    if (n.stage === 'exposed' && n.kind !== 'urchin') {
-      ctx.strokeStyle = `rgba(160,242,180,${0.28 + Math.sin(this.time * 3 + n.phase) * 0.16})`;
-      ctx.lineWidth = PIX * 2;
-      ctx.beginPath(); ctx.ellipse(0, 0.5, n.r * 1.14, n.r * 0.92, 0, 0, TAU); ctx.stroke();
     }
     ctx.restore();
   },
@@ -1079,23 +831,17 @@ const DiveScene = {
       const ext = Math.sin(prog * Math.PI) * 42;
       const ang = Math.atan2((Input.mouse.y + this.camY) - n.y, Input.mouse.x - n.x);
       ctx.rotate(ang);
-      // body tube
-      ctx.fillStyle = '#3c5a3a';
-      ctx.fillRect(0, -4, ext, 8);
-      ctx.fillStyle = '#54774e';
-      ctx.fillRect(0, -4, ext, 3);
-      // head with open jaw
-      ctx.save();
-      ctx.translate(ext, 0);
-      ctx.fillStyle = '#3c5a3a';
-      ctx.beginPath(); ctx.ellipse(0, 0, 8, 5.5, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#28211c';
-      ctx.beginPath(); ctx.moveTo(2, -1); ctx.lineTo(11, -5); ctx.lineTo(11, 5); ctx.lineTo(2, 1); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#e8e4da';
-      ctx.fillRect(8, -4, 1.5, 2); ctx.fillRect(8, 2, 1.5, 2);
+      // the moray lunges out of its den (uploaded eel, stretched with the lunge)
+      const eimg = ASSETS.eel_1;
+      if (eimg && eimg.width) {
+        const eh = 13, ew = Math.max(14, ext + 14);
+        ctx.save();
+        ctx.scale(-1, 1);
+        ctx.drawImage(eimg, -ew, -eh / 2, ew, eh);
+        ctx.restore();
+      }
       ctx.fillStyle = '#f2ff9a';
-      ctx.fillRect(-2, -3.5, 2, 2);
-      ctx.restore();
+      ctx.fillRect(ext - 3, -3.5, 2, 2);
     }
     ctx.restore();
   },
@@ -1183,57 +929,21 @@ const DiveScene = {
     ctx.save();
     if (this.shakeT > 0) ctx.translate(irand(-2, 2), irand(-2, 2));
 
-    // background: banded pixel gradient by depth
-    const depthFrac = this.camY / (this.maxCam + 1);
+    // painted deep water, drifting with your depth
+    const depthFrac = this.depthFrac();
     const night = isNight(G.clock) ? 0.55 : 0;
-    const mixTop = clamp(depthFrac + night * 0.4, 0, 1);
-    const c1 = [lerp(26, 4, mixTop), lerp(106, 18, mixTop), lerp(138, 30, mixTop)].map(Math.round);
-    const c2 = [lerp(12, 2, mixTop), lerp(60, 8, mixTop), lerp(88, 16, mixTop)].map(Math.round);
-    bandedFill(ctx, 0, 0, W, H, c1, c2, 10, false);
-
-    // far silhouettes: rock spires + a distant kelp forest, gentle parallax
-    ctx.fillStyle = 'rgba(6,20,30,0.5)';
-    for (let i = 0; i < 3; i++) {
-      const bx = [50, 420, 120][i];
-      const topY = H - 40 - i * 30 + this.camY * 0.06 - (this.maxCam * 0.06);
-      ctx.beginPath();
-      ctx.moveTo(bx - 26, H + 20);
-      ctx.lineTo(bx, topY + this.maxCam * 0.06 - this.camY * 0.02 + 60);
-      ctx.lineTo(bx + 22, H + 20);
-      ctx.closePath(); ctx.fill();
-    }
-    ctx.strokeStyle = 'rgba(10,34,30,0.45)';
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 5; i++) {
-      const kx = 20 + i * 110 + (i % 2) * 30;
-      const sw = Math.sin(this.time * 0.7 + i * 1.7);
-      ctx.beginPath();
-      ctx.moveTo(kx, H + 10);
-      ctx.quadraticCurveTo(kx + sw * 10, H - 60 - this.camY * 0.03, kx + sw * 20, H - 130 - this.camY * 0.03);
-      ctx.stroke();
-    }
-
-    // god rays near the surface
-    if (this.camY < 180 && !night) {
+    const bgH = 432, bgOver = bgH - H;
+    const bgOff = Math.min(bgOver, this.camY * 0.06);
+    drawA(ctx, `bg_deep${Math.floor(this.time * 6) % 10}`, 0, -bgOff, W, bgH);
+    // the deeper you go, the bluer and blacker it gets (headlamp overlay handles the rest)
+    ctx.fillStyle = `rgba(3,10,22,${clamp(depthFrac * 0.45 + night * 0.3, 0, 0.7)})`;
+    ctx.fillRect(0, 0, W, H);
+    // god-ray shafts near the surface
+    if (this.camY < 260 && !night) {
       ctx.save();
-      ctx.globalAlpha = 0.1 * (1 - this.camY / 180);
-      for (let i = 0; i < 5; i++) {
-        const x = 40 + i * 100 + Math.sin(this.time * 0.4 + i) * 18;
-        ctx.fillStyle = '#cfeaf5';
-        ctx.beginPath();
-        ctx.moveTo(x, -10); ctx.lineTo(x + 34, -10);
-        ctx.lineTo(x + 90, H); ctx.lineTo(x + 40, H);
-        ctx.closePath(); ctx.fill();
-      }
-      ctx.globalAlpha = 0.16 * (1 - this.camY / 180);
-      ctx.fillStyle = '#e8f6fc';
-      for (let i = 0; i < 3; i++) {
-        const x = 90 + i * 150 + Math.sin(this.time * 0.5 + i * 2) * 22;
-        ctx.beginPath();
-        ctx.moveTo(x, -10); ctx.lineTo(x + 10, -10);
-        ctx.lineTo(x + 34, H); ctx.lineTo(x + 16, H);
-        ctx.closePath(); ctx.fill();
-      }
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.55 * (1 - this.camY / 260);
+      drawA(ctx, `bg_rays${Math.floor(this.time * 8) % 8}`, 0, -this.camY * 0.35, W, 184);
       ctx.restore();
     }
 
@@ -1269,29 +979,21 @@ const DiveScene = {
       }
     }
 
-    // the piling wall (DPX-dense texture)
-    if (this.wallCanvas) {
-      ctx.drawImage(this.wallCanvas,
-        0, this.camY * DPX, this.wallCanvas.width, H * DPX,
-        this.WALL_X - 12, 0, this.wallCanvas.width / DPX, H);
+    // the great pole, tiled forever downward
+    const poleW = 208;
+    const poleH = assetH('pole', poleW);
+    const px0 = this.WALL_X - 14;
+    for (let ti = Math.floor(this.camY / poleH); ti * poleH < this.camY + H; ti++) {
+      drawA(ctx, 'pole', px0, ti * poleH - this.camY, poleW, poleH);
     }
-
-    // dancing caustic light on the wall near the surface
-    if (this.camY < 170 && !night) {
-      const cAlpha = 0.85 * (1 - this.camY / 170);
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      for (let i = 0; i < 7; i++) {
-        const wy = i * 26 + Math.sin(this.time * 0.6 + i * 1.7) * 12;
-        const sy = wy - this.camY;
-        if (sy < -10 || sy > H) continue;
-        const cx = this.WALL_X + 16 + ((i * 53 + Math.sin(this.time * 0.8 + i) * 30 + 200) % (this.WALL_W - 32));
-        ctx.fillStyle = `rgba(140,200,230,${0.05 * cAlpha})`;
-        ctx.beginPath(); ctx.ellipse(cx, sy, 24, 7, Math.sin(this.time + i) * 0.3, 0, TAU); ctx.fill();
-        ctx.fillStyle = `rgba(190,235,255,${0.05 * cAlpha})`;
-        ctx.beginPath(); ctx.ellipse(cx + 6, sy + 2, 11, 3.5, 0, 0, TAU); ctx.fill();
-      }
-      ctx.restore();
+    // freshly-scraped scars where shells used to sit
+    for (const s of this.scars) {
+      const sy2 = s.y - this.camY;
+      if (sy2 < -20 || sy2 > H + 20) continue;
+      ctx.fillStyle = 'rgba(96,52,38,0.55)';
+      ctx.beginPath(); ctx.ellipse(s.x, sy2, s.rx, s.ry, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(196,132,96,0.4)';
+      ctx.beginPath(); ctx.ellipse(s.x, sy2, s.rx * 0.6, s.ry * 0.6, 0, 0, TAU); ctx.fill();
     }
 
     // kelp strands swaying along the piling edges
@@ -1398,32 +1100,21 @@ const DiveScene = {
     for (const s of this.snow) ctx.fillRect(Math.round(s.x), Math.round(s.y), 1, 1);
 
     // jellyfish
-    for (const j of this.jellies) {
-      const sy = j.wy - this.camY;
-      if (sy < -30 || sy > H + 30) continue;
-      const pulse = 1 + Math.sin(this.time * 2.2 + j.sway) * 0.14;
+    for (const j2 of this.jellies) {
+      const sy2 = j2.wy - this.camY;
+      if (sy2 < -40 || sy2 > H + 40) continue;
+      const pulse = 1 + Math.sin(this.time * 2.2 + j2.sway) * 0.12;
       ctx.save();
-      ctx.translate(j.x, sy);
-      // tentacles
-      for (let i = 0; i < 5; i++) {
-        const tx = (i - 2) * j.r * 0.32;
-        ctx.strokeStyle = i % 2 ? 'rgba(232,160,200,0.4)' : 'rgba(200,138,224,0.4)';
-        ctx.lineWidth = PIX * 2;
-        ctx.beginPath();
-        ctx.moveTo(tx, j.r * 0.3);
-        ctx.quadraticCurveTo(tx + Math.sin(this.time * 2.6 + i) * 3, j.r * 0.9, tx + Math.sin(this.time * 1.8 + i * 2) * 5, j.r * 1.7);
-        ctx.stroke();
-      }
-      // bell
-      ctx.fillStyle = 'rgba(232,160,200,0.55)';
-      ctx.beginPath(); ctx.ellipse(0, 0, j.r * pulse, j.r * 0.8 / pulse, 0, Math.PI, 0); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = 'rgba(248,208,230,0.55)';
-      ctx.beginPath(); ctx.ellipse(-j.r * 0.2, -j.r * 0.2, j.r * 0.55 * pulse, j.r * 0.4, 0, Math.PI, 0); ctx.closePath(); ctx.fill();
-      if (night) {
-        ctx.fillStyle = 'rgba(248,190,225,0.12)';
-        ctx.beginPath(); ctx.arc(0, 0, j.r * 1.6, 0, TAU); ctx.fill();
-      }
+      ctx.translate(j2.x, sy2);
+      ctx.scale(pulse, 2 - pulse);
+      ctx.globalAlpha = 0.92;
+      drawAC(ctx, `jelly_${j2.r > 10.5 ? 3 : 0}`, 0, 0, j2.r * 2.4);
       ctx.restore();
+      ctx.globalAlpha = 1;
+      if (night) {
+        ctx.fillStyle = 'rgba(248,190,225,0.1)';
+        ctx.beginPath(); ctx.arc(j2.x, sy2, j2.r * 1.7, 0, TAU); ctx.fill();
+      }
     }
 
     // bioluminescent plankton after dark
@@ -1523,9 +1214,56 @@ const DiveScene = {
       ctx.translate(x, y);
       ctx.rotate(fi.rot + t * fi.vr);
       ctx.scale(sc, sc);
-      drawSpr(ctx, fi.img, -4, -4);
+      if (fi.art) drawAC(ctx, fi.art, 0, 0, 11);
+      else if (fi.img) drawSpr(ctx, fi.img, -4, -4);
       ctx.restore();
     }
+
+    // stardew-style reward: the prize rises, shining
+    if (this.reward) {
+      const r = this.reward, t = r.t;
+      const k = Math.min(1, t * 2.2);
+      const rise = 1 - Math.pow(1 - k, 3);
+      const y = r.y - rise * 28;
+      const pulse = 1 + Math.sin(k * Math.PI) * 0.3;
+      ctx.save();
+      ctx.translate(r.x, y);
+      const ba = clamp(1.1 - t, 0, 1);
+      ctx.save();
+      ctx.rotate(t * 1.4);
+      ctx.fillStyle = `rgba(255,246,200,${ba * 0.5})`;
+      for (let i = 0; i < 6; i++) {
+        ctx.rotate(TAU / 6);
+        ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(2.5, -17 - t * 8); ctx.lineTo(-2.5, -17 - t * 8); ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+      ctx.fillStyle = `rgba(255,255,255,${ba * 0.25})`;
+      ctx.beginPath(); ctx.arc(0, 0, 15 + t * 6, 0, TAU); ctx.fill();
+      drawAC(ctx, r.art, 0, 0, 24 * pulse);
+      ctx.restore();
+      text(ctx, '+' + r.name + (r.extra ? ' +!' : ''), r.x, y - 22, { size: 8, color: '#fff8e0', align: 'center' });
+    }
+
+    // depth chart along the right edge — where you are in the deep
+    const gx = W - 13, gy0 = 46, gy1 = H - 50;
+    const yFor = (d) => gy0 + (gy1 - gy0) * Math.sqrt(Math.min(1, d / 2400));
+    uiPanel(ctx, gx - 5, gy0 - 7, 17, gy1 - gy0 + 16, 0.6);
+    const zones = [[0, '#7ad2e8'], [300, '#3f9ab8'], [800, '#1f5c86'], [1600, '#0c2c48']];
+    for (let i = 0; i < zones.length; i++) {
+      const top = yFor(zones[i][0]);
+      const bot = i + 1 < zones.length ? yFor(zones[i + 1][0]) : gy1;
+      ctx.fillStyle = zones[i][1];
+      ctx.fillRect(gx - 1, top, 8, bot - top);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    for (const zd of [300, 800, 1600]) ctx.fillRect(gx - 2.5, yFor(zd), 11, PIX);
+    text(ctx, '0', gx - 4.5, gy0 - 1, { size: 5, color: '#bfe8f5', align: 'right' });
+    text(ctx, '~', gx - 4.5, gy1 - 5, { size: 5, color: '#5a7484', align: 'right' });
+    // you are here
+    const my2 = yFor(this.camY);
+    ctx.fillStyle = '#ffe66e';
+    ctx.beginPath(); ctx.moveTo(gx - 3.5, my2); ctx.lineTo(gx - 8, my2 - 3); ctx.lineTo(gx - 8, my2 + 3); ctx.closePath(); ctx.fill();
+    ctx.fillRect(gx - 1.5, my2 - 1, 9, 2);
 
     // ---- HUD -----------------------------------------------------------------
     // O2 gauge in a driftwood capsule
@@ -1649,7 +1387,6 @@ const DiveScene = {
   drawCursor(ctx) {
     const mx = Input.mouse.x, my = Input.mouse.y;
     const scraping = Input.mouse.down;
-    // the right tool comes out on its own: crowbar over pry-ready shells
     const hover = this.nodeAt(mx, my + this.camY);
     const pryMode = !!this.pry || (hover && hover.stage === 'exposed' && (hover.kind !== 'urchin' || G.gear.gloves));
     ctx.save();
@@ -1662,44 +1399,12 @@ const DiveScene = {
       }
     }
     if (pryMode) {
-      // pry bar levers with the marker
-      const lean = this.pry ? this.pry.marker * 0.45 : -0.25;
+      const lean = this.pry ? this.pry.marker * 0.5 : -0.3;
       ctx.rotate(lean);
-      // paw grip
-      ctx.fillStyle = '#6b4a2f';
-      ctx.beginPath(); ctx.arc(7, 9, 5, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#8a6444';
-      ctx.beginPath(); ctx.arc(7, 9, 3.4, 0, TAU); ctx.fill();
-      // bar
-      const barCol = ['#b06a3c', '#c8d0d4', '#ffd24e'][G.gear.pry];
-      ctx.fillStyle = barCol;
-      ctx.save();
-      ctx.rotate(-0.7);
-      ctx.fillRect(-2, -12, 3, 22);
-      ctx.restore();
-      // hooked tip
-      ctx.strokeStyle = barCol; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(-9.5, -6.5, 3.5, Math.PI * 0.9, Math.PI * 1.9); ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.6)';
-      ctx.fillRect(-3, -8, 1, 8);
+      drawAC(ctx, 'g_crowbar', 3, 3, 20);
     } else {
-      if (scraping) ctx.rotate(Math.sin(this.time * 40) * 0.12);
-      // paw
-      ctx.fillStyle = '#6b4a2f';
-      ctx.beginPath(); ctx.arc(6, 8, 5, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#8a6444';
-      ctx.beginPath(); ctx.arc(6, 8, 3.4, 0, TAU); ctx.fill();
-      // handle
-      ctx.fillStyle = '#7a3c1e';
-      ctx.fillRect(1, 2, 3, 8);
-      // blade
-      const bladeCol = ['#9aa0a0', '#c8d0d4', '#ffe66e'][G.gear.scraper];
-      ctx.fillStyle = bladeCol;
-      ctx.beginPath();
-      ctx.moveTo(-6, -6); ctx.lineTo(4, -1); ctx.lineTo(4, 3); ctx.lineTo(-8, -1);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.fillRect(-6, -5, 6, 1);
+      if (scraping) ctx.rotate(Math.sin(this.time * 40) * 0.14);
+      drawAC(ctx, 'g_scraper', 3, 3, 18);
       if (G.gear.scraper === 2 && scraping && Math.random() < 0.5) {
         ctx.fillStyle = '#ffe66e';
         ctx.fillRect(rand(-8, 0), rand(-8, -2), 1, 1);
@@ -1707,4 +1412,5 @@ const DiveScene = {
     }
     ctx.restore();
   },
+
 };

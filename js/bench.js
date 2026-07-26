@@ -136,9 +136,9 @@ const Bench = {
   menuRows() {
     const rows = [];
     for (const k of this.crackables())
-      rows.push({ icon: SPR.icons[k], label: `Crack ${ITEMS[k].name}  x${G.storage[k]}`, sub: `-> ${ITEMS[BENCH_CRACK[k]].name} ($${ITEMS[BENCH_CRACK[k]].price})`, act: () => this.startCrack(k) });
+      rows.push({ art: k, label: `Crack ${ITEMS[k].name}  x${G.storage[k]}`, sub: `-> ${ITEMS[BENCH_CRACK[k]].name} ($${ITEMS[BENCH_CRACK[k]].price})`, act: () => this.startCrack(k) });
     for (const k of this.polishables())
-      rows.push({ icon: SPR.icons[k], label: `Polish ${ITEMS[k].name}  x${G.storage[k]}`, sub: `-> ${ITEMS[BENCH_POLISH[k]].name} ($${ITEMS[BENCH_POLISH[k]].price})`, act: () => this.startPolish(k) });
+      rows.push({ art: k, label: `Polish ${ITEMS[k].name}  x${G.storage[k]}`, sub: `-> ${ITEMS[BENCH_POLISH[k]].name} ($${ITEMS[BENCH_POLISH[k]].price})`, act: () => this.startPolish(k) });
     return rows;
   },
 
@@ -165,7 +165,7 @@ const Bench = {
         ctx.fillRect(this.WX + 10, ry, this.WW - 20, 23);
         ctx.fillStyle = 'rgba(230,200,150,0.12)';
         ctx.fillRect(this.WX + 10, ry, this.WW - 20, PIX);
-        drawSpr(ctx, rows[i].icon, this.WX + 18, ry + 7);
+        drawItemIcon(ctx, rows[i].art, this.WX + 24, ry + 11.5, 15);
         text(ctx, rows[i].label, this.WX + 32, ry + 3.5, { size: 8, color: '#f4e8cc' });
         text(ctx, rows[i].sub, this.WX + 32, ry + 13, { size: 6, color: '#a0d2ac' });
       }
@@ -179,12 +179,27 @@ const Bench = {
     ctx.beginPath(); ctx.ellipse(cx, cy + 26, 62, 12, 0, 0, TAU); ctx.fill();
     ctx.fillStyle = '#7a6240';
     ctx.beginPath(); ctx.ellipse(cx, cy + 24, 54, 9, 0, 0, TAU); ctx.fill();
-    const img = SPR.icons[this.item];
+    // the shell itself, big on the work cloth — cracked open on success
+    const showOpen = this.result && this.result.good > 0 && this.mode === 'crack';
+    const artName = showOpen ? ('open_' + (NODE_ART[this.item] || 'clam'))
+      : (this.mode === 'polish' && this.result ? ITEM_ART[BENCH_POLISH[this.item]] : ITEM_ART[this.item]) || 'shell_clam';
     ctx.save();
-    ctx.translate(cx, cy + 4);
-    ctx.scale(6.5, 6.5);
+    ctx.translate(cx, cy + 2);
     if (this.mode === 'polish' && this.rubbing) ctx.rotate(Math.sin(Input.mouse.x * 0.35) * 0.06);
-    ctx.drawImage(img, -img.width / DPX / 2, -img.height / DPX / 2, img.width / DPX, img.height / DPX);
+    if (this.result) {
+      const rp = 1 + Math.sin(clamp(0.9 - this.resultT, 0, 0.9) * Math.PI) * 0.12;
+      ctx.scale(rp, rp);
+      // starburst behind the reveal
+      ctx.save();
+      ctx.rotate(this.resultT * 1.5);
+      ctx.fillStyle = `rgba(255,246,200,${clamp(this.resultT, 0, 0.55)})`;
+      for (let i = 0; i < 6; i++) {
+        ctx.rotate(TAU / 6);
+        ctx.beginPath(); ctx.moveTo(0, -18); ctx.lineTo(5, -44); ctx.lineTo(-5, -44); ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+    }
+    drawAC(ctx, artName, 0, 0, 62);
     ctx.restore();
 
     if (this.mode === 'crack') {

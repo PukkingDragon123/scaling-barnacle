@@ -440,42 +440,8 @@ const TitleScene = {
   },
 
   draw(c) {
-    // banded sunset sky
-    bandedFill(c, 0, 0, W, 150, hexRGB('#241b40'), hexRGB('#f09a52'), 14);
-    // sun with halo rings
-    c.fillStyle = 'rgba(255,220,150,0.18)';
-    c.beginPath(); c.arc(W / 2, 128, 38, 0, TAU); c.fill();
-    c.fillStyle = 'rgba(255,224,160,0.3)';
-    c.beginPath(); c.arc(W / 2, 128, 31, 0, TAU); c.fill();
-    c.fillStyle = '#f8dca2';
-    c.beginPath(); c.arc(W / 2, 128, 25, 0, TAU); c.fill();
-    c.fillStyle = '#fdf2cc';
-    c.beginPath(); c.arc(W / 2 - 5, 122, 12, 0, TAU); c.fill();
-    // clouds drifting past, faint so they never fight the title
-    for (let i = 0; i < 2; i++) {
-      const cl = SPR.clouds[i];
-      const cx = ((this.time * (3 + i * 2) + i * 260) % (W + 160)) - 80;
-      c.globalAlpha = 0.32;
-      drawSpr(c, cl, cx, 18 + i * 108);
-      c.globalAlpha = 1;
-    }
-    // banded sea
-    bandedFill(c, 0, 150, W, H - 150, hexRGB('#3f5f78'), hexRGB('#0b1d2c'), 11);
-    // sun glint path
-    c.fillStyle = 'rgba(255,214,150,0.3)';
-    for (let y = 152; y < H; y += 4) {
-      const w2 = 16 + (y - 150) * 0.5;
-      c.fillRect(W / 2 - w2 / 2 + Math.sin(y * 0.5 + this.time * 2) * 4, y, w2, 1);
-    }
-    // wave dashes
-    for (let row = 0; row < 8; row++) {
-      const y = 156 + row * 13;
-      c.fillStyle = `rgba(255,220,170,${0.15 - row * 0.014})`;
-      for (let x = -20; x < W + 20; x += 30) {
-        const ox = Math.sin(this.time * 1.3 + row * 2 + x * 0.05) * 9;
-        c.fillRect(Math.round(x + ox), y, 14, 1);
-      }
-    }
+    // the painted sea, alive
+    drawA(c, `bg_surf${Math.floor(this.time * 7) % 10}`, -30 + Math.sin(this.time * 0.2) * 6, 0, 540, 270);
     // shark fin drive-by (a promise of things to come)
     if (this.fin) {
       c.fillStyle = '#141c26';
@@ -488,11 +454,11 @@ const TitleScene = {
     }
     // drifting shells
     for (let i = 0; i < 3; i++) {
-      const icons = [SPR.icons.clam, SPR.icons.mussel, SPR.icons.oyster];
-      const bx = 60 + i * 160 + Math.sin(this.time * 0.7 + i * 2) * 8;
-      const by = 228 + Math.sin(this.time * 1.2 + i * 2.6) * 3;
-      c.globalAlpha = 0.85;
-      drawSpr(c, icons[i], bx, by);
+      const keys = ['clam', 'mussel', 'scallop'];
+      const bx = 70 + i * 160 + Math.sin(this.time * 0.7 + i * 2) * 8;
+      const by = 232 + Math.sin(this.time * 1.2 + i * 2.6) * 3;
+      c.globalAlpha = 0.9;
+      drawAC(c, `shell_${keys[i]}`, bx, by, 15);
       c.globalAlpha = 1;
     }
     // otter on a buoy
@@ -505,9 +471,15 @@ const TitleScene = {
     c.fillRect(W / 2 - 12, 203 + bob, 24, 4);
     c.fillStyle = 'rgba(0,0,0,0.25)';
     c.beginPath(); c.ellipse(W / 2, 222 + bob * 0.4, 15, 3, 0, 0, TAU); c.fill();
-    const blink = (this.time % 3.4) < 0.14;
     const br = Math.sin(this.time * 2.1) * 0.02;
-    drawOtto(c, SPR.otterR[blink ? 3 : 0], W / 2, 203.5 + bob, 1 - br * 0.7, 1 + br, 0);
+    const oimg = ASSETS.otter_0;
+    if (oimg && oimg.width) {
+      c.save();
+      c.translate(W / 2, 204 + bob);
+      c.scale(1 - br * 0.7, 1 + br);
+      c.drawImage(oimg, -13, -26, 26 * oimg.width / oimg.height, 26);
+      c.restore();
+    }
     // title with layered drop shadow
     const wob = Math.sin(this.time * 2) * 2;
     text(c, "MR. OTTO'S", W / 2 + 2, 40 + wob + 2, { size: 26, color: 'rgba(30,12,24,0.8)', align: 'center', shadow: false });
@@ -598,6 +570,14 @@ function frame(now) {
 }
 
 resize();
-Game.scene = TitleScene;
-TitleScene.enter();
-requestAnimationFrame(frame);
+ctx.save();
+ctx.scale(DPX, DPX);
+ctx.fillStyle = '#0a1420';
+ctx.fillRect(0, 0, W, H);
+text(ctx, 'loading the sea...', W / 2, H / 2 - 4, { size: 10, color: '#9fc4d4', align: 'center' });
+ctx.restore();
+loadAssets(() => {
+  Game.scene = TitleScene;
+  TitleScene.enter();
+  requestAnimationFrame(frame);
+});
