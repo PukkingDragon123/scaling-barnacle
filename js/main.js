@@ -326,9 +326,9 @@ const Game = {
     const goalTxt = G.goal < GOALS.length ? GOALS[G.goal].name : 'Living the dream';
     const star = G.goal < GOALS.length ? '*' : '★';
     const gw = textWidth(c, `${star} ${goalTxt}`, 6.5) + 12;
-    c.globalAlpha = 0.85;
-    uiPanel(c, W / 2 - gw / 2, 4, gw, 12, 0.6);
-    text(c, `${star} ${goalTxt}`, W / 2, 7, { size: 6.5, color: '#ffe6b0', align: 'center' });
+    c.globalAlpha = 0.9;
+    uiPanel(c, W / 2 - gw / 2, 4, gw, 12, 0.9, true);
+    text(c, `${star} ${goalTxt}`, W / 2, 7, { size: 6.5, color: '#6a4420', align: 'center', shadow: false });
     c.globalAlpha = 1;
   },
 
@@ -339,8 +339,8 @@ const Game = {
       const y = H - 18 - i * 14;
       c.globalAlpha = a;
       const w = textWidth(c, t.msg, 7) + 14;
-      uiPanel(c, W / 2 - w / 2, y - 3, w, 13, 0.9);
-      text(c, t.msg, W / 2, y, { size: 7, color: '#f4e8cc', align: 'center' });
+      uiPanel(c, W / 2 - w / 2, y - 3, w, 13, 0.96, true);
+      text(c, t.msg, W / 2, y, { size: 7, color: '#4a3020', align: 'center', shadow: false });
       c.globalAlpha = 1;
     }
   },
@@ -472,7 +472,7 @@ const TitleScene = {
     c.fillStyle = 'rgba(0,0,0,0.25)';
     c.beginPath(); c.ellipse(W / 2, 222 + bob * 0.4, 15, 3, 0, 0, TAU); c.fill();
     const br = Math.sin(this.time * 2.1) * 0.02;
-    const oimg = ASSETS.otter_0;
+    const oimg = ASSETS.o2_10;   // waving hello
     if (oimg && oimg.width) {
       c.save();
       c.translate(W / 2, 204 + bob);

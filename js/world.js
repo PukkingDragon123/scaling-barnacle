@@ -15,13 +15,6 @@ const DECK_Y = 176;
 const HOUSE_X = 30, HOUSE_W = 175;
 // bridge of repeating dock modules
 const SEG_START = 330, SEG_W = 88;
-const SEG_PATTERN = [
-  { n: 'dock_3', f: 0.20 },
-  { n: 'dock_5', f: 0.33, lamp: 0.86 },
-  { n: 'dock_4', f: 0.20 },
-  { n: 'dock_7', f: 0.42 },
-  { n: 'dock_6', f: 0.28 },
-];
 
 const WorldScene = {
   customCursor: false,
@@ -231,11 +224,11 @@ const WorldScene = {
 
     // boardwalk under everything, tying the modules together
     ctx.fillStyle = '#7a4a3c';
-    ctx.fillRect(196, DECK_Y - 1, endX - 196, 2.5);
+    ctx.fillRect(196, DECK_Y - 1, SEG_START - 186, 2.5);
     ctx.fillStyle = 'rgba(255,220,190,0.25)';
-    ctx.fillRect(196, DECK_Y - 1, endX - 196, PIX * 2);
+    ctx.fillRect(196, DECK_Y - 1, SEG_START - 186, PIX * 2);
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.fillRect(196, DECK_Y + 1, endX - 196, PIX * 2);
+    ctx.fillRect(196, DECK_Y + 1, SEG_START - 186, PIX * 2);
 
     // ---- the house (uploaded stilt hut): its platform IS the deck line ---------------
     const hh = assetH('house_ext', HOUSE_W);
@@ -300,12 +293,16 @@ const WorldScene = {
     drawAC(ctx, 'shell_clam', 296, wbY + wbH * 0.30, 10);
     drawAC(ctx, 'shell_scallop', 306, wbY + wbH * 0.32, 9);
 
-    // ---- bridge: repeating dock modules ------------------------------------------------
-    for (let x = SEG_START, i = 0; x < endX; x += SEG_W, i++) {
-      const seg = SEG_PATTERN[i % SEG_PATTERN.length];
-      const h = assetH(seg.n, SEG_W + 2);
-      drawA(ctx, seg.n, x - 1, DECK_Y - h * seg.f, SEG_W + 2, h);
-      if (seg.lamp) this._lampGlows.push({ x: x + SEG_W * seg.lamp, y: DECK_Y - h * seg.f + h * 0.13 });
+    // ---- bridge: one clean module, repeated and connected -----------------------------
+    // lamp posts stand behind the deck every third segment
+    const lpW = 17, lpH = assetH('dock_15', lpW);
+    for (let x = SEG_START + SEG_W * 1.5; x < endX - 20; x += SEG_W * 3) {
+      drawA(ctx, 'dock_15', x, DECK_Y - lpH + 2, lpW, lpH);
+      this._lampGlows.push({ x: x + lpW * 0.55, y: DECK_Y - lpH + 6 });
+    }
+    const segH = assetH('dock_3', SEG_W + 2);
+    for (let x = SEG_START; x < endX; x += SEG_W) {
+      drawA(ctx, 'dock_3', x - 1, DECK_Y - segH * 0.20, SEG_W + 2, segH);
     }
     // end-of-bridge barrier
     if (G.bridge < 3) {
@@ -370,11 +367,11 @@ const WorldScene = {
     }
 
     // ---- player: the uploaded otter, with squash & stretch ---------------------------
-    const carrying = ITEM_KEYS.some(k => (G.storage[k] || 0) > 0);
+    const OTTER_WALK = ['o2_0', 'o2_1', 'o2_3', 'o2_4', 'o2_5'];
     const walking = this.walkT > 0 && this.idleT < 0.1;
     let frameN = 0, sqx = 1, sqy = 1, hop = 0;
     if (walking) {
-      frameN = Math.floor(this.walkT * 0.9) % 4;
+      frameN = Math.floor(this.walkT * 0.9) % OTTER_WALK.length;
       const ph = this.walkT * 2.2;
       hop = Math.abs(Math.sin(ph)) * 1.6;
       sqy = 1 + Math.cos(ph * 2) * 0.045;
@@ -385,7 +382,7 @@ const WorldScene = {
     }
     ctx.fillStyle = 'rgba(0,10,30,0.3)';
     ctx.beginPath(); ctx.ellipse(this.px, DECK_Y + 0.6, Math.max(4, 7 - hop * 0.9), 1.6, 0, 0, TAU); ctx.fill();
-    const oimg = ASSETS[(carrying ? 'otterf_' : 'otter_') + frameN];
+    const oimg = ASSETS[walking ? OTTER_WALK[frameN] : 'o2_13'];
     if (oimg && oimg.width) {
       const oh = 27, ow = oh * oimg.width / oimg.height;
       ctx.save();
@@ -405,27 +402,28 @@ const WorldScene = {
       const label = (TouchUI.enabled ? '' : '[E] ') + best.label;
       const w = textWidth(ctx, label, 7) + 12;
       const bx = clamp(this.px, cam + w / 2 + 4, cam + W - w / 2 - 4);
-      uiPanel(ctx, bx - w / 2, DECK_Y - 48, w, 13, 0.85);
-      text(ctx, label, bx, DECK_Y - 45, { size: 7, color: '#fff8e0', align: 'center' });
-      ctx.fillStyle = 'rgba(26,17,10,0.85)';
+      uiPanel(ctx, bx - w / 2, DECK_Y - 48, w, 13, 0.95, true);
+      text(ctx, label, bx, DECK_Y - 45, { size: 7, color: '#4a3020', align: 'center', shadow: false });
+      ctx.fillStyle = 'rgba(246,232,201,0.95)';
       ctx.beginPath();
-      ctx.moveTo(this.px - 3, DECK_Y - 35); ctx.lineTo(this.px + 3, DECK_Y - 35); ctx.lineTo(this.px, DECK_Y - 31);
+      ctx.moveTo(this.px - 3, DECK_Y - 35.5); ctx.lineTo(this.px + 3, DECK_Y - 35.5); ctx.lineTo(this.px, DECK_Y - 31.5);
       ctx.closePath(); ctx.fill();
     }
 
-    // shallow water wash over the post bottoms
-    ctx.fillStyle = 'rgba(96,190,225,0.5)';
-    ctx.beginPath();
-    ctx.moveTo(cam - 10, H);
-    ctx.lineTo(cam - 10, 226);
-    for (let x = cam - 10; x <= cam + W + 10; x += 8)
-      ctx.lineTo(x, 226 + Math.sin(x * 0.05 + this.time * 1.8) * 3);
-    ctx.lineTo(cam + W + 10, H);
-    ctx.closePath(); ctx.fill();
-    for (let x = cam - 10; x <= cam + W + 10; x += 8) {
-      const wy = 226 + Math.sin(x * 0.05 + this.time * 1.8) * 3;
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.fillRect(x, wy, 5, 1);
+    // waves cut from the painted sea itself, two drifting layers over the post feet
+    const wImg = ASSETS[`bg_surf${Math.floor(this.time * 7) % 10}`];
+    if (wImg && wImg.width) {
+      const sy = wImg.height * 0.66, sh = wImg.height * 0.15;
+      for (let L = 0; L < 2; L++) {
+        const bob = Math.sin(this.time * (1.1 + L * 0.6) + L * 2.2) * 2;
+        const drift = (this.time * (9 + L * 7)) % 540;
+        const dy = 216 + L * 10 + bob;
+        ctx.globalAlpha = 0.9;
+        for (let tx = cam - drift - 540; tx < cam + W + 540; tx += 540) {
+          ctx.drawImage(wImg, 0, sy, wImg.width, sh, tx, dy, 540, 58 - L * 6);
+        }
+      }
+      ctx.globalAlpha = 1;
     }
 
     ctx.restore();
@@ -494,9 +492,10 @@ const WorldScene = {
         const f = 1 - pc.t / 1.1;
         dx = lerp(padX, -60, f);
         dy = lerp(52, 18, f);
-        img = 'drone_lift';
+        img = Math.floor(this.time * 7) % 2 ? 'drone_go' : 'drone_go2';
       }
-      drawAC(ctx, img, dx, dy, 30);
+      if (img === 'drone_claw' && pc.t <= 2.4) img = Math.floor(this.time * 7) % 2 ? 'drone_lift' : 'drone_lift2';
+      drawAC(ctx, img, dx, dy + Math.sin(this.time * 5) * 1.2, 30);
     }
   },
 };

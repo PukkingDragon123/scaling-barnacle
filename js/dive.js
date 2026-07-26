@@ -146,14 +146,6 @@ const DiveScene = {
           r: 5.5 + rng() * 3.5, seed: Math.floor(rng() * 99999), phase: rng() * TAU,
         });
       }
-      if (rng() < 0.3) {
-        this.nodes.push({
-          kind: 'anemone', decor: true, alive: true,
-          x: rng() < 0.5 ? this.WALL_X + 8 + rng() * 10 : this.WALL_X + this.WALL_W - 18 + rng() * 10,
-          y: wy + rng() * 30,
-          r: 5 + rng() * 3, seed: Math.floor(rng() * 99999), phase: rng() * TAU,
-        });
-      }
     }
     // one moray den per chunk or so, once past the shallows
     if (y0 > 220 && rng() < 0.7) {
@@ -708,7 +700,6 @@ const DiveScene = {
   // ---- drawing ---------------------------------------------------------------
   drawNode(ctx, n, sy) {
     if (n.kind === 'star') { this.drawStar(ctx, n, sy); return; }
-    if (n.kind === 'anemone') { this.drawAnemone(ctx, n, sy); return; }
     if (n.kind === 'eelhole') { this.drawEelhole(ctx, n, sy); return; }
     const sx = n.x + (n.shake > 0 ? rand(-1.3, 1.3) : 0);
     const jy = sy + (n.shake > 0 ? rand(-1, 1) : 0);
@@ -779,29 +770,6 @@ const DiveScene = {
     ctx.restore();
   },
 
-  drawAnemone(ctx, n, sy) {
-    ctx.save();
-    ctx.translate(Math.round(n.x * DPX) / DPX, Math.round(sy * DPX) / DPX);
-    // base
-    ctx.fillStyle = '#7a3c46';
-    ctx.beginPath(); ctx.ellipse(0, 1.5, n.r * 0.9, n.r * 0.55, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#94505a';
-    ctx.beginPath(); ctx.ellipse(0, 0.8, n.r * 0.7, n.r * 0.4, 0, 0, TAU); ctx.fill();
-    // tentacles swaying with the water
-    for (let i = 0; i < 9; i++) {
-      const a = (i / 9 - 0.5) * 2.4;
-      const sw = Math.sin(this.time * 1.6 + n.phase + i * 0.8) * 2.4;
-      ctx.strokeStyle = i % 2 ? '#8ad0c2' : '#aee2d2';
-      ctx.lineWidth = PIX * 2;
-      ctx.beginPath();
-      ctx.moveTo(a * n.r * 0.4, 0);
-      ctx.quadraticCurveTo(a * n.r * 0.6 + sw * 0.5, -n.r * 0.7, a * n.r * 0.8 + sw, -n.r * 1.25);
-      ctx.stroke();
-      ctx.fillStyle = '#f2b8d0';
-      ctx.fillRect(a * n.r * 0.8 + sw - PIX, -n.r * 1.25 - PIX, PIX * 2, PIX * 2);
-    }
-    ctx.restore();
-  },
 
   drawEelhole(ctx, n, sy) {
     ctx.save();
@@ -994,37 +962,6 @@ const DiveScene = {
       ctx.beginPath(); ctx.ellipse(s.x, sy2, s.rx, s.ry, 0, 0, TAU); ctx.fill();
       ctx.fillStyle = 'rgba(196,132,96,0.4)';
       ctx.beginPath(); ctx.ellipse(s.x, sy2, s.rx * 0.6, s.ry * 0.6, 0, 0, TAU); ctx.fill();
-    }
-
-    // kelp strands swaying along the piling edges
-    for (let i = 0; i < 6; i++) {
-      const left = i % 2 === 0;
-      const ax = left ? this.WALL_X - 10 : this.WALL_X + this.WALL_W + 10;
-      const anchorWorldY = 90 + i * 150;
-      const ay = anchorWorldY - this.camY;
-      if (ay < -120 || ay > H + 130) continue;
-      const segs = 12 + (i % 3) * 3;
-      ctx.strokeStyle = 'rgba(34,104,66,0.9)';
-      ctx.lineWidth = 2;
-      let px = ax, py = ay;
-      ctx.beginPath(); ctx.moveTo(px, py);
-      for (let s = 1; s <= segs; s++) {
-        const sway = Math.sin(this.time * 1.15 + i * 1.9 + s * 0.5) * s * 0.5;
-        const nx2 = ax + sway + (left ? -s * 0.25 : s * 0.25);
-        const ny2 = ay - s * 6.5;
-        ctx.lineTo(nx2, ny2);
-        // leaf nubs alternating sides
-        if (s % 2 === 0 && s > 2) {
-          ctx.save();
-          ctx.fillStyle = 'rgba(56,140,88,0.85)';
-          ctx.beginPath();
-          ctx.ellipse(nx2 + (s % 4 === 0 ? 3 : -3), ny2, 3.2, 1.3, s % 4 === 0 ? 0.5 : -0.5, 0, TAU);
-          ctx.fill();
-          ctx.restore();
-        }
-        px = nx2; py = ny2;
-      }
-      ctx.stroke();
     }
 
     // nodes
