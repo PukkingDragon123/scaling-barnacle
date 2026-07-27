@@ -96,6 +96,17 @@ const HouseScene = {
     drawA(ctx, `ocean${Math.floor(this.time * 8) % 12}`, -30, 0, 540, 270);
     SKY.tint(ctx, G.clock, this.time);
 
+    // The dock, tiled behind the hut at the porch line and scaled to match this
+    // view — outside, the house is part of the pier, so it has to be here too or
+    // it reads as a shed adrift in open water.
+    const segW = Math.round(88 * HUT_W / 124);   // the exterior's 88 at this zoom
+    const segH = assetH('dock_11', segW);
+    // align deck TOPS: the hut's porch boards start at 0.6728 of its sprite
+    const segTop = HUT_Y + HUT_H * 0.6728 - segH * 0.0352;
+    for (let x = HUT_X % (segW - 1) - segW; x < W + segW; x += segW - 1) {
+      drawA(ctx, 'dock_11', x, segTop, segW, segH);
+    }
+
     // the whole hut sprite, unzoomed — you see the roof, the porch and the stilts
     drawA(ctx, 'hut_full', HUT_X, HUT_Y, HUT_W, HUT_H);
 
@@ -104,10 +115,33 @@ const HouseScene = {
       const h = assetH(name, w);
       drawA(ctx, name, cx - w / 2, FLOOR - h + 1, w, h);
     };
+    // the roof throws the back of the porch into shade — gives the flat wall depth
+    const shadeTop = HUT_Y + HUT_H * 0.30;
+    const gsh = ctx.createLinearGradient(0, shadeTop, 0, FLOOR);
+    gsh.addColorStop(0, 'rgba(28,14,6,0.34)');
+    gsh.addColorStop(0.55, 'rgba(28,14,6,0.14)');
+    gsh.addColorStop(1, 'rgba(28,14,6,0)');
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(PORCH_L, shadeTop, PORCH_R - PORCH_L, FLOOR - shadeTop);
+    ctx.clip();
+    ctx.fillStyle = gsh;
+    ctx.fillRect(PORCH_L, shadeTop, PORCH_R - PORCH_L, FLOOR - shadeTop);
+    ctx.restore();
+
     stand('furn_0', BED_X, 62);          // the bed
     const tblH = assetH('furn_2', 40);
     stand('furn_2', TABLE_X, 40);        // the table
-    drawAC(ctx, 'furn_14', TABLE_X + 6, FLOOR - tblH - 5, 10);   // a lantern on it
+    const lampY = FLOOR - tblH - 5;
+    drawAC(ctx, 'furn_14', TABLE_X + 6, lampY, 10);   // a lantern on it
+    // and the light it throws, once the day is going
+    const glow = clamp(nite * 1.2, 0, 1) * 0.9 + 0.1;
+    const gl = ctx.createRadialGradient(TABLE_X + 6, lampY, 2, TABLE_X + 6, lampY, 46);
+    gl.addColorStop(0, `rgba(255,206,120,${glow * 0.34})`);
+    gl.addColorStop(0.5, `rgba(255,186,100,${glow * 0.12})`);
+    gl.addColorStop(1, 'rgba(255,170,90,0)');
+    ctx.fillStyle = gl;
+    ctx.fillRect(TABLE_X - 40, lampY - 46, 92, 92);
 
     // ---- player -------------------------------------------------------------------------
     const OTTER_WALK = ['o4_4', 'o4_5', 'o4_6', 'o4_7'];

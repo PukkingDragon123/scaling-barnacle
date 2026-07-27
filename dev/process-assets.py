@@ -344,7 +344,13 @@ room = room.resize((round(room.size[0] * 3.2), round(room.size[1] * 3.2)), Image
 save('hut_room', room)
 
 hx2 = trim(Image.open(os.path.join(ROOT, '840E2071-1BC2-437D-BF2C-FE6478FF1DA3-removebg-preview.png')).convert('RGBA'))
-save('house_clean', hx2.resize((round(hx2.size[0] * 1.8), round(hx2.size[1] * 1.8)), Image.LANCZOS))
+house_clean = hx2.resize((round(hx2.size[0] * 1.8), round(hx2.size[1] * 1.8)), Image.LANCZOS)
+save('house_clean', house_clean)
+# Just the building: everything above the sprite's own deck (its top row is 277
+# of 598, so cut at 274 to clear the boards) and right of its stair rail (x 264).
+# The pier is then the only deck in the scene, so the two can't disagree about
+# plank style, post spacing or deck thickness.
+save('house_body', trim(house_clean.crop((264, 0, house_clean.size[0], 274))))
 
 wb = defringe(trim(global_key(Image.open(os.path.join(ROOT, 'IMG_4468.jpeg')), 48)), tol=88, passes=3)
 save('workbench', wb)
@@ -360,7 +366,13 @@ for i, b in enumerate(components(dk)):
     save(f'dock_{i}', trim(dk.crop(tuple(b))))
 
 print('furniture (components)...')
-fu = defringe(global_key(Image.open(os.path.join(ROOT, '175C57F7-66B8-4C75-A0DB-5DC747AEBA78.png')), 40))
+# This sheet's darkest sprite colour (the bed's blue blanket) sits only ~105 from
+# the background, so global_key punched holes in it and the old defringe tol of 70
+# (= 121 in RGB distance) ate its every edge. The cells are all border-reachable,
+# so a plain flood fill plus a tight defringe is both safer and cleaner.
+FURN_BG = (156, 162, 180)
+fu = defringe(key_bg(Image.open(os.path.join(ROOT, '175C57F7-66B8-4C75-A0DB-5DC747AEBA78.png')), tol=46),
+              FURN_BG, tol=46, passes=1)
 for i, b in enumerate(components(fu, min_area=500)):
     save(f'furn_{i}', trim(fu.crop(tuple(b))))
 

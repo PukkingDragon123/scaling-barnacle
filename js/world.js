@@ -13,14 +13,12 @@ const DECK_Y = 214;   // the dock sits low in frame, water filling the bottom
 
 // Every structure is anchored by its MEASURED deck-surface line (fraction of
 // sprite height) so nothing floats: deck surfaces all land exactly on DECK_Y.
-// deck fractions are measured off the art (topmost row of the widest slab),
-// not eyeballed: house_clean's deck top is row 277 of 598, dock_11's is 7 of 199
-const HOUSE_X = 30, HOUSE_W = 124, HOUSE_DECK = 0.4632;  // the uploaded hut, background-free
-const PIER_START = 128, SEG_W = 88, PIER_DECK = 0.0352;  // dock_11 trestle module
-// the house's own deck spans these x, so the walk range and the pier both
-// start from its solid boards rather than its stairs
-const HOUSE_DECK_L = HOUSE_X + HOUSE_W * 0.2096;
-const HOUSE_DECK_R = HOUSE_X + HOUSE_W * 0.8977;
+// The house is the BUILDING only (house_body) — its own deck and stairs are
+// cropped away in the asset pipeline, so the pier is the single deck in the
+// scene and the two can't disagree about plank style or thickness.
+const HOUSE_X = 34, HOUSE_W = 86;
+const SEG_W = 88, PIER_DECK = 0.0352;   // dock_11 trestle module
+const PIER_START = -SEG_W;              // the deck runs off the left edge, under the house
 
 // place a sprite so its deck surface sits on DECK_Y
 function drawOnDeck(ctx, name, x, w, deckFrac) {
@@ -45,12 +43,12 @@ const WorldScene = {
 
   worldW() { return this.endX() + 80; },
   endX() { return 300 + G.bridge * 200; },
-  houseTop() { return DECK_Y - assetH('house_clean', HOUSE_W) * HOUSE_DECK; },
+  houseTop() { return DECK_Y - assetH('house_body', HOUSE_W); },
 
   enter(opts) {
     this.time = 0;
     if (opts && opts.at !== undefined) this.px = PILING_X[opts.at];
-    else if (opts && opts.fromHouse) this.px = 112;
+    else if (opts && opts.fromHouse) this.px = 80;
     if (!this.stars) {
       const rng = mulberry32(777);
       this.stars = [];
@@ -68,7 +66,7 @@ const WorldScene = {
 
   spots() {
     const s = [
-      { x: 88, label: 'Enter House', act: () => Game.go(HouseScene, {}) },
+      { x: 56, label: 'Enter House', act: () => Game.go(HouseScene, {}) },
       { x: 232, label: 'ClamNet  (sell & shop)', act: () => { Shop.openUI(); } },
       { x: 300, label: 'Workbench  (crack & polish)', act: () => { Bench.openUI(); } },
     ];
@@ -90,7 +88,7 @@ const WorldScene = {
     if (Input.keys['KeyD'] || Input.keys['ArrowRight']) mv += 1;
     if (mv !== 0) {
       this.dir = mv;
-      this.px = clamp(this.px + mv * 92 * dt, HOUSE_DECK_L + 4, this.endX() - 10);
+      this.px = clamp(this.px + mv * 92 * dt, 16, this.endX() - 10);
       this.walkT += dt * 9;
       this.idleT = 0;
       this.dustT -= dt;
@@ -116,7 +114,7 @@ const WorldScene = {
 
     // chimney smoke
     if (Math.random() < dt * 2) {
-      this.smoke.push({ x: HOUSE_X + HOUSE_W * 0.42 + rand(-1, 1), y: this.houseTop() + 6, vy: rand(-13, -8), t: rand(1.5, 3), s: rand(1.5, 3) });
+      this.smoke.push({ x: HOUSE_X + HOUSE_W * 0.245 + rand(-1, 1), y: this.houseTop() + 4, vy: rand(-13, -8), t: rand(1.5, 3), s: rand(1.5, 3) });
     }
     for (const s of this.smoke) { s.y += s.vy * dt; s.x += Math.sin(this.time + s.y * 0.1) * 0.2 + 3 * dt; s.t -= dt; }
     this.smoke = this.smoke.filter(s => s.t > 0);
@@ -152,8 +150,9 @@ const WorldScene = {
     }
 
     // ---- the house, its platform flush with the pier deck --------------------------
-    const hh = drawOnDeck(ctx, 'house_clean', HOUSE_X, HOUSE_W, HOUSE_DECK);
-    const hy = DECK_Y - hh * HOUSE_DECK;
+    const hh = assetH('house_body', HOUSE_W);
+    const hy = DECK_Y - hh;
+    drawA(ctx, 'house_body', HOUSE_X, hy, HOUSE_W, hh);
     if (G.house >= 2) {
       const bx0 = HOUSE_X + HOUSE_W * 0.30, bx1 = HOUSE_X + HOUSE_W * 0.72, by = hy + hh * 0.10;
       ctx.strokeStyle = '#6a5030'; ctx.lineWidth = PIX;
@@ -179,7 +178,7 @@ const WorldScene = {
     }
 
     // ---- lamp posts standing on the deck -------------------------------------------
-    for (let x = PIER_START + SEG_W * 2.5; x < pierEnd; x += SEG_W * 3) {
+    for (let x = 348; x < pierEnd; x += SEG_W * 3) {
       const lh = drawStanding(ctx, 'dock_15', x, 15, 5);
       this._lampGlows.push({ x, y: DECK_Y - lh + 6 });
     }
@@ -285,10 +284,10 @@ const WorldScene = {
       ctx.save();
       ctx.translate(-cam, 0);
       // hut window glow
-      const hh2 = assetH('house_clean', HOUSE_W);
-      const hy2 = DECK_Y - hh2 * HOUSE_DECK;
+      const hh2 = assetH('house_body', HOUSE_W);
+      const hy2 = DECK_Y - hh2;
       ctx.fillStyle = `rgba(255,214,120,${nite * 0.18})`;
-      ctx.beginPath(); ctx.arc(HOUSE_X + HOUSE_W * 0.63, hy2 + hh2 * 0.38, 15, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(HOUSE_X + HOUSE_W * 0.535, hy2 + hh2 * 0.60, 12, 0, TAU); ctx.fill();
       // dock lanterns
       for (const g of this._lampGlows) {
         const fl = 0.8 + Math.sin(this.time * 8 + g.x) * 0.2;
