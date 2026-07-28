@@ -21,10 +21,9 @@ const BAT_CX_MIN = 272, BAT_CX_MAX = 430;   // the crab's half of the dock
 // All twelve crab frames are drawn at ONE pixel scale so his body never changes
 // size when he swaps to a taller frame (4..11 are 340px tall, 0..3 are 295px).
 const BAT_CRAB_S = 40 / 295;
-// Art orientation, isolated as flags: if a sheet turns out to face the other way
-// this is the only edit needed.
+// Art orientation, isolated as a flag: if the sheet turns out to face the other
+// way this is the only edit needed.
 const BAT_CRAB_FACES_LEFT = true;
-const BAT_CANNON_FACES_LEFT = true;
 
 // Particle colours. Kept to eight so the draw pass can set fillStyle once per
 // colour and never build a colour string inside the loop.
@@ -75,10 +74,13 @@ const Battle = {
   CHARGE_T: 0.85,       // seconds from tap to full power
   SWEET_LO: 0.78, SWEET_HI: 0.96,   // release band that lands a PERFECT shot
   FIRE_CD: 0.22,
-  HEAVY_DMG: 12, WEAK_DMG: 3,
+  HEAVY_DMG: 12, WEAK_DMG: 4,
   PERFECT_MUL: 1.35,
-  STAGGER_T: 1.35,      // length of the open damage window
-  STAGGER_CD: 2.2,      // he shrugs off the next big hit for this long after
+  // The window has to be longer than one charge-fire-fly cycle (~1.2s measured)
+  // or the reward for staggering him is theoretical.
+  STAGGER_T: 1.8,       // length of the open damage window
+  STAGGER_CD: 3.0,      // he shrugs off the next big hit for this long after,
+                        // which is what buys him a whole attack between windows
   IFRAME_T: 1.1,
   HIT_STOP: 0.08,       // 80ms freeze on a solid hit
 
@@ -97,14 +99,14 @@ const Battle = {
   crab: null,
   balls: null, parts: null, nums: null, marks: null,
   _bi: 0, _pi: 0, _ni: 0, _mi: 0,
-  _prx: null, _pry: null, _prn: 0, _prHit: false,
-  _wasHold: true, _injHold: false, _injMove: 0, _tap: null, _escQ: 0,
+  _prx: null, _pry: null,
+  _blockHold: true, _injHold: false, _injMove: 0, _tap: null, _escQ: 0,
   _installed: false,
 
   // ---- pools -----------------------------------------------------------------
   // Allocated exactly once for the lifetime of the page and then reused: the hot
   // path only ever writes fields on objects that already exist.
-  MAXB: 40, MAXP: 320, MAXN: 16, MAXM: 8, MAXPR: 48,
+  MAXB: 40, MAXP: 320, MAXN: 16, MAXM: 8, MAXPR: 80,
 
   _initPools() {
     if (this.balls) return;
@@ -228,21 +230,25 @@ const Battle = {
     this.retreatT = 0; this.ammoWarnT = 0;
     this.phase = 1; this.pendingPhase = 0;
     this.loot = null;
-    this._wasHold = true;    // a button held over from the last scene must be let go
+    // a button still held from the click that started the fight must be released
+    // once before it charges, or the fight opens by charging on its own
+    this._blockHold = true;
     this._injHold = false; this._injMove = 0; this._tap = null; this._escQ = 0;
     for (const b of this.balls) b.live = false;
     for (const p of this.parts) p.live = false;
     for (const n of this.nums) n.live = false;
     for (const m of this.marks) m.live = false;
 
-    const hpMax = Math.round(110 * (1 + 0.35 * (this.wave - 1)));
+    // Sized so a good player needs roughly a dozen landed shots: long enough to
+    // see all three phases and every attack, short enough to stay a set piece.
+    const hpMax = Math.round(240 * (1 + 0.35 * (this.wave - 1)));
     this.crab = {
       x: 500, face: -1, dir: -1,
       hp: hpMax, hpMax, hpShown: hpMax,
       st: 'arrive', t: 1.9, sub: 0,
       next: 'throw', shots: 0, shotT: 0, targetX: 120,
       hurtT: 0, stagCd: 0, invT: 0,
-      walk: 0, bob: 0, cannonUp: false, tilt: 0, fall: 0,
+      walk: 0, bob: 0, tilt: 0, fall: 0,
       banjo: false, banjoT: 0, taunt: 0, aimAt: 120,
     };
 
@@ -303,9 +309,17 @@ const Battle = {
     return clamp(Math.atan2(dy, dx), -1.40, 0.12);
   },
 
+  // Range, not just damage, is what separates the two shots. A full-power iron
+  // ball crosses the whole dock (v^2/g = 385 units); the scrap shot tops out at
+  // 234, so with an empty crate you have to shove the cannon forward into his
+  // half of the deck to reach him at all. Weak, but never useless.
   _speed(power, heavy) {
-    return heavy ? lerp(130, 340, power) : lerp(92, 196, power);
+    return heavy ? lerp(130, 340, power) : lerp(110, 265, power);
   },
+
+  // Every attack of his scales gently with the wave, so a late-game player in an
+  // Armored Wetsuit (def 1) is not simply immune to the whole fight.
+  _atk(base) { return base + (this.wave - 1) * 0.2; },
 
   _art(name, scale) {
     const img = ASSETS[name];
@@ -313,13 +327,22 @@ const Battle = {
     return { w: img.width * scale, h: img.height * scale };
   },
 
+  // Two scratch rects, filled in place. They are read every frame by the ball
+  // sweep and the arc preview, and a boss fight has no business minting garbage
+  // sixty times a second.
+  _cbox: { x0: 0, x1: 0, y0: 0, y1: 0 },
+  _obox: { x0: 0, x1: 0, y0: 0, y1: 0 },
+
   _crabBox() {
-    const c = this.crab;
-    return { x0: c.x - 15, x1: c.x + 15, y0: DECK_Y - 34, y1: DECK_Y - 1 };
+    const c = this.crab, b = this._cbox;
+    b.x0 = c.x - 15; b.x1 = c.x + 15; b.y0 = DECK_Y - 34; b.y1 = DECK_Y - 1;
+    return b;
   },
 
   _ottoBox() {
-    return { x0: this.px - 19, x1: this.px + 10, y0: DECK_Y - 26, y1: DECK_Y };
+    const b = this._obox;
+    b.x0 = this.px - 19; b.x1 = this.px + 10; b.y0 = DECK_Y - 26; b.y1 = DECK_Y;
+    return b;
   },
 
   // ---- update -------------------------------------------------------------------
@@ -406,7 +429,13 @@ const Battle = {
     let hold = !!this._injHold;
     if (this.pollInput && (Input.mouse.down || Input.keys['Space'])) hold = true;
     const canAct = this.mode === 'fight' && this.fireCd <= 0;
-    if (hold && !this._wasHold && canAct) {
+    // Holding is a STATE, not an edge: while the button is down and the cannon is
+    // free, it charges. This cannot auto-refire, because firing only happens on
+    // RELEASE — and it means a press that arrives during the reload, or a charge
+    // knocked out of Otto's paws by a hit, resumes on its own instead of leaving
+    // a dead cannon in the player's hand until they think to let go and re-press.
+    if (!hold) this._blockHold = false;
+    if (hold && !this._blockHold && !this.charging && canAct) {
       this.charging = true; this.charge = 0;
       SND.tone({ f: 190, f2: 240, type: 'triangle', a: 0.01, d: 0.09, v: 0.12 });
     }
@@ -422,7 +451,6 @@ const Battle = {
         else { this.charging = false; this.charge = 0; }
       }
     }
-    this._wasHold = hold;
 
     // a queued snap shot from click()
     if (this._tap !== null && this._tap !== undefined) {
@@ -471,7 +499,7 @@ const Battle = {
     b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp;
     b.r = heavy ? 3.4 : 2.1;
     b.dmg = heavy ? this.HEAVY_DMG * (perfect ? this.PERFECT_MUL : 1) : this.WEAK_DMG;
-    b.foe = false; b.kind = heavy ? 0 : 1; b.spin = 0; b.perfect = perfect && heavy;
+    b.foe = false; b.kind = heavy ? 0 : 1; b.spin = 0; b.perfect = perfect;
     b.trailT = 0; b.t = 6;
     this.shotsFired++;
 
@@ -627,8 +655,10 @@ const Battle = {
     if (c.hp <= 0) { this._kill(); return; }
 
     // A solid hit staggers him and opens the damage window; the cooldown stops a
-    // stocked-up player from simply locking him down forever.
-    const solid = b.kind === 0;
+    // stocked-up player from simply locking him down forever. An iron ball is
+    // always solid — a scrap shot only counts if it was released in the band, so
+    // an empty crate leaves you one way to stay in the fight: perfect timing.
+    const solid = b.kind === 0 || b.perfect;
     if (solid && !staggered && c.stagCd <= 0 && c.st !== 'interlude') {
       this._stagger();
     } else {
@@ -642,7 +672,6 @@ const Battle = {
     const c = this.crab;
     c.st = 'stagger'; c.t = this.STAGGER_T; c.sub = 0;
     c.stagCd = this.STAGGER_T + this.STAGGER_CD;
-    c.cannonUp = false;
     c.shots = 0;
     this._say('STAGGERED!  HIT HIM', 1.1, '#ffe66e');
     SND.ding();
@@ -659,8 +688,7 @@ const Battle = {
 
   _kill() {
     const c = this.crab;
-    c.st = 'dead'; c.t = 2.4; c.tilt = 0; c.fall = 0;
-    c.cannonUp = false;
+    c.st = 'dead'; c.t = 2.0; c.tilt = 0; c.fall = 0;
     this.slowT = 1.5;              // the pinch: everything drags on the last hit
     this.stopT = 0.13;
     this.flash = 0.9; this.flashCol = '255,255,255';
@@ -708,7 +736,7 @@ const Battle = {
         c.walk += dt * 8;
         if (Math.random() < dt * 12)
           this._pp(c.x + rand(-10, 10), DECK_Y - 1, rand(-30, 10), rand(-30, -6), rand(0.3, 0.6), rand(1, 2), 4, BAT_K_DOT, 120, false);
-        if (c.t <= 0) { this._say('WAVE 1  —  FIGHT!', 1.4, '#ffe66e'); this._toScuttle(0.9); }
+        if (c.t <= 0) { this._say('FIGHT!', 1.2, '#ffe66e'); this._toScuttle(0.9); }
         break;
       }
 
@@ -735,7 +763,7 @@ const Battle = {
           c.st = c.next;
           if (c.st === 'charge') {
             c.targetX = clamp(this.px, BAT_PX_MIN + 8, 300);
-            c.t = 3.2; c.sub = 0;
+            c.t = 2.4; c.sub = 0;
             SND.scrape();
           } else if (c.st === 'throw') {
             c.t = 0.42; c.sub = 0;
@@ -743,7 +771,6 @@ const Battle = {
             c.shotT = 0;
           } else {   // cannon / volley
             c.t = 0.62; c.sub = 0;
-            c.cannonUp = true;
             c.shots = c.st === 'volley' ? 3 : (this.phase >= 3 ? 2 : 1);
             c.shotT = 0;
             SND.pryCreak();
@@ -763,10 +790,10 @@ const Battle = {
           // the cutlass connects
           const ob = this._ottoBox();
           if (c.x - 14 < ob.x1 && c.x + 14 > ob.x0) {
-            this._hurt(1);
+            this._hurt(this._atk(1.25));
             this._burst(this.px, DECK_Y - 14, 14, 2);
           }
-          if (Math.abs(c.x - c.targetX) < 6 || c.t <= 0.8) { c.sub = 1; c.t = 2.4; }
+          if (Math.abs(c.x - c.targetX) < 6 || c.t <= 0.6) { c.sub = 1; c.t = 1.8; }
         } else {
           c.x += (BAT_CX_MIN + 40 - c.x) * Math.min(1, dt * 2.4);
           c.face = 1;
@@ -785,7 +812,7 @@ const Battle = {
           if (c.shotT <= 0 && c.shots > 0) {
             c.shots--;
             c.shotT = 0.3;
-            this._lob(c.x - 12, DECK_Y - 26, clamp(this.px + rand(-14, 14), 20, 360), 1.05, 3, 0.5);
+            this._lob(c.x - 12, DECK_Y - 26, clamp(this.px + rand(-14, 14), 20, 360), 1.05, 3, this._atk(0.5));
             SND.pop(1.3);
           }
           if (c.shots <= 0 && c.shotT <= 0.05) this._toScuttle(this.phase >= 3 ? 0.9 : 1.5);
@@ -812,12 +839,11 @@ const Battle = {
             SND.tone({ f: 620, f2: 620, type: 'square', a: 0.003, d: 0.06, v: 0.1 });
           } else if (c.shots <= 0 && c.shotT <= 0) {
             // wait out the last shot's recoil so the smoke has time to read
-            c.cannonUp = false;
             this._toScuttle(this.phase >= 3 ? 1.0 : 1.6);
           }
         } else if (c.sub === 2 && c.shotT <= 0) {
           c.shots--;
-          this._lob(c.x - 16, DECK_Y - 20, c.aimAt, c.st === 'volley' ? 0.62 : 0.72, 4, 1);
+          this._lob(c.x - 16, DECK_Y - 20, c.aimAt, c.st === 'volley' ? 0.62 : 0.72, 4, this._atk(1));
           this._shake(2.2, 0.14);
           SND.tone({ f: 84, f2: 34, type: 'square', a: 0.004, d: 0.24, v: 0.26 });
           SND.noise({ d: 0.3, v: 0.26, f: 200, f2: 60, q: 0.8 });
@@ -865,8 +891,9 @@ const Battle = {
       }
 
       case 'dead': {
-        c.tilt = Math.min(1.35, c.tilt + dt * 2.2);
-        c.fall = Math.min(6, c.fall + dt * 9);
+        // lies flat ON the planks — any further and he sinks through the trestle
+        c.tilt = Math.min(1.1, c.tilt + dt * 2.0);
+        c.fall = Math.min(2.5, c.fall + dt * 5);
         if (Math.random() < dt * 8)
           this._pp(c.x + rand(-12, 12), DECK_Y - rand(4, 20), rand(-20, 20), rand(-40, -10), rand(0.4, 0.9), rand(1.4, 3), 7, BAT_K_SMOKE, -10, false);
         if (c.t <= 0) this._win();
@@ -893,7 +920,6 @@ const Battle = {
     const c = this.crab;
     c.st = 'interlude'; c.t = this.INTER_T; c.sub = 0;
     c.invT = this.INTER_T;
-    c.cannonUp = false;
     c.taunt = 0;
     // half the time he plays a bar of banjo, half the time he just points and
     // laughs. Either way it is the only moment in the fight nobody is shooting.
@@ -951,7 +977,7 @@ const Battle = {
     mats.crabClaw = 1 + Math.floor(w / 2) + (flawless ? 1 : 0);
     mats.brassScrap = irand(1, 2) + w;
     if (Math.random() < 0.18 + 0.1 * w) mats.pearl = 1;
-    return { wave: w, money, mats, flawless };
+    return { wave: w, money, mats, flawless, keys: Object.keys(mats) };
   },
 
   _win() {
@@ -983,7 +1009,8 @@ const Battle = {
     G.hearts = 1;
     G.stats.deaths++;
     G.flags.battleRaid = true;      // he will be back tomorrow
-    this.loot = { wave: this.wave, money: -stolen, mats: {}, flawless: false };
+    // same shape as a win, so a `done` callback can read it without branching
+    this.loot = { wave: this.wave, money: -stolen, mats: {}, flawless: false, keys: [] };
     Game.save();
     this._say('THE DOCK IS RAIDED...', 2.8, '#e8434c');
     this.flash = 0.9; this.flashCol = '232,67,76';
@@ -1086,20 +1113,39 @@ const Battle = {
     }
   },
 
+  // The single most important readability element in the fight: this is the
+  // "move or eat a cannonball" telegraph. A thin stroke disappeared into the
+  // plank texture, so it gets a filled wash, a dark rim, and a chevron that
+  // falls toward the deck as the fuse burns down.
   _drawMarks(ctx) {
     for (const m of this.marks) {
       if (!m.live) continue;
       const f = 1 - m.t / m.life;
-      const a = 0.35 + 0.5 * Math.abs(Math.sin(f * 14));
-      ctx.strokeStyle = `rgba(232,67,76,${a.toFixed(3)})`;
-      ctx.lineWidth = PIX * 3;
+      const pulse = 0.5 + 0.5 * Math.abs(Math.sin(f * 16));
+      const rx = lerp(17, 9, f), ry = lerp(5, 2.6, f);
+      const my = DECK_Y - 3;
+      ctx.fillStyle = `rgba(232,67,76,${(0.16 + 0.24 * pulse).toFixed(3)})`;
+      ctx.beginPath(); ctx.ellipse(m.x, my, rx, ry, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(20,8,8,0.55)';
+      ctx.lineWidth = PIX * 4;
+      ctx.beginPath(); ctx.ellipse(m.x, my, rx, ry, 0, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = `rgba(255,120,110,${(0.55 + 0.45 * pulse).toFixed(3)})`;
+      ctx.lineWidth = PIX * 2;
+      ctx.beginPath(); ctx.ellipse(m.x, my, rx, ry, 0, 0, TAU); ctx.stroke();
       ctx.beginPath();
-      ctx.ellipse(m.x, DECK_Y - 1.5, lerp(16, 8, f), lerp(4.5, 2.4, f), 0, 0, TAU);
+      ctx.moveTo(m.x - rx * 0.45, my); ctx.lineTo(m.x + rx * 0.45, my);
+      ctx.moveTo(m.x, my - ry * 0.8); ctx.lineTo(m.x, my + ry * 0.8);
       ctx.stroke();
+      // incoming chevron, dropping onto the mark
+      const cy = lerp(my - 30, my - 9, f);
+      ctx.fillStyle = 'rgba(20,8,8,0.5)';
       ctx.beginPath();
-      ctx.moveTo(m.x - 5, DECK_Y - 1.5); ctx.lineTo(m.x + 5, DECK_Y - 1.5);
-      ctx.moveTo(m.x, DECK_Y - 4); ctx.lineTo(m.x, DECK_Y + 1);
-      ctx.stroke();
+      ctx.moveTo(m.x - 4.5, cy - 4.5); ctx.lineTo(m.x + 4.5, cy - 4.5); ctx.lineTo(m.x, cy + 1.5);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#e8434c';
+      ctx.beginPath();
+      ctx.moveTo(m.x - 3.2, cy - 3.6); ctx.lineTo(m.x + 3.2, cy - 3.6); ctx.lineTo(m.x, cy + 0.6);
+      ctx.closePath(); ctx.fill();
     }
   },
 
@@ -1111,7 +1157,9 @@ const Battle = {
     if (c.st === 'alert') return 'crab_10';
     if (c.st === 'charge') return 'crab_4';
     if (c.st === 'throw') return c.sub === 0 ? 'crab_5' : (Math.floor(c.bob * 9) % 2 ? 'crab_4' : 'crab_5');
-    if (c.st === 'cannon' || c.st === 'volley') return c.sub === 0 ? 'crab_6' : 'crab_5';
+    // frame 8 IS him with the cannon shouldered, so the artillery states use it
+    // directly rather than pasting a prop next to him
+    if (c.st === 'cannon' || c.st === 'volley') return c.sub === 0 ? 'crab_6' : 'crab_8';
     if (c.st === 'interlude') return c.banjo ? 'crab_7' : 'crab_5';
     if (c.st === 'arrive') return 'crab_4';
     return `crab_${Math.floor(c.walk * 0.5) % 4}`;   // scuttling: the four idles
@@ -1129,17 +1177,15 @@ const Battle = {
     ctx.ellipse(c.x, DECK_Y + 1, 15, 2.2, 0, 0, TAU);
     ctx.fill();
 
-    // his cannon, wheeled out beside him for the artillery phases
-    if (c.cannonUp) {
-      const ca = this._art('crab_8', BAT_CRAB_S * 0.62);
-      if (ca) drawA(ctx, 'crab_8', c.x - 30 - ca.w / 2, DECK_Y - ca.h + 1, ca.w, ca.h);
-    }
-
     if (!a) return;
     const bob = c.st === 'scuttle' ? Math.abs(Math.sin(c.walk * 0.9)) * 1.6 : 0;
     const wob = c.st === 'stagger' ? Math.sin(this.time * 17) * 0.09 : 0;
+    // Tipping over rotates about his feet, which would swing the body down
+    // through the trestle — so the pivot rises as he goes over and he ends up
+    // lying ACROSS the planks instead of hanging under them.
+    const lay = Math.sin(c.tilt) * a.w * 0.45;
     ctx.save();
-    ctx.translate(Math.round(c.x * DPX) / DPX, DECK_Y + 0.5 + c.fall);
+    ctx.translate(Math.round(c.x * DPX) / DPX, DECK_Y + 0.5 + c.fall - lay);
     ctx.rotate(wob + c.tilt);
     ctx.scale(flip ? -1 : 1, 1);
     // the hurt frame flashes white by drawing it twice with a lighten pass
@@ -1163,29 +1209,66 @@ const Battle = {
       }
     }
     if (c.invT > 0) {
-      ctx.strokeStyle = `rgba(90,210,240,${0.2 + 0.14 * Math.sin(this.time * 9)})`;
-      ctx.lineWidth = PIX * 3;
-      ctx.beginPath();
-      ctx.ellipse(c.x, DECK_Y - 17, 19, 21, 0, 0, TAU);
-      ctx.stroke();
+      // dark rim under a bright one, or the shimmer vanishes into the sky and the
+      // player cannot tell why their shots are bouncing off
+      const puls = 0.5 + 0.5 * Math.sin(this.time * 9);
+      ctx.lineWidth = PIX * 5;
+      ctx.strokeStyle = 'rgba(10,30,44,0.4)';
+      ctx.beginPath(); ctx.ellipse(c.x, DECK_Y - 17, 19, 21, 0, 0, TAU); ctx.stroke();
+      ctx.lineWidth = PIX * 2.5;
+      ctx.strokeStyle = `rgba(150,235,255,${(0.45 + 0.35 * puls).toFixed(3)})`;
+      ctx.beginPath(); ctx.ellipse(c.x, DECK_Y - 17, 19, 21, 0, 0, TAU); ctx.stroke();
+    }
+  },
+
+  // The deck gun has no art of its own — crab_8 is the crab HOLDING a cannon, not
+  // a prop — so the carriage is drawn in code from the same driftwood-and-iron
+  // palette as the dock. Wheels first, then the trail, then the barrel on top.
+  _drawCarriage(ctx) {
+    const cx = this.pivX(), wy = DECK_Y - 3.2;
+    // trail: a wooden wedge braced against the planks
+    ctx.fillStyle = '#5a3a1e';
+    ctx.beginPath();
+    ctx.moveTo(cx - 11, DECK_Y - 1); ctx.lineTo(cx + 5, DECK_Y - 8);
+    ctx.lineTo(cx + 9, DECK_Y - 5.5); ctx.lineTo(cx - 9, DECK_Y + 0.5);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#8a6434';
+    ctx.beginPath();
+    ctx.moveTo(cx - 11, DECK_Y - 1); ctx.lineTo(cx + 5, DECK_Y - 8);
+    ctx.lineTo(cx + 6, DECK_Y - 7); ctx.lineTo(cx - 10, DECK_Y - 0.2);
+    ctx.closePath(); ctx.fill();
+    // cheeks the trunnion sits in
+    ctx.fillStyle = '#6d4526';
+    ctx.fillRect(cx - 4, DECK_Y - 14, 9, 8);
+    ctx.fillStyle = '#c9a271';
+    ctx.fillRect(cx - 4, DECK_Y - 14, 9, 1.2);
+    // wheels
+    for (let i = 0; i < 2; i++) {
+      const wx = cx + (i ? 5.5 : -5.5);
+      ctx.fillStyle = '#3a2a1a';
+      ctx.beginPath(); ctx.arc(wx, wy, 3.4, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#8a6434';
+      ctx.beginPath(); ctx.arc(wx, wy, 2.4, 0, TAU); ctx.fill();
+      // spokes: turn with the roll so the rig reads as moving
+      ctx.strokeStyle = '#5a3a1e';
+      ctx.lineWidth = PIX * 2;
+      const rot = this.px * 0.35;
+      for (let k = 0; k < 2; k++) {
+        const ang = rot + k * Math.PI / 2;
+        ctx.beginPath();
+        ctx.moveTo(wx - Math.cos(ang) * 2.2, wy - Math.sin(ang) * 2.2);
+        ctx.lineTo(wx + Math.cos(ang) * 2.2, wy + Math.sin(ang) * 2.2);
+        ctx.stroke();
+      }
     }
   },
 
   _drawOtto(ctx) {
     const px = this.px;
-    // ---- the carriage: real art for the body, coded barrel for the aim ----------
-    const ca = this._art('crab_8', BAT_CRAB_S * 0.55);
     ctx.fillStyle = 'rgba(30,16,8,0.22)';
     ctx.beginPath();
     ctx.ellipse(px, DECK_Y + 1, 16, 2.2, 0, 0, TAU);
     ctx.fill();
-    if (ca) {
-      ctx.save();
-      ctx.translate(Math.round((px + 4 - this.recoil) * DPX) / DPX, DECK_Y + 0.5);
-      ctx.scale(BAT_CANNON_FACES_LEFT ? -1 : 1, 1);
-      ctx.drawImage(ASSETS['crab_8'], -ca.w / 2, -ca.h, ca.w, ca.h);
-      ctx.restore();
-    }
 
     // ---- Otto, one step behind the breech ---------------------------------------
     const walking = this.moveDir !== 0;
@@ -1204,7 +1287,8 @@ const Battle = {
       ctx.restore();
     }
 
-    // ---- the barrel, swinging with the aim ---------------------------------------
+    // ---- the gun: carriage over Otto's paws, barrel swinging with the aim --------
+    this._drawCarriage(ctx);
     const a = this.aimAngle();
     const pxp = this.pivX(), pyp = this.pivY();
     ctx.save();
@@ -1357,7 +1441,7 @@ const Battle = {
     const sp = this._speed(clamp(this.charge, 0.14, 1), heavy);
     let x = this.pivX() + Math.cos(a) * 15, y = this.pivY() + Math.sin(a) * 15;
     let vx = Math.cos(a) * sp, vy = Math.sin(a) * sp;
-    const step = 0.045;
+    const step = 0.028;   // dense enough to read as a line over a 350-unit arc
     const cb = this._crabBox();
     let n = 0, hit = false;
     for (let i = 0; i < this.MAXPR; i++) {
@@ -1370,13 +1454,16 @@ const Battle = {
       if (y >= DECK_Y && x < BAT_DECK_END) break;
       if (y >= BAT_WATER_Y || x > W + 40) break;
     }
-    this._prn = n; this._prHit = hit;
-    ctx.fillStyle = hit ? '#ffe66e' : '#bfe8f5';
-    for (let i = 0; i < n; i++) {
-      if (i % 2) continue;                       // dotted, not a solid line
-      ctx.globalAlpha = (1 - i / n) * 0.75 + 0.1;
-      const s = hit ? 1.4 : 1.1;
-      ctx.fillRect(this._prx[i] - s / 2, this._pry[i] - s / 2, s, s);
+    // Two passes, dark under bright: a single pale colour vanished completely
+    // against the bright painted sky, which is most of where the arc lives.
+    for (let pass = 0; pass < 2; pass++) {
+      ctx.fillStyle = pass === 0 ? '#14202a' : (hit ? '#ffe66e' : '#fff8e0');
+      const s = pass === 0 ? 2.6 : 1.7;
+      for (let i = 0; i < n; i++) {
+        if (i % 3) continue;                     // dotted, not a solid line
+        ctx.globalAlpha = ((1 - i / n) * 0.6 + 0.4) * (pass === 0 ? 0.55 : 1);
+        ctx.fillRect(this._prx[i] - s / 2, this._pry[i] - s / 2, s, s);
+      }
     }
     ctx.globalAlpha = 1;
     // landing marker
@@ -1431,7 +1518,13 @@ const Battle = {
   _drawAmmo(ctx) {
     const n = this.ammo();
     uiPanel(ctx, 6, 40, 74, 20, 0.88, true);
-    drawAC(ctx, 'crab_8', 15, 50, 13);
+    // an iron ball, drawn rather than borrowed: no asset in the manifest is one
+    ctx.fillStyle = n > 0 ? '#2a2f33' : 'rgba(42,47,51,0.35)';
+    ctx.beginPath(); ctx.arc(16, 50, 5, 0, TAU); ctx.fill();
+    if (n > 0) {
+      ctx.fillStyle = '#6a747c';
+      ctx.fillRect(13.5, 46.8, 2.6, 1.8);
+    }
     const col = n > 0 ? '#4a3020' : '#e8434c';
     text(ctx, n > 0 ? `x${n}` : 'EMPTY', 26, 46.5, { size: 8, color: col, shadow: false });
     if (n <= 0)
@@ -1459,7 +1552,7 @@ const Battle = {
   },
 
   _drawLoot(ctx) {
-    const keys = Object.keys(this.loot.mats);
+    const keys = this.loot.keys || [];
     const h = 46 + keys.length * 13;
     const w = 176, x = W / 2 - w / 2, y = 118;
     uiPanel(ctx, x, y, w, h, 0.95, true);

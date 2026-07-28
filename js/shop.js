@@ -5,7 +5,9 @@ const Shop = {
   open: false,
   tab: 0,
   scroll: 0,
-  TABS: ['SELL', 'GEAR', 'BUILD', 'DECOR'],
+  TABS: ['SELL', 'STALL', 'GEAR', 'BUILD', 'DECOR'],
+  STALL_TAB: 1,          // Sprout's counter: seeds and livestock
+
   WX: 40, WY: 22, WW: 400, WH: 226,
   _rows: [],
 
@@ -73,7 +75,40 @@ const Shop = {
       }
       if (!any) push({ info: 'Storage is empty. Go scrape the pilings!' });
       else push({ label: 'SELL EVERYTHING', sub: 'one big crate', btn: `$${total}`, act: () => this.sellKeys(ITEM_KEYS) });
-    } else if (this.tab === 1) {
+    } else if (this.tab === this.STALL_TAB) {
+      // STALL — the only place you BUY things that start a production chain.
+      // Both catalogues are owned by their own module; this just renders them.
+      const F = typeof Farm !== 'undefined' ? Farm : null;
+      const S = typeof Stock !== 'undefined' ? Stock : null;
+      if (F && F.SEEDS) {
+        push({ info: 'SEEDS — plant on a tilled bed, water it daily' });
+        for (const sd of F.SEEDS) {
+          const held = F.seedCount ? F.seedCount(sd.key) : 0;
+          push({
+            gart: sd.art, label: sd.name,
+            sub: (sd.desc || '') + (held ? `   (holding ${held})` : ''),
+            btn: `$${sd.price}`, price: sd.price,
+            act: () => F.buySeed(sd.key, 1),
+          });
+        }
+      }
+      if (S && S.SPECIES) {
+        const pens = (G.built && G.built.pen) || 0;
+        push({ info: pens
+          ? `LIVESTOCK — ${pens} pen${pens > 1 ? 's' : ''} built, room for ${pens * (S.PEN_CAP || 3)}`
+          : 'LIVESTOCK — build a pen at the crafting bench first' });
+        for (const sp of S.SPECIES) {
+          push({
+            gart: 'stock_' + sp.key + '_3', label: sp.name,
+            sub: `${sp.desc}  Matures in ${sp.matureDays}d.`,
+            btn: pens ? `$${sp.price}` : 'NO PEN', price: sp.price,
+            // buyAnimal owns the whole transaction (pen check, cash, naming, save)
+            act: pens ? () => S.buyAnimal(sp.key) : null,
+          });
+        }
+      }
+      if (!F && !S) push({ info: 'The stall is shuttered.' });
+    } else if (this.tab === 2) {
       // GEAR
       const tier = (arr, cur, applyKey, gart) => {
         if (cur + 1 < arr.length) {
@@ -98,7 +133,7 @@ const Shop = {
         if (G.gear[key]) push({ gart: singleArt[key], label: it.name, sub: it.desc, btn: 'OWNED' });
         else push({ gart: singleArt[key], label: it.name, sub: it.desc, btn: `$${it.price}`, price: it.price, act: () => this.buy(it.price, () => { G.gear[key] = true; }, it.name) });
       }
-    } else if (this.tab === 2) {
+    } else if (this.tab === 3) {
       // BUILD
       if (G.bridge < 3) {
         const b = G.bridge === 1 ? BUILDS.bridge2 : BUILDS.bridge3;
@@ -120,7 +155,7 @@ const Shop = {
 
   update(dt) {
     if (Input.p('Escape')) { this.close(); return; }
-    for (let i = 0; i < 4; i++)
+    for (let i = 0; i < this.TABS.length; i++)
       if (Input.p('Digit' + (i + 1))) { this.tab = i; this.scroll = 0; SND.blip(); }
     this.scroll = clamp(this.scroll + Input.wheelDelta, 0, 30);
 
@@ -143,8 +178,8 @@ const Shop = {
       }
       // tabs
       for (let i = 0; i < this.TABS.length; i++) {
-        const tx = this.WX + 12 + i * 58;
-        if (mx > tx && mx < tx + 54 && my > this.WY + 26 && my < this.WY + 42) {
+        const tx = this.WX + 12 + i * 50;
+        if (mx > tx && mx < tx + 46 && my > this.WY + 26 && my < this.WY + 42) {
           this.tab = i; this.scroll = 0; SND.blip(); return;
         }
       }
@@ -207,12 +242,12 @@ const Shop = {
     text(ctx, 'X', X + WW - 17, Y + 7.5, { size: 8, color: cHov ? '#ff5a6a' : '#2ef2a0', align: 'center', shadow: false });
 
     // ---- balance readout ----
-    text(ctx, 'BAL', X + WW - 112, Y + 27, { size: 6.5, color: 'rgba(125,255,207,0.6)', shadow: false });
+    text(ctx, 'BAL', X + WW - 116, Y + 27, { size: 6.5, color: 'rgba(125,255,207,0.6)', shadow: false });
     text(ctx, `$${G.money}`.padStart(7, ' '), X + WW - 92, Y + 25, { size: 10, color: '#2ef2a0', shadow: false });
 
     // ---- tabs as terminal switches ----
     for (let i = 0; i < this.TABS.length; i++) {
-      const tx = X + 12 + i * 58, ty = Y + 26, tw = 54, th = 16;
+      const tx = X + 12 + i * 50, ty = Y + 26, tw = 46, th = 16;
       const sel = i === this.tab;
       const hov = mx > tx && mx < tx + tw && my > ty && my < ty + th;
       ctx.fillStyle = sel ? 'rgba(46,242,160,0.20)' : (hov ? 'rgba(46,242,160,0.10)' : 'rgba(46,242,160,0.04)');
@@ -220,7 +255,7 @@ const Shop = {
       ctx.strokeStyle = sel ? '#2ef2a0' : 'rgba(46,242,160,0.35)'; ctx.lineWidth = 1;
       ctx.strokeRect(tx + 0.5, ty + 0.5, tw - 1, th - 1);
       text(ctx, `[${i + 1}]${this.TABS[i]}`, tx + tw / 2, ty + 4.5, {
-        size: 6.5, color: sel ? '#baffe6' : 'rgba(125,255,207,0.65)', align: 'center', shadow: false });
+        size: 6, color: sel ? '#baffe6' : 'rgba(125,255,207,0.65)', align: 'center', shadow: false });
     }
 
     // ---- rows as log lines ----
@@ -276,7 +311,7 @@ const Shop = {
       }
     }
     // the hint lives in the title bar — the last log line owns the bottom edge
-    text(ctx, TouchUI.enabled ? 'tap X to disconnect' : '[1-4] tabs  [Esc] disconnect',
+    text(ctx, TouchUI.enabled ? 'tap X to disconnect' : '[1-5] tabs  [Esc] disconnect',
       X + WW - 74, Y + 7.5, { size: 6, color: 'rgba(125,255,207,0.5)', align: 'right', shadow: false });
     ctx.restore();
   },

@@ -90,7 +90,7 @@
   // claims Digit1..0 — so it only gets the keys when no modal owns them. Hotbar
   // guards itself against Shop and Bench; these two it cannot know about.
   const modalUp = () => (M.Craft && M.Craft.open) || (M.NPCs && M.NPCs.open) ||
-                        (M.Battle && M.Battle.active);
+                        (M.Stock && M.Stock.open) || (M.Battle && M.Battle.active);
 
   const gUpdate = Game.globalUpdate.bind(Game);
   Game.globalUpdate = function (dt) {

@@ -79,6 +79,7 @@ const Craft = {
     grill:      { name: 'Grilled Hogfish',  glyph: 'plate',   mine: true },
     custard:    { name: 'Moon Custard',     glyph: 'custard', mine: true },
     skewer:     { name: 'Urchin Skewer',    glyph: 'skewer',  mine: true },
+    rolls:      { name: 'Curl & Roe Rolls', glyph: 'roll',    mine: true },
     // farm produce (Farm.CROPS keys)
     blade: { name: 'Kelp Blade', art: 'crop_blade_p' },
     curl:  { name: 'Sea Curl',   art: 'crop_curl_p' },
@@ -102,6 +103,7 @@ const Craft = {
     swift: { name: 'Swift Paws',  color: '#a0f2b4', speed: 1.25, desc: 'Otto walks and swims quicker.' },
     sharp: { name: 'Sharp Eye',   color: '#5ad2f0', scrape: 1.3, desc: 'The scraper bites deeper.' },
     lucky: { name: 'Moonlucky',   color: '#e0b0ff', luck: 1.5,   desc: 'The reef feels generous.' },
+    steady: { name: 'Steady Paws', color: '#ffc07a', pry: 1.2, def: 0.7, desc: 'Wider pry window, and knocks hurt less.' },
   },
   MAX_BUFFS: 6,
 
@@ -180,6 +182,10 @@ const Craft = {
       cost: { stock_hogfish_p: 1, berry: 1, charcoal: 1 }, money: 0, out: { key: 'grill', n: 1 }, art: null,
       heal: 1, buff: { key: 'swift', t: 180 },
       desc: 'Charred outside, sweet inside. Otto fairly skips afterwards.' },
+    { key: 'rolls', name: 'Curl & Roe Rolls', tab: 'cook',
+      cost: { stock_sunfish_p: 1, curl: 1 }, money: 0, out: { key: 'rolls', n: 1 }, art: null,
+      heal: 1.5, buff: { key: 'steady', t: 180 },
+      desc: 'Sea curl wrapped round sunfish roe. Settles the nerves and the paws.' },
     { key: 'custard', name: 'Moon Custard', tab: 'cook',
       cost: { moon: 1, stock_puffer_p: 1 }, money: 0, out: { key: 'custard', n: 1 }, art: null,
       heal: 4, buff: { key: 'lucky', t: 240 },
@@ -491,10 +497,12 @@ const Craft = {
     return m;
   },
 
-  airMul() { return this.factor('air'); },
+  airMul() { return this.factor('air'); },        // multiply air DRAIN by this
   speedMul() { return this.factor('speed'); },
   scrapeMul() { return this.factor('scrape'); },
   luckMul() { return this.factor('luck'); },
+  pryMul() { return this.factor('pry'); },        // widen the pry sweet spot
+  defMul() { return this.factor('def'); },        // multiply incoming damage by this
 
   // ---- little helpers other systems want ---------------------------------
 
@@ -824,6 +832,16 @@ const Craft = {
       ctx.beginPath(); ctx.arc(0.8 * u, -1.4 * u, 1.1 * u, 0, TAU); ctx.fill();
       ctx.fillStyle = '#cfc8dc';
       ctx.fillRect(-3.4 * u, 3.4 * u, 6.8 * u, 0.8 * u);
+    } else if (g === 'roll') {
+      ctx.fillStyle = '#3f6a3a';                        // two kelp-wrapped rolls
+      ctx.beginPath(); ctx.ellipse(-2.4 * u, 0.6 * u, 2.6 * u, 3 * u, 0, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(2.6 * u, 1 * u, 2.6 * u, 3 * u, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#f2e6c9';                        // the pale middle
+      ctx.beginPath(); ctx.ellipse(-2.4 * u, 0.6 * u, 1.5 * u, 1.9 * u, 0, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(2.6 * u, 1 * u, 1.5 * u, 1.9 * u, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#eda93e';                        // roe
+      ctx.beginPath(); ctx.arc(-2.4 * u, 0.6 * u, 0.9 * u, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(2.6 * u, 1 * u, 0.9 * u, 0, TAU); ctx.fill();
     } else if (g === 'skewer') {
       ctx.fillStyle = wood;
       ctx.fillRect(-0.5 * u, -4.6 * u, 1 * u, 9.2 * u);
@@ -1161,17 +1179,21 @@ const Craft = {
     // ---- rain barrel ---------------------------------------------------
     const rx = site('barrel');
     if (rx > 0 && G.built.barrel) {
+      // belly out the staves a little, or a 12x17 box reads as a crate
       ctx.fillStyle = '#8a6434';
-      ctx.fillRect(rx - 6, D - 17, 12, 17);
+      ctx.fillRect(rx - 5.4, D - 18, 10.8, 18);
+      ctx.fillRect(rx - 6.2, D - 14, 12.4, 10);
       ctx.fillStyle = 'rgba(90,58,30,0.35)';
-      for (let i = 0; i < 3; i++) ctx.fillRect(rx - 6 + i * 4.2, D - 17, PIX * 2, 17);
-      ctx.fillStyle = '#5a3a1e';                     // hoops
-      ctx.fillRect(rx - 6.6, D - 14, 13.2, 1.4);
-      ctx.fillRect(rx - 6.6, D - 5, 13.2, 1.4);
+      for (let i = 0; i < 3; i++) ctx.fillRect(rx - 4 + i * 3.4, D - 18, PIX * 2, 18);
+      ctx.fillStyle = '#5a3a1e';                     // iron hoops
+      ctx.fillRect(rx - 6.4, D - 14.6, 12.8, 1.4);
+      ctx.fillRect(rx - 6.4, D - 5.4, 12.8, 1.4);
+      ctx.fillStyle = '#9fc4d4';                     // rim, seen from slightly above
+      ctx.beginPath(); ctx.ellipse(rx, D - 18, 5.6, 1.7, 0, 0, TAU); ctx.fill();
       ctx.fillStyle = '#5ad2f0';                     // rainwater
-      ctx.fillRect(rx - 5, D - 18.2, 10, 1.6);
-      ctx.fillStyle = 'rgba(191,232,245,0.7)';
-      ctx.fillRect(rx - 5, D - 18.2, 10, 0.6);
+      ctx.beginPath(); ctx.ellipse(rx, D - 17.8, 4.4, 1.2, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(191,232,245,0.75)';
+      ctx.fillRect(rx - 3.4, D - 18.4, 5, 0.6);
     }
 
     // ---- seed shed -----------------------------------------------------
@@ -1196,7 +1218,12 @@ const Craft = {
     const gx = site('scarer');
     if (gx > 0 && G.built.scarer) {
       const sway = Math.sin(this.time * 1.4) * 1.6;
-      drawStanding(ctx, 'pole', gx, 5, 1);
+      // coded post: the `pole` asset is 514x1106, so any sane width makes it far
+      // too short to stand a scarecrow on
+      ctx.fillStyle = '#8a6434';
+      ctx.fillRect(gx - 1.2, D - 38, 2.4, 38);
+      ctx.fillStyle = 'rgba(90,58,30,0.4)';
+      ctx.fillRect(gx + 0.6, D - 38, 0.8, 38);
       ctx.fillStyle = '#6d4526';                     // arms
       ctx.fillRect(gx - 9, D - 30, 18, 1.8);
       ctx.fillStyle = '#b8452c';                     // rag, flapping
