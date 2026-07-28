@@ -648,10 +648,13 @@ const Stock = {
     const h = this.adult(a) ? sp.h : sp.h * 0.62;
     const cx = this.PEN_DEF[a.penIndex].x;
     const swimW = this.PEN_HW - 6 - h * 0.35;
-    const top = this.PEN_TOP + 8 + h * 0.5;
-    const bot = this.PEN_TOP + this.PEN_H - 6 - h * 0.5;
-    const midY = lerp(top, bot, m.lane ? 0.68 : 0.28);
-    const swimH = (bot - top) * 0.25 * m.ay;
+    // The band is only ~32 units tall between the planks and the hotbar strip, so
+    // it is used to the edges: 3 off the top for the floats, 4 off the bottom so a
+    // tail never pokes under the pen's bottom rope.
+    const top = this.PEN_TOP + 3 + h * 0.5;
+    const bot = this.PEN_TOP + this.PEN_H - 4 - h * 0.5;
+    const midY = lerp(top, bot, m.lane ? 0.72 : 0.24);
+    const swimH = (bot - top) * 0.26 * m.ay;
     const ph = this.time * m.sp + m.ph;
     return {
       x: cx + Math.sin(ph) * swimW * m.ax,
@@ -809,7 +812,9 @@ const Stock = {
 
     // an unfed animal nudges the surface and puts up its own small "!"
     if (!a.fed && !a.product) {
-      const py = pos.y - pos.h * 0.6 - 4.5 + Math.sin(this.time * 2.6 + m.ph) * 0.7;
+      // clamped under the planks: anything above PEN_TOP would draw on the deck
+      const py = Math.max(this.PEN_TOP + 1, pos.y - pos.h * 0.6 - 4.5)
+        + Math.sin(this.time * 2.6 + m.ph) * 0.7;
       ctx.fillStyle = 'rgba(255,230,110,0.75)';
       ctx.fillRect(pos.x - 0.4, py, 0.8, 2.2);
       ctx.fillRect(pos.x - 0.4, py + 3, 0.8, 0.8);
@@ -823,7 +828,11 @@ const Stock = {
     const sp = this.byKey(a.species);
     const m = this._motion(a);
     const bx = pos.x;
-    const by = pos.y - pos.h * 0.6 - 8 + Math.sin(this.time * 1.9 + m.ph) * 1.2;
+    // The bubble rises to just under the planks and stays there — floating it a
+    // fixed distance above the animal would put it on the deck. The lane offset
+    // keeps two bubbles from sitting on top of each other.
+    const by = Math.max(this.PEN_TOP + 7 + m.lane * 4, pos.y - pos.h * 0.6 - 8)
+      + Math.sin(this.time * 1.9 + m.ph) * 1.1;
 
     ctx.fillStyle = 'rgba(150,225,245,0.26)';
     ctx.beginPath(); ctx.arc(bx, by, 6.6, 0, TAU); ctx.fill();

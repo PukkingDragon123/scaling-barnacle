@@ -53,7 +53,8 @@ const Battle = {
   // ---- public surface --------------------------------------------------------
   active: false,        // true from enter() until the fight is handed back
   ammoKey: 'cannonball',
-  loot: null,           // last fight's reward: { wave, money, mats, flawless }
+  loot: null,           // last result: { wave, money, mats, keys, flawless }
+                        // money is NEGATIVE on a loss (what he stole)
   done: null,           // function(win, loot) — set by the integrator
   pollInput: true,      // false = the host drives click()/press()/release() only
 

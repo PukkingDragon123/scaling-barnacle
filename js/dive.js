@@ -17,11 +17,14 @@ const DiveScene = {
   shakeT: 0, flash: 0, flashCol: '232,60,60', slowT: 0,
   msg: '', msgT: 0, banner: '', bannerT: 0,
   time: 0, wallCanvas: null,
+  _vCv: null, _vCtx: null, _vKey: -1,
+  _poleCv: null, _sc: null,
   over: false, overT: 0,
 
   enter(p) {
     this.p = p;
     this.time = 0;
+    if (typeof DiveFX !== 'undefined') DiveFX.seedReef(p, 3000);
     this.camY = 0; this.camVel = 0;
     this.maxCam = 1e9;   // the sea has no floor — your O2 does
     this.reward = null;
@@ -206,6 +209,7 @@ const DiveScene = {
   },
 
   popNode(n) {
+    if (typeof DiveFX !== 'undefined') DiveFX.pryPop(n.x, n.y - this.camY);
     n.alive = false;
     const drop = NODE_DEFS[n.kind].drop;
     const gained = [drop];
@@ -475,6 +479,7 @@ const DiveScene = {
           this.scrapeT = scr.tick;
           n.hp -= scr.dmg; n.shake = 1;
           SND.scrape();
+          if (typeof DiveFX !== 'undefined') DiveFX.scrapeHit(mx, my, n.kind);
           for (let i = 0; i < 4; i++)
             this.particles.push({
               x: mx + rand(-5, 5), y: my + rand(-5, 5),
@@ -784,7 +789,10 @@ const DiveScene = {
     const night = isNight(G.clock) ? 0.55 : 0;
     const bgH = 432, bgOver = bgH - H;
     const bgOff = Math.min(bgOver, this.camY * 0.06);
-    drawA(ctx, `bg_deep${Math.floor(this.time * 5) % 8}`, 0, -bgOff, W, bgH);
+    const bgName = `bg_deep${Math.floor(this.time * 5) % 8}`;
+    const bgCv = this.scaled(bgName, W, bgH, 0);
+    if (bgCv) ctx.drawImage(bgCv, 0, -bgOff, W, bgH);
+    else drawA(ctx, bgName, 0, -bgOff, W, bgH);
     // the deeper you go, the bluer and blacker it gets (headlamp overlay handles the rest)
     ctx.fillStyle = `rgba(3,10,22,${clamp(depthFrac * 0.45 + night * 0.3, 0, 0.7)})`;
     ctx.fillRect(0, 0, W, H);
@@ -793,19 +801,31 @@ const DiveScene = {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 0.55 * (1 - this.camY / 260);
-      drawA(ctx, `bg_rays${Math.floor(this.time * 6) % 6}`, 0, -this.camY * 0.35, W, 184);
+      const ryName = `bg_rays${Math.floor(this.time * 6) % 6}`;
+      const ryCv = this.scaled(ryName, W, 184, 1);
+      if (ryCv) ctx.drawImage(ryCv, 0, -this.camY * 0.35, W, 184);
+      else drawA(ctx, ryName, 0, -this.camY * 0.35, W, 184);
       ctx.restore();
     }
 
     // shark far pass (behind wall)
     if (this.shark && this.shark.state === 'pass') this.drawShark(ctx, this.shark);
 
+    // the reef behind the piling
+    if (typeof DiveFX !== 'undefined') DiveFX.drawReef(ctx, this.camY, false);
+
     // the great pole, tiled forever downward
     const poleW = 208;
     const poleH = assetH('pole', poleW);
     const px0 = this.WALL_X - 14;
+    // The piling is a 514x1106 source blown up to 208 logical wide and tiled two
+    // or three deep — that is several million filtered destination pixels every
+    // frame. Scale it ONCE into a canvas at its exact on-screen size, then the
+    // per-frame work is a 1:1 blit.
+    const pole = this.poleTile(poleW, poleH);
     for (let ti = Math.floor(this.camY / poleH); ti * poleH < this.camY + H; ti++) {
-      drawA(ctx, 'pole', px0, ti * poleH - this.camY, poleW, poleH);
+      if (pole) ctx.drawImage(pole, px0, ti * poleH - this.camY, poleW, poleH);
+      else drawA(ctx, 'pole', px0, ti * poleH - this.camY, poleW, poleH);
     }
     // nodes
     for (const n of this.nodes) {
@@ -911,26 +931,32 @@ const DiveScene = {
     const darkBase = clamp(depthFrac * 0.72 + night * 0.35, 0, 0.9) + this.gloom * 0.5;
     const dark = clamp(darkBase, 0, 0.94);
     if (dark > 0.02) {
-      if (!this._darkCv) {
-        this._darkCv = document.createElement('canvas');
-        this._darkCv.width = W * DPX; this._darkCv.height = H * DPX;
-        this._darkCtx = this._darkCv.getContext('2d');
-        this._darkCtx.scale(DPX, DPX);
-      }
-      const dc = this._darkCtx;
-      dc.clearRect(0, 0, W, H);
-      dc.fillStyle = `rgba(2,6,10,${dark})`;
-      dc.fillRect(0, 0, W, H);
+      // The dark used to be built on its own full-size canvas each frame —
+      // clear, fill, punch a hole, blit — which is four full-screen passes at
+      // device density. Instead: paint the falloff ONLY in the lamp's box, and
+      // fence the rest of the screen with four flat rects. Same picture, one
+      // small gradient fill.
+      const solid = `rgba(2,6,10,${dark})`;
       if (G.gear.lamp) {
-        dc.globalCompositeOperation = 'destination-out';
-        const rg = dc.createRadialGradient(Input.mouse.x, Input.mouse.y, 10, Input.mouse.x, Input.mouse.y, 95);
-        rg.addColorStop(0, 'rgba(0,0,0,0.95)');
-        rg.addColorStop(1, 'rgba(0,0,0,0)');
-        dc.fillStyle = rg;
-        dc.beginPath(); dc.arc(Input.mouse.x, Input.mouse.y, 96, 0, TAU); dc.fill();
-        dc.globalCompositeOperation = 'source-over';
+        const lx = Input.mouse.x, ly = Input.mouse.y, R = 96;
+        const rg = ctx.createRadialGradient(lx, ly, 8, lx, ly, R);
+        rg.addColorStop(0, 'rgba(2,6,10,0)');
+        rg.addColorStop(0.55, `rgba(2,6,10,${dark * 0.45})`);
+        rg.addColorStop(1, solid);
+        ctx.fillStyle = rg;
+        ctx.fillRect(lx - R, ly - R, R * 2, R * 2);
+        ctx.fillStyle = solid;
+        // the four bands around the lamp box, clamped to the screen
+        const x0 = Math.max(0, lx - R), x1 = Math.min(W, lx + R);
+        const y0 = Math.max(0, ly - R), y1 = Math.min(H, ly + R);
+        if (y0 > 0) ctx.fillRect(0, 0, W, y0);
+        if (y1 < H) ctx.fillRect(0, y1, W, H - y1);
+        if (x0 > 0) ctx.fillRect(0, y0, x0, y1 - y0);
+        if (x1 < W) ctx.fillRect(x1, y0, W - x1, y1 - y0);
+      } else {
+        ctx.fillStyle = solid;
+        ctx.fillRect(0, 0, W, H);
       }
-      ctx.drawImage(this._darkCv, 0, 0, W, H);
       if (G.gear.lamp) {
         ctx.fillStyle = 'rgba(255,240,190,0.06)';
         ctx.beginPath(); ctx.arc(Input.mouse.x, Input.mouse.y, 60, 0, TAU); ctx.fill();
@@ -1111,6 +1137,13 @@ const DiveScene = {
       ctx.fillRect(W / 2 - 39, 61, Math.round(78 * clamp(this.shark.sus, 0, 1)), 3);
     }
 
+    // the reef in front, parallaxed and larger, plus the debris from your work
+    if (typeof DiveFX !== 'undefined') {
+      DiveFX.drawReef(ctx, this.camY, true);
+      DiveFX.drawDebris(ctx);
+      DiveFX.drawWater(ctx, this.camY, this.time);
+    }
+
     // Otto himself, swimming alongside — the uploaded swim cycle, so the dive
     // reads as you being in the water rather than a disembodied cursor
     this.drawSwimmer(ctx);
@@ -1124,12 +1157,9 @@ const DiveScene = {
       ctx.fillRect(0, 0, W, H);
     }
 
-    // vignette
-    const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.55, W / 2, H / 2, H * 0.95);
-    vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, `rgba(0,0,10,${0.35 + this.gloom * 0.4})`);
-    ctx.fillStyle = vg;
-    ctx.fillRect(0, 0, W, H);
+    // vignette, baked per 5% of gloom: evaluating a radial gradient over every
+    // device pixel every frame is one of the most expensive things in here
+    ctx.drawImage(this.vignette(), 0, 0, W, H);
 
     ctx.restore();
 
@@ -1189,11 +1219,92 @@ const DiveScene = {
     }
   },
 
+  // A tiny cache of pre-scaled frames. The deep-water backdrop is a 1440x1296
+  // source blown up to 1920x1728 device pixels; filtering that every frame is
+  // the single most expensive thing in the dive. The animation only steps five
+  // times a second, so scale each frame once and blit it until it changes.
+  // Two slots: the water backdrop and the ray band, which cycle independently.
+  scaled(name, w, h, slot) {
+    const img = ASSETS[name];
+    if (!img || !img.width) return null;
+    const pw = Math.round(w * DPX), ph = Math.round(h * DPX);
+    if (!this._sc) this._sc = [];
+    let e = this._sc[slot];
+    if (e && e.name === name && e.cv.width === pw && e.cv.height === ph) return e.cv;
+    if (!e || e.cv.width !== pw || e.cv.height !== ph) {
+      const cv = document.createElement('canvas');
+      cv.width = pw; cv.height = ph;
+      const c = cv.getContext('2d');
+      c.imageSmoothingEnabled = true;
+      c.imageSmoothingQuality = 'high';
+      e = this._sc[slot] = { name: null, cv, ctx: c };
+    }
+    e.ctx.clearRect(0, 0, pw, ph);
+    e.ctx.drawImage(img, 0, 0, pw, ph);
+    e.name = name;
+    return e.cv;
+  },
+
+  // the piling, pre-scaled to its draw size at device density
+  poleTile(w, h) {
+    const img = ASSETS['pole'];
+    if (!img || !img.width) return null;
+    const pw = Math.round(w * DPX), ph = Math.round(h * DPX);
+    if (this._poleCv && this._poleCv.width === pw && this._poleCv.height === ph) return this._poleCv;
+    const cv = document.createElement('canvas');
+    cv.width = pw; cv.height = ph;
+    const c = cv.getContext('2d');
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = 'high';
+    c.drawImage(img, 0, 0, pw, ph);
+    this._poleCv = cv;
+    return cv;
+  },
+
+  // one canvas, redrawn only when the gloom actually steps
+  vignette() {
+    const key = Math.round(clamp(this.gloom, 0, 1) * 20);
+    if (this._vKey === key && this._vCv) return this._vCv;
+    if (!this._vCv) {
+      this._vCv = document.createElement('canvas');
+      this._vCv.width = W * DPX; this._vCv.height = H * DPX;
+      this._vCtx = this._vCv.getContext('2d');
+      this._vCtx.scale(DPX, DPX);
+    }
+    const c = this._vCtx;
+    c.clearRect(0, 0, W, H);
+    const vg = c.createRadialGradient(W / 2, H / 2, H * 0.55, W / 2, H / 2, H * 0.95);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, `rgba(0,0,10,${0.35 + (key / 20) * 0.4})`);
+    c.fillStyle = vg;
+    c.fillRect(0, 0, W, H);
+    this._vKey = key;
+    return this._vCv;
+  },
+
   drawCursor(ctx) {
     const mx = Input.mouse.x, my = Input.mouse.y;
     const scraping = Input.mouse.down;
     const hover = this.nodeAt(mx, my + this.camY);
     const pryMode = !!this.pry || (hover && hover.stage === 'exposed' && (hover.kind !== 'urchin' || G.gear.gloves));
+
+    // the big, weighted tool — a spring-follow object in Otto's paws
+    if (typeof DiveFX !== 'undefined') {
+      if (this.numbT > 0) {
+        // a stung paw cannot hold steady
+        ctx.save();
+        ctx.translate(rand(-1.6, 1.6), rand(-1.6, 1.6));
+      }
+      DiveFX.drawTool(ctx, mx, my, {
+        tool: pryMode ? 'pry' : 'scraper',
+        scraping: scraping && !pryMode,
+        prying: !!this.pry,
+        power: this.pry ? this.pry.marker : 0,
+        dt: 1 / 60,
+      });
+      if (this.numbT > 0) ctx.restore();
+      return;
+    }
     ctx.save();
     ctx.translate(mx, my);
     if (this.numbT > 0) {
