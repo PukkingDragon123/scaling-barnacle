@@ -1,13 +1,15 @@
 // ---- house interior: the painted cutaway, furnished with the uploaded props ----
 'use strict';
 
-// The hut sprite shown whole, fitted by height. Measured off the art: the porch
-// deck slab runs y 292..321 of 434, and spans x 0.104..0.892 — so the boards you
-// stand on are at 0.70 of the sprite height, between those two edges.
-const HUT_H = 252, HUT_W = Math.round(HUT_H * 575 / 434);
-const HUT_X = Math.round((W - HUT_W) / 2), HUT_Y = 8;
-const PORCH_L = HUT_X + HUT_W * 0.135, PORCH_R = HUT_X + HUT_W * 0.865;
-const BED_X = Math.round(PORCH_L + 50), TABLE_X = Math.round(PORCH_R - 44);
+// The new interior cutaway (house_in2), sized so the room fills the frame and the
+// stilts carry off the bottom edge. Measured down the middle of the art
+// (1400x1286): wall to y 0.501, then the floor boards 0.504..0.523, then the dock
+// below. So you stand at 0.519 — on the boards, just shy of their front lip.
+const HUT_H = 290, HUT_W = Math.round(HUT_H * 1400 / 1286);
+const HUT_X = Math.round((W - HUT_W) / 2), HUT_Y = 22;
+const BOARD_TOP = HUT_Y + HUT_H * 0.507;        // where the dock's deck must line up
+const PORCH_L = HUT_X + HUT_W * 0.30, PORCH_R = HUT_X + HUT_W * 0.945;
+const BED_X = Math.round(PORCH_L + 40), TABLE_X = Math.round(PORCH_R - 40);
 
 const HouseScene = {
   customCursor: false,
@@ -16,7 +18,7 @@ const HouseScene = {
   aquaFish: [],
   embers: [],
 
-  FLOOR: 184,      // the porch boards, measured off the hut sprite
+  FLOOR: Math.round(HUT_Y + HUT_H * 0.519),   // standing on the boards
 
   enter(opts) {
     this.time = 0;
@@ -99,16 +101,15 @@ const HouseScene = {
     // The dock, tiled behind the hut at the porch line and scaled to match this
     // view — outside, the house is part of the pier, so it has to be here too or
     // it reads as a shed adrift in open water.
-    const segW = Math.round(88 * HUT_W / 124);   // the exterior's 88 at this zoom
+    const segW = Math.round(88 * HUT_W / 86);    // the exterior's 88 at this zoom
     const segH = assetH('dock_11', segW);
-    // align deck TOPS: the hut's porch boards start at 0.6728 of its sprite
-    const segTop = HUT_Y + HUT_H * 0.6728 - segH * 0.0352;
+    const segTop = BOARD_TOP - segH * 0.0352;    // deck top to deck top
     for (let x = HUT_X % (segW - 1) - segW; x < W + segW; x += segW - 1) {
       drawA(ctx, 'dock_11', x, segTop, segW, segH);
     }
 
-    // the whole hut sprite, unzoomed — you see the roof, the porch and the stilts
-    drawA(ctx, 'hut_full', HUT_X, HUT_Y, HUT_W, HUT_H);
+    // the cutaway itself, over the dock
+    drawA(ctx, 'house_in2', HUT_X, HUT_Y, HUT_W, HUT_H);
 
     // furniture, standing on the porch boards
     const stand = (name, cx, w) => {
@@ -116,10 +117,12 @@ const HouseScene = {
       drawA(ctx, name, cx - w / 2, FLOOR - h + 1, w, h);
     };
     // the roof throws the back of the porch into shade — gives the flat wall depth
-    const shadeTop = HUT_Y + HUT_H * 0.30;
+    // starts at zero alpha so the shade has no visible top edge on the wall
+    const shadeTop = HUT_Y + HUT_H * 0.16;
     const gsh = ctx.createLinearGradient(0, shadeTop, 0, FLOOR);
-    gsh.addColorStop(0, 'rgba(28,14,6,0.34)');
-    gsh.addColorStop(0.55, 'rgba(28,14,6,0.14)');
+    gsh.addColorStop(0, 'rgba(28,14,6,0)');
+    gsh.addColorStop(0.32, 'rgba(28,14,6,0.26)');
+    gsh.addColorStop(0.75, 'rgba(28,14,6,0.10)');
     gsh.addColorStop(1, 'rgba(28,14,6,0)');
     ctx.save();
     ctx.beginPath();
@@ -129,7 +132,7 @@ const HouseScene = {
     ctx.fillRect(PORCH_L, shadeTop, PORCH_R - PORCH_L, FLOOR - shadeTop);
     ctx.restore();
 
-    stand('furn_0', BED_X, 62);          // the bed
+    stand('furn_0', BED_X, 54);          // the bed
     const tblH = assetH('furn_2', 40);
     stand('furn_2', TABLE_X, 40);        // the table
     const lampY = FLOOR - tblH - 5;

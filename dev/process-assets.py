@@ -70,17 +70,24 @@ def despeckle(im, min_alpha_run=3):
     return im
 
 
-def global_key(im, tol=34):
+def global_key(im, tol=34, bg_col=None):
     """Remove EVERY pixel near the sheet background, not just the border-connected
     ones — sprite sheets trap background inside enclosed shapes (between beams,
-    under a roof) that a flood fill can never reach."""
+    under a roof) that a flood fill can never reach.
+
+    Pass bg_col when the image has ALREADY been through key_bg: its corners are
+    transparent by then, so corner sampling would key against black instead and
+    eat the artwork's outlines while leaving the trapped background behind."""
     im = im.convert('RGBA')
     w, h = im.size
     px = im.load()
-    corners = [px[0, 0], px[w - 1, 0], px[0, h - 1], px[w - 1, h - 1]]
-    br = sum(c[0] for c in corners) / 4
-    bg = sum(c[1] for c in corners) / 4
-    bb = sum(c[2] for c in corners) / 4
+    if bg_col is not None:
+        br, bg, bb = bg_col
+    else:
+        corners = [px[0, 0], px[w - 1, 0], px[0, h - 1], px[w - 1, h - 1]]
+        br = sum(c[0] for c in corners) / 4
+        bg = sum(c[1] for c in corners) / 4
+        bb = sum(c[2] for c in corners) / 4
     t2 = tol * tol * 3
     for y in range(h):
         for x in range(w):
@@ -328,24 +335,16 @@ save('pole', pole)
 
 print('house exterior (full + cropped top: hut and platform only)...')
 hx = despeckle(trim(key_bg(Image.open(os.path.join(ROOT, '840E2071-1BC2-437D-BF2C-FE6478FF1DA3.jpeg')), tol=46)))
-save('house_ext', hx)
 # the stilts are the pier's job — keep only the hut and the boards it stands on,
 # then upscale so the detail holds at a bigger on-screen size
-top = trim(hx.crop((0, 0, hx.size[0], round(hx.size[1] * 0.60))))
-top = top.resize((round(top.size[0] * 2.2), round(top.size[1] * 2.2)), Image.LANCZOS)
-save('house_top', top)
 
 print('houses (already background-free) + workbench prop...')
 hut = trim(Image.open(os.path.join(ROOT, '044A2D24-7F4F-4661-A7BB-C5E89EC3CD66-removebg-preview.png')).convert('RGBA'))
 save('hut_full', hut)
 # the room itself: crop away the stilts, keep the porch floor and everything above
-room = trim(hut.crop((0, 0, hut.size[0], round(hut.size[1] * 0.70))))
-room = room.resize((round(room.size[0] * 3.2), round(room.size[1] * 3.2)), Image.LANCZOS)
-save('hut_room', room)
 
 hx2 = trim(Image.open(os.path.join(ROOT, '840E2071-1BC2-437D-BF2C-FE6478FF1DA3-removebg-preview.png')).convert('RGBA'))
 house_clean = hx2.resize((round(hx2.size[0] * 1.8), round(hx2.size[1] * 1.8)), Image.LANCZOS)
-save('house_clean', house_clean)
 # Just the building: everything above the sprite's own deck (its top row is 277
 # of 598, so cut at 274 to clear the boards) and right of its stair rail (x 264).
 # The pier is then the only deck in the scene, so the two can't disagree about
@@ -355,10 +354,6 @@ save('house_body', trim(house_clean.crop((264, 0, house_clean.size[0], 274))))
 wb = defringe(trim(global_key(Image.open(os.path.join(ROOT, 'IMG_4468.jpeg')), 48)), tol=88, passes=3)
 save('workbench', wb)
 
-print('house interior...')
-hi = trim(key_bg(Image.open(os.path.join(ROOT, '2DD3E769-96DE-4F19-9812-7A79465BF57B.png')), tol=30))
-hi = hi.resize((1440, round(hi.size[1] * 1440 / hi.size[0])), Image.LANCZOS)
-save('house_int', hi)
 
 print('dock modules (components)...')
 dk = defringe(global_key(Image.open(os.path.join(ROOT, '5EE6640E-E83B-4DA3-BFAD-E80A0066A61C.png')), 40), (162, 168, 182))
@@ -393,6 +388,59 @@ print('animated backgrounds...')
 gif_frames('IMG_4439.gif', 'bg_deep', 8, box=(0, 130, 1300, 1300), target=(1440, 1296))
 # god rays band
 gif_frames('IMG_4438.webp', 'bg_rays', 6, target=(1440, 552))
+
+print('the new house interior...')
+# Two-stage key: a border fill clears the outside, then a TIGHT global pass with
+# the sheet colour passed in explicitly clears the grey trapped under the stairs,
+# between the stilts and in the window pane. The tight tolerance is what keeps
+# the rope wraps from getting pinholed.
+IN2_BG = (152, 155, 164)
+in2 = global_key(key_bg(Image.open(os.path.join(ROOT, 'IMG_4496.jpeg')), tol=48), 27, IN2_BG)
+in2 = trim(despeckle(defringe(in2, IN2_BG, tol=40, passes=1)))
+in2 = in2.resize((1400, round(in2.size[1] * 1400 / in2.size[0])), Image.LANCZOS)
+save('house_in2', in2)
+
+print('corals and seaweeds (components)...')
+CORAL_BG = (157, 162, 176)
+cr = defringe(key_bg(Image.open(os.path.join(ROOT, '3BC01B54-D550-415E-A786-968C86546D91.png')), tol=44),
+              CORAL_BG, tol=44, passes=1)
+for i, b in enumerate(components(cr, min_area=700)):
+    cell = trim(cr.crop(tuple(b)))
+    if cell.size[1] > 132:
+        s = 132 / cell.size[1]
+        cell = cell.resize((max(1, round(cell.size[0] * s)), 132), Image.LANCZOS)
+    save(f'coral_{i}', cell)
+
+# ---- crops: 5 species x [sprout, growing, mature, produce, seed] -------------
+CROP_KEYS = ['gourd', 'curl', 'berry', 'blade', 'moon']
+crop_names = []
+for k in CROP_KEYS:
+    crop_names += [f'crop_{k}_0', f'crop_{k}_1', f'crop_{k}_2', f'crop_{k}_p', f'crop_{k}_seed']
+print('crops (5 species x 5 stages)...')
+grid_slice('A80F475C-2484-46A0-8655-228B7A624E51.png', 5, 5, crop_names,
+           tol=44, target_h=150, solo=True, defr=True, inset=6)
+
+# ---- livestock: 3 species x [3 baby, 3 adult, 3 producing, product] ----------
+STOCK_KEYS = ['puffer', 'sunfish', 'hogfish']
+stock_names = []
+for k in STOCK_KEYS:
+    stock_names += [f'stock_{k}_{i}' for i in range(9)] + [f'stock_{k}_p']
+print('livestock (3 species x 10)...')
+grid_slice('9D9FDC0A-6FE8-430E-896F-AF6DEEB9A92A.png', 10, 3, stock_names,
+           tol=44, target_h=150, solo=True, defr=True, inset=5)
+
+# ---- NPCs: 4x4 character sheets on navy. Tolerance stays low or the navy eats
+#      the dark outlines and the professor's waistcoat.
+for src, prefix in (('B59D6D33-8796-4EF1-9102-8ADE55B876AF.png', 'prof'),
+                    ('720D6322-D87E-40A4-BC5B-1B7B764BB31A.png', 'angler'),
+                    ('0CF8013A-DF6F-491C-AB9F-F0E7F1E31356.png', 'farmer')):
+    print(f'{prefix} (4x4)...')
+    grid_slice(src, 4, 4, [f'{prefix}_{i}' for i in range(16)],
+               tol=26, target_h=300, solo=True, inset=6)
+
+print('the crab punk (4x3)...')
+grid_slice('IMG_4504.jpeg', 4, 3, [f'crab_{i}' for i in range(12)],
+           tol=26, target_h=340, solo=True, inset=6)
 
 with open(os.path.join(OUT, 'manifest.json'), 'w') as f:
     json.dump(manifest, f)

@@ -983,6 +983,19 @@ const DiveScene = {
       drawAC(ctx, r.art, 0, 0, 24 * pulse);
       ctx.restore();
       text(ctx, '+' + r.name + (r.extra ? ' +!' : ''), r.x, y - 22, { size: 8, color: '#fff8e0', align: 'center' });
+      // Otto holds it up — the uploaded triumph pose, popped in with a squash
+      const hi = ASSETS['o4_hold'];
+      if (hi && hi.width) {
+        const sq = 1 + Math.sin(Math.min(1, t * 3) * Math.PI) * 0.16;
+        const hh = 40, hw = hh * hi.width / hi.height;
+        ctx.save();
+        ctx.translate(46, H * 0.62 - rise * 5);
+        ctx.scale(1 / sq, sq);
+        ctx.globalAlpha = clamp(1.15 - t, 0, 1);
+        ctx.drawImage(hi, -hw / 2, -hh / 2, hw, hh);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
     }
 
     // depth chart along the right edge — where you are in the deep
@@ -1098,6 +1111,10 @@ const DiveScene = {
       ctx.fillRect(W / 2 - 39, 61, Math.round(78 * clamp(this.shark.sus, 0, 1)), 3);
     }
 
+    // Otto himself, swimming alongside — the uploaded swim cycle, so the dive
+    // reads as you being in the water rather than a disembodied cursor
+    this.drawSwimmer(ctx);
+
     // scraper cursor
     this.drawCursor(ctx);
 
@@ -1122,6 +1139,53 @@ const DiveScene = {
       ctx.fillRect(0, 0, W, H);
       if (this.overT > 1.2)
         text(ctx, 'Everything goes dark...', W / 2, H / 2 - 6, { size: 10, color: '#8a9aa8', align: 'center' });
+    }
+  },
+
+  // Otto swimming at the edge of frame. He leans into the direction of travel,
+  // switches to the plunge pose when diving hard, and reaches when you scrape.
+  drawSwimmer(ctx) {
+    if (this.reward) return;   // the reward pop draws him holding the shell up
+    const v = this.camVel;
+    const t = this.time;
+    // he hangs off the left, out of the way of the piling and the depth chart
+    const bob = Math.sin(t * 2.1) * 2.4 + Math.sin(t * 0.7) * 1.2;
+    const sx = 46 + Math.sin(t * 0.9) * 3;
+    const sy = H * 0.62 + bob - clamp(v, -90, 90) * 0.06;
+
+    let art, tilt, flip = false;
+    if (v > 60) {                       // driving downward: the plunge pose
+      art = 'o4_dive'; tilt = 0.55;
+    } else if (v < -60) {               // kicking for the surface
+      art = (Math.floor(t * 7) % 2) ? 'o4_swim' : 'o4_swim2'; tilt = -0.62;
+    } else if (this.pry) {              // both paws on the bar
+      art = 'o4_grab'; tilt = 0.06 + Math.sin(t * 22) * 0.05;
+    } else if (Input.mouse.down) {      // reaching out to scrape
+      art = 'o4_grab'; tilt = 0.1 + Math.sin(t * 26) * 0.07;
+    } else {
+      art = (Math.floor(t * 3.2) % 2) ? 'o4_swim' : 'o4_swim2';
+      tilt = 0.08 + Math.sin(t * 1.6) * 0.06;
+    }
+    const img = ASSETS[art];
+    if (!img || !img.width) return;
+
+    const oh = 34, ow = oh * img.width / img.height;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(tilt);
+    // he faces the piling, which is to his right, so no flip in the normal case
+    if (flip) ctx.scale(-1, 1);
+    ctx.globalAlpha = 0.96;
+    ctx.drawImage(img, -ow / 2, -oh / 2, ow, oh);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // his kick leaves a little wake
+    if (Math.abs(v) > 30 && Math.random() < 0.4) {
+      this.bubbles.push({
+        x: sx - 14 + rand(-3, 3), y: sy + this.camY + rand(-4, 6),
+        r: rand(0.8, 2.1), v: rand(10, 22), wob: rand(TAU),
+      });
     }
   },
 

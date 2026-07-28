@@ -208,13 +208,56 @@ canvas.addEventListener('touchcancel', touchEnd, { passive: false });
 
 // ---- game manager ---------------------------------------------------------------
 const Game = {
-  scene: null, fade: 1, fadeDir: -1, pending: null,
+  scene: null, fade: 1, fadeDir: -1, pending: null, plunge: null,
   toasts: [], time: 0, saveT: 25, helpOpen: false,
   rotHinted: false,
 
   go(scene, arg) {
+    // going over the side gets the plunge animation, drawn over the fade
+    if (scene === DiveScene && this.scene === WorldScene) this.plunge = 0;
+    else if (scene === WorldScene && this.scene === DiveScene) this.plunge = -1;
     this.pending = { scene, arg };
     if (this.fadeDir !== 1) this.fadeDir = 1;
+  },
+
+  // Otto tipping over the rail and knifing into the water, or breaking back out
+  // of it. Runs on top of the scene fade so the cut never feels like a cut.
+  drawPlunge(c) {
+    if (this.plunge === null) return;
+    const down = this.plunge >= 0;
+    const t = Math.abs(this.plunge);
+    if (t > 1.15) { this.plunge = null; return; }
+    const k = Math.min(1, t / 0.85);
+    const img = ASSETS[down ? 'o4_dive' : 'o4_swim'];
+    if (!img || !img.width) return;
+    const oh = down ? 58 : 52, ow = oh * img.width / img.height;
+    // he accelerates downward, or decelerates on the way up
+    const ease = down ? k * k : 1 - (1 - k) * (1 - k);
+    const y = down ? -40 + ease * (H + 80) : H + 40 - ease * (H + 80);
+    c.save();
+    c.translate(W / 2 + Math.sin(t * 3) * 6, y);
+    c.rotate(down ? 0.5 + k * 0.5 : -0.7);
+    c.globalAlpha = clamp(1.2 - t, 0, 1);
+    c.drawImage(img, -ow / 2, -oh / 2, ow, oh);
+    c.globalAlpha = 1;
+    c.restore();
+    // the splash he makes crossing the surface
+    const sy = H * 0.46;
+    if (Math.abs(y - sy) < 50) {
+      const s = 1 - Math.abs(y - sy) / 50;
+      c.strokeStyle = `rgba(214,246,255,${s * 0.7})`;
+      c.lineWidth = 1.5;
+      for (let i = 1; i <= 3; i++) {
+        c.beginPath();
+        c.ellipse(W / 2, sy, 16 * i * (0.5 + s), 4 * i * (0.4 + s * 0.6), 0, 0, TAU);
+        c.stroke();
+      }
+      c.fillStyle = `rgba(236,252,255,${s * 0.55})`;
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * TAU;
+        c.fillRect(W / 2 + Math.cos(a) * (18 + s * 26), sy + Math.sin(a) * (6 + s * 9), 2, 2);
+      }
+    }
   },
 
   updateFade(dt) {
@@ -314,6 +357,7 @@ const Game = {
     this.saveT -= dt;
     if (this.saveT <= 0) { this.saveT = 25; this.save(); }
     // toasts
+    if (this.plunge !== null) this.plunge += this.plunge >= 0 ? dt : -dt;
     for (const t of this.toasts) t.t -= dt;
     this.toasts = this.toasts.filter(t => t.t > 0);
   },
@@ -604,6 +648,7 @@ function frame(now) {
     ctx.fillStyle = `rgba(0,0,0,${clamp(Game.fade, 0, 1)})`;
     ctx.fillRect(0, 0, W, H);
   }
+  Game.drawPlunge(ctx);
   Game.drawCursor(ctx);
   ctx.restore();
 
