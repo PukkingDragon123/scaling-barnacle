@@ -181,6 +181,76 @@
     };
   }
 
+  // ---- the open ocean, and everything that lives in it ---------------------------------
+  // Ocean owns movement and the layers; Mining owns nodes and loot; Tame owns the
+  // wildlife; Hood owns the neighbours' homes. None of them knows about the
+  // others, so the scene calls belong here.
+  //
+  // Ocean and Mining use DIFFERENT chunk grids (512x320 vs 480x280), so the
+  // chunk indices one produces are meaningless to the other. Mining's chunks are
+  // therefore driven straight off the visible rect in Mining's own units.
+  if (M.Ocean) {
+    const O = M.Ocean;
+
+    const oEnter = O.enter.bind(O);
+    O.enter = function (arg) {
+      oEnter(arg);
+      const seed = (G && G.ocean && G.ocean.seed) | 0;
+      if (M.Mining && M.Mining.reset) M.Mining.reset(seed);
+      if (M.Tame && M.Tame.reset) M.Tame.reset(seed);
+      if (M.Hood && M.Hood.reset) M.Hood.reset(seed);
+    };
+
+    const oUpdate = O.update.bind(O);
+    O.update = function (dt) {
+      oUpdate(dt);
+      const seed = (G && G.ocean && G.ocean.seed) | 0;
+      if (M.Mining) {
+        // cover the visible rect plus one chunk of margin, in Mining's grid
+        if (M.Mining.ensureChunk) {
+          const cw = M.Mining.CHUNK_W || 480, ch = M.Mining.CHUNK_H || 280;
+          const c0 = Math.floor((O.camX - cw) / cw), c1 = Math.floor((O.camX + W + cw) / cw);
+          const r0 = Math.floor((O.camY - ch) / ch), r1 = Math.floor((O.camY + H + ch) / ch);
+          for (let cx = c0; cx <= c1; cx++)
+            for (let cy = r0; cy <= r1; cy++) M.Mining.ensureChunk(cx, cy, seed);
+        }
+        if (M.Mining.update) M.Mining.update(dt, O.px, O.py, { x: O.camX, y: O.camY });
+      }
+      if (M.Tame && M.Tame.update) M.Tame.update(dt, O.px, O.py);
+      if (M.Hood && M.Hood.update) M.Hood.update(dt);
+    };
+
+    // Nodes, loot and animals belong in world space, between the mid layer and
+    // Otto — so they sit behind him but in front of the scenery.
+    const oProps = O._drawProps.bind(O);
+    O._drawProps = function (ctx, t, front) {
+      oProps(ctx, t, front);
+      if (front) return;                 // the back pass only, once per frame
+      ctx.save();
+      ctx.translate(-Math.round(this.camX * DPX) / DPX, -Math.round(this.camY * DPX) / DPX);
+      if (M.Hood && M.Hood.draw) M.Hood.draw(ctx, this.camX, this.camY);
+      if (M.Mining && M.Mining.draw) M.Mining.draw(ctx, this.camX, this.camY);
+      if (M.Tame && M.Tame.draw) M.Tame.draw(ctx, this.camX, this.camY);
+      ctx.restore();
+    };
+
+    // Mining and Tame report their XP through a hook so they do not depend on
+    // the skills module existing.
+    if (M.Skills && M.Skills.gain) {
+      const g = (skill, n) => M.Skills.gain(skill, n);
+      if (M.Mining) M.Mining.xp = g;
+      if (M.Tame) M.Tame.xp = g;
+    }
+    // Loot goes into the new bag if there is one, otherwise into flat storage.
+    if (M.Mining) {
+      M.Mining.give = function (key, n) {
+        if (M.Inv && M.Inv.add) return M.Inv.add(key, n);
+        if (G && G.storage) { G.storage[key] = (G.storage[key] || 0) + n; return 0; }
+        return n;
+      };
+    }
+  }
+
   // ---- Craft's material lookup --------------------------------------------------------
   // Craft reads materials through one hook so the integrator decides what counts as
   // "held". Here that is storage plus anything sitting in the hotbar.

@@ -30,7 +30,12 @@ const fails = [];
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   await page.goto(GAME_URL);
-  await page.waitForTimeout(2600);
+  // Wait on the loader rather than a fixed sleep: the asset set has grown from
+  // 143 files to 487, and a hardcoded 2.6s stopped being enough.
+  await page.waitForFunction(
+    () => typeof G !== 'undefined' && G && typeof ASSETS !== 'undefined' && ASSETS.dock_11 && ASSETS.dock_11.width,
+    null, { timeout: 60000 });
+  await page.waitForTimeout(600);
   const cv = page.locator('#game');
   const box = () => cv.boundingBox();
   const toScreen = async (lx, ly) => { const b = await box(); return [b.x + lx * b.width / 480, b.y + ly * b.height / 270]; };
@@ -42,9 +47,18 @@ const fails = [];
   // of three spread down a 900-unit dock — so this waypoint is derived from the
   // scene rather than hardcoded, and a future layout change cannot stale it.
   const pilingX = await page.evaluate(() => PILING_X[0]);
-  await page.keyboard.down(pilingX < 160 ? 'KeyA' : 'KeyD');
-  await page.waitForFunction((tx) => Math.abs(WorldScene.px - tx) < 14, pilingX, { timeout: 9000 });
-  await page.keyboard.up(pilingX < 160 ? 'KeyA' : 'KeyD');
+  const pilingKey = pilingX < 160 ? 'KeyA' : 'KeyD';
+  await page.keyboard.down(pilingKey);
+  // Walk until the spot is in reach OR Otto stops moving. The dock clamps his
+  // position, so a piling near an end can sit exactly at the interaction radius
+  // and an exact-distance wait would never fire.
+  await page.waitForFunction((tx) => {
+    const d = Math.abs(WorldScene.px - tx);
+    const stuck = WorldScene.px === window.__lastPx;
+    window.__lastPx = WorldScene.px;
+    return d < 21 || stuck;
+  }, pilingX, { timeout: 9000, polling: 120 });
+  await page.keyboard.up(pilingKey);
   await page.keyboard.press('KeyE');
   await page.waitForTimeout(1300);
   const inDive = await page.evaluate(() => Game.scene === DiveScene);

@@ -25,7 +25,10 @@ const errors = [];
   const p = await b.newPage({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
   p.on('pageerror', e => errors.push(e.message));
   await p.goto(GAME_URL);
-  await p.waitForTimeout(2600);
+  await p.waitForFunction(
+    () => typeof G !== 'undefined' && G && typeof ASSETS !== 'undefined' && ASSETS.dock_11 && ASSETS.dock_11.width,
+    null, { timeout: 60000 });
+  await p.waitForTimeout(600);
   await p.evaluate(() => {
     const cv = document.getElementById('game');
     window.touchAt = (id, type, lx, ly) => {

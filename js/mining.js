@@ -1,15 +1,17 @@
 'use strict';
 // js/mining.js -- resource harvesting in the open ocean.
 //
-// One top-level const, nothing else at file scope. No hooks are installed: this is
-// a system a SCENE drives, not a modal, so the ocean scene owns the calls and
-// js/integrate.js owns the wiring (see the report that shipped with this file).
+// One top-level const, nothing else at file scope. No hooks are installed and
+// nothing is monkeypatched: this is a system a SCENE drives, not a modal, so the
+// ocean scene owns the calls and js/integrate.js owns the wiring. Nothing here
+// runs at load time, so the file is safe anywhere in index.html's order.
 //
 // The contract with the scene is four calls:
 //   Mining.reset(seed)                       on enter, once
 //   Mining.ensureChunk(cx, cy, seed)         while it generates terrain
 //   Mining.update(dt, px, py, cam)           every frame, px/py = Otto's centre
-//   Mining.draw(ctx, camX, camY)             in the scene's draw, world space
+//   Mining.draw(ctx, camX, camY)             WORLD space (camera already applied)
+// plus two hooks the integrator may re-point: Mining.xp and Mining.anim.
 //
 // Everything else (nodes, drifting loot, chips, fly-up labels) is preallocated in
 // init() and recycled. The steady state allocates nothing: the frame budget here
@@ -83,7 +85,7 @@ const Mining = {
   // tier IS the index. power = hp removed per swing, so swings-to-break is
   // ceil(hardness / power) and a better pick is felt on every node, not just the
   // ones it unlocks. No pickaxe art exists in the manifest, so the icon is a
-  // coded glyph (_pickGlyph) -- same trick Hotbar plays with 'g_hoe'.
+  // coded glyph (drawPickIcon) -- same trick Hotbar plays with 'g_hoe'.
   PICKS: [
     { name: 'shell pick', power: 1, price: 0, desc: 'chips timber and soft stone' },
     { name: 'stone pick', power: 1, price: 90, desc: 'bites coal, iron and scrap' },
@@ -211,6 +213,15 @@ const Mining = {
   // module. The integrator points it at whatever exists; default is a no-op.
   xp: function (skill, n) { },
 
+  // Otto's swing animation goes out the same way. Left at the default, a swing
+  // asks the host scene to play its own pickaxe cycle if it has one (Ocean
+  // publishes playMine(t) for exactly this), which is the same typeof-guarded
+  // opt-in DiveScene uses for DiveFX. Point it anywhere to override, or at a
+  // no-op to draw the swing yourself off pickFrame().
+  anim: function (t) {
+    if (typeof Ocean !== 'undefined' && Ocean && Ocean.playMine) Ocean.playMine(t);
+  },
+
   // ------------------------------------------------------------------ save ----
   // G.mining = { pick, broken, lastDay, swings, mined, gems }
   // Only five keys on G are deep-merged and `mining` is not one of them, so this
@@ -247,7 +258,9 @@ const Mining = {
     }
     this.chips.length = 0;
     for (i = 0; i < this.CHIP_MAX; i++) {
-      this.chips.push({ t: 0, x: 0, y: 0, vx: 0, vy: 0, s: 0.5, tone: 0 });
+      // sz is the drawn size in logical units, snapped to the texel grid ONCE at
+      // spawn so the draw loop stays a bare fillRect
+      this.chips.push({ t: 0, x: 0, y: 0, vx: 0, vy: 0, sz: PIX * 2, tone: 0 });
     }
     this.flys.length = 0;
     for (i = 0; i < this.FLY_MAX; i++) {
@@ -699,6 +712,10 @@ const Mining = {
     this.busy = true;
     this.swingT = 0;
     this.hitDone = false;
+    // Slightly longer than the swing so a held sequence never flickers back to
+    // the swim cycle between blows. Both outward hooks are typeof-checked because
+    // the integrator owns them and may have set them to anything.
+    if (typeof this.anim === 'function') this.anim(this.SWING_T * 1.35);
   },
 
   // One landed blow. Returns true if the node broke.
@@ -711,8 +728,10 @@ const Mining = {
     n.shakeT = 0.22;
     n.shakeA = 1.1 + dmg * 0.25;
     n.hitT = 0.16;
-    n.hitX = (this.aimX - n.x) * 0.4;
-    n.hitY = (this.aimY - n.y) * 0.4;
+    // Where the blow lands, clamped INSIDE the rock: auto-targeting can leave the
+    // cursor a long way off, and the spark and chips have to come off the node.
+    n.hitX = clamp((this.aimX - n.x) * 0.4, -n.w * 0.34, n.w * 0.34);
+    n.hitY = clamp((this.aimY - n.y) * 0.4, -n.h * 0.34, n.h * 0.34);
     G.mining.swings++;
     this.combo++;
     this.comboT = 1.6;
@@ -720,7 +739,7 @@ const Mining = {
     this._chipBurst(n.x + n.hitX, n.y + n.hitY, def, 5 + Math.min(4, dmg * 2));
     if (def.snd === 'thump') this._snd('thump', 0.35);
     else this._snd(def.snd === 'clink' ? 'clink' : 'scrape');
-    this.xp(def.skill, 1);
+    this._xp(def.skill, 1);
 
     if (n.hp <= 0) { this._break(n); return true; }
     if (n.hp <= dmg) this._snd('ding');       // one more and it goes
@@ -734,7 +753,10 @@ const Mining = {
     this.note = 'your pickaxe is too soft for this';
     this.noteT = 2.2;
     this.noteX = n.x;
-    this.noteY = n.y - n.h * 0.5 - 8;
+    // Well clear of the node: the host scene draws Otto OVER this pass, and he is
+    // standing on the node when he complains, so a tighter offset lands the text
+    // behind his head.
+    this.noteY = n.y - n.h * 0.5 - 30;
     this._chipBurst(n.x, n.y, def, 2);
     if (this._noteGap <= 0) {
       this._noteGap = this.NOTE_GAP;
@@ -754,12 +776,12 @@ const Mining = {
     G.mining.broken[n.uid] = G.day;            // stays broken until dawn
     G.mining.mined++;
 
-    this._chipBurst(n.x, n.y, def, 14);
+    this._chipBurst(n.x, n.y, def, 10 + Math.min(12, n.max));   // a wreck sprays more than a log
     this._spillLoot(n, def);
     this._snd('pop', 1 + Math.min(0.5, n.max * 0.02));
     this._snd('thump', 0.45);
     if (def.key === 'crystal' || def.key === 'gold') this._snd('chime');
-    this.xp(def.skill, def.xp);
+    this._xp(def.skill, def.xp);
     this._vibe(22);
 
     // Dead nodes draw nothing, but the list is capped, so retire it immediately.
@@ -841,7 +863,9 @@ const Mining = {
       c.x = x; c.y = y;
       c.vx = Math.cos(ang) * sp;
       c.vy = Math.sin(ang) * sp - 12;
-      c.s = rand(0.5, 1.1);
+      // 2 to 6 device texels, on the grid: below that the debris disappears
+      // into the backdrop at this density.
+      c.sz = PIX * (2 + (Math.random() * 3 | 0) * 2);
       c.tone = def.chips[i % def.chips.length];
     }
   },
@@ -863,7 +887,9 @@ const Mining = {
   _collect: function (d) {
     this.give(d.res, d.n);
     if (d.res === 'crystal') G.mining.gems += d.n;
-    this._fly('+' + d.n + ' ' + this.resName(d.res), d.x, d.y - 4,
+    // Lifted well above the drop: a collection happens inside Otto's silhouette
+    // and the host draws him on top of this pass.
+    this._fly('+' + d.n + ' ' + this.resName(d.res), d.x, d.y - 22,
       d.res === 'crystal' ? '#5ad2f0' : (d.res === 'ingot' || d.res === 'ore' ? '#c9d4dc' : '#ffe66e'));
     d.live = false;
     this._snd('pop', d.res === 'crystal' ? 1.5 : 1.2);
@@ -1006,8 +1032,10 @@ const Mining = {
   setCam: function (camX, camY) { this.cam.x = camX || 0; this.cam.y = camY || 0; },
 
   // ---------------------------------------------------------------- draw ------
-  // World space: call from the scene's draw so it gets the colour grade like the
-  // rest of the world. Does its own camera offset.
+  // WORLD SPACE. The caller has already applied translate(-camX, -camY), exactly
+  // as integrate.js does for Stock.draw, NPCs.drawWorld and Craft.drawDock, so
+  // everything here is drawn at its world coordinate and camX/camY are used ONLY
+  // to cull. Use drawScreen() from a scene that has not translated yet.
   draw: function (ctx, camX, camY) {
     if (!this.ensure()) return;
     camX = camX || 0;
@@ -1015,38 +1043,44 @@ const Mining = {
     this.cam.x = camX;
     this.cam.y = camY;
 
-    var i, n, sx, sy;
+    // one culling box, in world units, reused by every pass below
+    var x0 = camX - 60, x1 = camX + W + 60, y0 = camY - 60, y1 = camY + H + 60;
+    var i, n;
     for (i = 0; i < this.nodes.length; i++) {
       n = this.nodes[i];
       if (n.dead) continue;
-      sx = n.x - camX;
-      sy = n.y - camY;
-      if (sx < -60 || sx > W + 60 || sy < -60 || sy > H + 60) continue;   // cull by camera
-      this._drawNode(ctx, n, sx, sy);
+      if (n.x < x0 || n.x > x1 || n.y < y0 || n.y > y1) continue;
+      this._drawNode(ctx, n, n.x, n.y);
     }
 
-    if (this.target && !this.target.dead) {
-      sx = this.target.x - camX;
-      sy = this.target.y - camY;
-      if (sx > -60 && sx < W + 60 && sy > -60 && sy < H + 60) this._drawRing(ctx, this.target, sx, sy);
+    n = this.target;
+    if (n && !n.dead && n.x >= x0 && n.x <= x1 && n.y >= y0 && n.y <= y1) {
+      this._drawRing(ctx, n, n.x, n.y);
     }
 
     this._drawChips(ctx, camX, camY);
     this._drawLoot(ctx, camX, camY);
     this._drawFlys(ctx, camX, camY);
 
-    if (this.noteT > 0) {
-      sx = this.noteX - camX;
-      sy = this.noteY - camY;
-      if (sx > -80 && sx < W + 80 && sy > -20 && sy < H + 20) {
-        ctx.save();
-        ctx.globalAlpha = this.noteT > 0.4 ? 1 : this.noteT / 0.4;
-        var tw = textWidth(ctx, this.note, 7) + 10;
-        uiPanel(ctx, sx - tw * 0.5, sy - 11, tw, 13, 0.9, false);
-        text(ctx, this.note, sx, sy - 8, { size: 7, color: '#ff5a4a', align: 'center' });
-        ctx.restore();
-      }
+    if (this.noteT > 0 && this.noteX > x0 - 40 && this.noteX < x1 + 40 &&
+        this.noteY > y0 && this.noteY < y1) {
+      ctx.save();
+      ctx.globalAlpha = this.noteT > 0.4 ? 1 : this.noteT / 0.4;
+      var tw = textWidth(ctx, this.note, 7) + 10;
+      uiPanel(ctx, this.noteX - tw * 0.5, this.noteY - 11, tw, 13, 0.9, false);
+      text(ctx, this.note, this.noteX, this.noteY - 8, { size: 7, color: '#ff5a4a', align: 'center' });
+      ctx.restore();
     }
+  },
+
+  // For a caller that has NOT offset the canvas yet (Stock ships the same pair).
+  drawScreen: function (ctx, camX, camY) {
+    camX = camX || 0;
+    camY = camY || 0;
+    ctx.save();
+    ctx.translate(-Math.round(camX * DPX) / DPX, -Math.round(camY * DPX) / DPX);
+    this.draw(ctx, camX, camY);
+    ctx.restore();
   },
 
   _drawNode: function (ctx, n, sx, sy) {
@@ -1131,21 +1165,20 @@ const Mining = {
   // Batched by tone: fillStyle is set at most once per palette entry in use, and
   // per-chip variation is carried on globalAlpha. Never build a colour in here.
   _drawChips: function (ctx, camX, camY) {
-    var tones = this.CHIP_TONES, ti, i, c, any, sx, sy, alive = 0;
+    var tones = this.CHIP_TONES, ti, i, c, any, alive = 0;
     for (i = 0; i < this.chips.length; i++) if (this.chips[i].t > 0) { alive = 1; break; }
     if (!alive) return;                    // the common case: skip the tone sweep
+    var x0 = camX - 20, x1 = camX + W + 20, y0 = camY - 20, y1 = camY + H + 20;
     ctx.save();
     for (ti = 0; ti < tones.length; ti++) {
       any = false;
       for (i = 0; i < this.chips.length; i++) {
         c = this.chips[i];
         if (c.t <= 0 || c.tone !== ti) continue;
-        sx = c.x - camX;
-        sy = c.y - camY;
-        if (sx < -20 || sx > W + 20 || sy < -20 || sy > H + 20) continue;
-        if (!any) { ctx.fillStyle = tones[ti]; any = true; }
+        if (c.x < x0 || c.x > x1 || c.y < y0 || c.y > y1) continue;
+        if (!any) { ctx.fillStyle = tones[ti]; any = true; }   // one set per tone
         ctx.globalAlpha = c.t > 0.35 ? 1 : c.t / 0.35;
-        ctx.fillRect(Math.round(sx * DPX) / DPX, Math.round(sy * DPX) / DPX, PIX * 2 * c.s * 2, PIX * 2 * c.s * 2);
+        ctx.fillRect(Math.round(c.x * DPX) / DPX, Math.round(c.y * DPX) / DPX, c.sz, c.sz);
       }
     }
     ctx.globalAlpha = 1;
@@ -1153,20 +1186,19 @@ const Mining = {
   },
 
   _drawLoot: function (ctx, camX, camY) {
-    var i, d, sx, sy, def, s, bob;
+    var i, d, def, s, bob;
+    var x0 = camX - 20, x1 = camX + W + 20, y0 = camY - 20, y1 = camY + H + 20;
     ctx.save();
     for (i = 0; i < this.loot.length; i++) {
       d = this.loot[i];
       if (!d.live) continue;
-      sx = d.x - camX;
-      sy = d.y - camY;
-      if (sx < -20 || sx > W + 20 || sy < -20 || sy > H + 20) continue;
+      if (d.x < x0 || d.x > x1 || d.y < y0 || d.y > y1) continue;
       def = this.resDef(d.res);
       bob = Math.sin(d.sp) * (d.vac ? 0.6 : 1.4);
-      s = d.vac ? 9.5 : 8.5;
+      s = d.vac ? 9.5 : 8.5;                  // a touch bigger once it is homing
       ctx.globalAlpha = d.t < 1.2 ? d.t / 1.2 : 1;
       ctx.save();
-      ctx.translate(Math.round(sx * DPX) / DPX, Math.round((sy + bob) * DPX) / DPX);
+      ctx.translate(Math.round(d.x * DPX) / DPX, Math.round((d.y + bob) * DPX) / DPX);
       if (def && typeof ASSETS !== 'undefined' && ASSETS[def.art] && ASSETS[def.art].width) {
         drawAC(ctx, def.art, 0, 0, s);
       } else {
@@ -1174,25 +1206,22 @@ const Mining = {
         ctx.fillRect(-s * 0.3, -s * 0.3, s * 0.6, s * 0.6);
       }
       ctx.restore();
-      if (d.n > 1) {
-        text(ctx, 'x' + d.n, sx + 4, sy + 1, { size: 6, color: '#f6e8c9', align: 'left' });
-      }
+      if (d.n > 1) text(ctx, 'x' + d.n, d.x + 4, d.y + 1, { size: 6, color: '#f6e8c9' });
     }
     ctx.globalAlpha = 1;
     ctx.restore();
   },
 
   _drawFlys: function (ctx, camX, camY) {
-    var i, f, sx, sy;
+    var i, f;
+    var x0 = camX - 60, x1 = camX + W + 60, y0 = camY - 20, y1 = camY + H + 20;
     ctx.save();
     for (i = 0; i < this.flys.length; i++) {
       f = this.flys[i];
       if (!f.live) continue;
-      sx = f.x - camX;
-      sy = f.y - camY;
-      if (sx < -60 || sx > W + 60 || sy < -20 || sy > H + 20) continue;
+      if (f.x < x0 || f.x > x1 || f.y < y0 || f.y > y1) continue;
       ctx.globalAlpha = f.t > 0.5 ? 1 : f.t / 0.5;
-      text(ctx, f.txt, sx, sy, { size: 7, color: f.col, align: 'center' });
+      text(ctx, f.txt, f.x, f.y, { size: 7, color: f.col, align: 'center' });
     }
     ctx.globalAlpha = 1;
     ctx.restore();
@@ -1205,14 +1234,17 @@ const Mining = {
     var s = box / 12;
     ctx.save();
     ctx.translate(Math.round(cx * DPX) / DPX, Math.round(cy * DPX) / DPX);
-    ctx.fillStyle = '#6d4526';                       // handle
-    ctx.fillRect(-1 * s, -5 * s, 2 * s, 11 * s);
-    ctx.fillStyle = '#8f9aa4';                       // head
-    ctx.fillRect(-5 * s, -5 * s, 10 * s, 2 * s);
-    ctx.fillRect(-5 * s, -3 * s, 2 * s, 2 * s);
-    ctx.fillRect(3 * s, -3 * s, 2 * s, 2 * s);
-    ctx.fillStyle = '#c9d4dc';                       // highlight
-    ctx.fillRect(-5 * s, -5 * s, 10 * s, PIX * 2);
+    ctx.fillStyle = '#6d4526';                       // handle, angled by stepping it
+    ctx.fillRect(-1 * s, -4 * s, 2 * s, 5 * s);
+    ctx.fillRect(0 * s, 1 * s, 2 * s, 5 * s);
+    ctx.fillStyle = '#8f9aa4';                       // head: a swept arc, not a bar
+    ctx.fillRect(-2 * s, -6 * s, 4 * s, 2 * s);
+    ctx.fillRect(-5 * s, -5 * s, 3 * s, 2 * s);
+    ctx.fillRect(2 * s, -5 * s, 3 * s, 2 * s);
+    ctx.fillRect(-6 * s, -4 * s, 1 * s, 2 * s);      // the two tips drop away
+    ctx.fillRect(5 * s, -4 * s, 1 * s, 2 * s);
+    ctx.fillStyle = '#c9d4dc';                       // top highlight
+    ctx.fillRect(-2 * s, -6 * s, 4 * s, PIX * 2);
     ctx.restore();
   },
 
@@ -1231,6 +1263,10 @@ const Mining = {
     if (typeof SND === 'undefined' || !SND || typeof SND[name] !== 'function') return;
     if (arg === undefined) SND[name]();
     else SND[name](arg);
+  },
+  // The xp hook is owned by the integrator, so never trust its type.
+  _xp: function (skill, n) {
+    if (typeof this.xp === 'function') this.xp(skill, n);
   },
   _vibe: function (ms) {
     if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { } }
