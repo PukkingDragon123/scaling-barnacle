@@ -15,13 +15,29 @@ const Hotbar = {
   // Tool key -> asset name. Only the diving tools shipped with art; the farm
   // tools resolve to names that do not exist in the manifest ON PURPOSE, so
   // _glyph() draws them until real art lands (drawA would silently no-op).
+  // Every tool now points at real uploaded art. 'g_can' and 'g_hoe' were named
+  // for assets that never existed, so those two silently drew a coded glyph while
+  // the actual watering can and hoe sat unused in the manifest as ftool_1/ftool_0.
   TOOL_ART: {
     scraper: 'g_scraper',
     pry: 'g_crowbar',
-    can: 'g_can',
-    hoe: 'g_hoe',
-    seedbag: 'g_netbag',
-    cannon: 'crab_8',      // the crab punk's cannon prop doubles as the icon
+    hoe: 'ftool_0',        // hoe
+    can: 'ftool_1',        // watering can
+    spade: 'ftool_2',
+    rake: 'ftool_3',
+    sickle: 'ftool_4',
+    shears: 'ftool_5',
+    trowel: 'ftool_6',
+    fork: 'ftool_7',
+    seedbag: 'ftool_8',    // the seed sack, not a net bag
+    basket: 'ftool_9',
+    bucket: 'ftool_10',
+    gloves: 'ftool_11',
+    pick: 'opick_1',       // the pickaxe, mid-swing, reads well small
+    cutlass: 'wpn_cutlass',
+    flint: 'wpn_flint',
+    bomb: 'wpn_bomb',
+    cannon: 'wpn_cannon',
   },
 
   TOOL_NAMES: {
@@ -29,6 +45,19 @@ const Hotbar = {
     pry: 'Pry Bar',
     can: 'Watering Can',
     hoe: 'Hoe',
+    spade: 'Spade',
+    rake: 'Rake',
+    sickle: 'Sickle',
+    shears: 'Shears',
+    trowel: 'Trowel',
+    fork: 'Pitchfork',
+    basket: 'Basket',
+    bucket: 'Bucket',
+    gloves: 'Work Gloves',
+    pick: 'Pickaxe',
+    cutlass: 'Cutlass',
+    flint: 'Flintlock',
+    bomb: 'Powder Bomb',
     seedbag: 'Seed Bag',
     cannon: 'Cannon',
   },

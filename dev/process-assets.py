@@ -201,22 +201,92 @@ def save(name, im):
     print(f'  {name}: {im.size[0]}x{im.size[1]} ({os.path.getsize(path)//1024}KB)')
 
 
+def gutters(im, axis, want, min_run=2):
+    """Find the cut lines between cells by looking for EMPTY rows/columns.
+
+    A nominal grid assumes every sprite fits inside its cell. Real sheets do not
+    oblige: an outstretched tail or a wide sway overhangs, and slicing on the
+    nominal line cuts it off — or, with an inset, cuts the sprite and then
+    biggest_blob throws away the severed flipper. Both were happening (the whale
+    swallowed its neighbour, the spin frames lost tails, a seed packet came out as
+    a corner fragment).
+
+    So: project alpha onto one axis, find the runs of blank, and cut through the
+    middle of each. Returns `want`+1 boundaries, or None if the sheet does not
+    actually have that many gutters — in which case the caller falls back to the
+    nominal grid rather than guessing.
+    """
+    w, h = im.size
+    px = im.load()
+    n = w if axis == 'x' else h
+    other = h if axis == 'x' else w
+    # step the scan: exact counts are not needed, only "is anything here"
+    step = max(1, other // 200)
+    occupied = bytearray(n)
+    for i in range(n):
+        for j in range(0, other, step):
+            a = px[i, j][3] if axis == 'x' else px[j, i][3]
+            if a > 24:
+                occupied[i] = 1
+                break
+    runs = []
+    start = None
+    for i in range(n):
+        if not occupied[i]:
+            if start is None:
+                start = i
+        elif start is not None:
+            if i - start >= min_run:
+                runs.append((start, i))
+            start = None
+    if start is not None and n - start >= min_run:
+        runs.append((start, n))
+    # interior gutters only: leading and trailing blank is just margin
+    inner = [r for r in runs if r[0] > 0 and r[1] < n]
+    if len(inner) != want - 1:
+        return None
+    cuts = [0]
+    for a, b in inner:
+        cuts.append((a + b) // 2)
+    cuts.append(n)
+    return cuts
+
+
 def grid_slice(src, cols, rows, names, tol=34, target_h=None, target_w=None,
-               solo=False, defr=False, inset=0):
+               solo=False, defr=False, inset=0, gutter=True):
     im = key_bg(Image.open(os.path.join(ROOT, src)), tol)
     if defr:
         im = defringe(im)
     w, h = im.size
-    cw, ch = w / cols, h / rows
+    # Prefer cutting on the sheet's real gutters; fall back to the nominal grid
+    # when the sheet does not present the expected number of them.
+    ys = gutters(im, 'y', rows) if gutter and rows > 1 else None
+    if ys is None:
+        ys = [round(r * h / rows) for r in range(rows + 1)]
+    # Column gutters are found PER ROW. A sprite in row 0 may overhang to the left
+    # while one in row 2 overhangs right, so no single column of blank runs the
+    # whole sheet height — but inside one row band the gutters are clean.
+    nominal_x = [round(c * w / cols) for c in range(cols + 1)]
+    xs_by_row = []
+    for r in range(rows):
+        gx = None
+        if gutter and cols > 1 and ys[r + 1] > ys[r]:
+            gx = gutters(im.crop((0, ys[r], w, ys[r + 1])), 'x', cols)
+        xs_by_row.append(gx if gx else nominal_x)
     i = 0
     for r in range(rows):
+        xs = xs_by_row[r]
+        # a gutter cut already clears the art; an inset would eat into the sprite
+        ins = 0 if xs is not nominal_x else inset
         for c in range(cols):
             if i >= len(names):
                 break
-            box = (int(c * cw) + inset, int(r * ch) + inset,
-                   int((c + 1) * cw) - inset, int((r + 1) * ch) - inset)
+            box = (xs[c] + ins, ys[r] + ins, xs[c + 1] - ins, ys[r + 1] - ins)
             cell = im.crop(box)
-            if solo:
+            # biggest_blob only when we had to guess the cut. On a gutter cut the
+            # cell holds exactly one sprite already, and culling to the largest
+            # blob is precisely what was deleting detached tails and flippers.
+            if solo and xs is nominal_x:
                 cell = biggest_blob(cell)
             cell = trim(cell)
             if names[i]:

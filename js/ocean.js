@@ -88,7 +88,8 @@ const Ocean = {
   camX: 0, camY: 0,
   face: 1, bank: 0, spin: 0,
   ix: 0, iy: 0, nx: 0, ny: 0, inMag: 0,
-  anim: 'cruise', animFrame: 'oswim_0', animBox: 54, animT: 0,
+  anim: 'cruise', animFrame: 'oswim_0', animPrev: 'oswim_0', animMix: 1,
+  animBox: 54, animT: 0,
   air: 0, airMax: 0, airBeepT: 0, drownT: 0,
   bag: null, bagCount: 0, bagPulse: 0,
   dashT: 0, dashCD: 0, ddx: 1, ddy: 0,
@@ -258,7 +259,8 @@ const Ocean = {
     this.over = false; this.overT = 0;
     this.flash = 0; this.shakeT = 0; this.splashT = 0;
     this.msg = ''; this.msgT = 0;
-    this.anim = 'cruise'; this.animFrame = 'oswim_0'; this.animT = 0;
+    this.anim = 'cruise'; this.animFrame = 'oswim_0';
+    this.animPrev = 'oswim_0'; this.animMix = 1; this.animT = 0;
     for (let i = 0; i < this.bubbles.length; i++) this.bubbles[i].t = 0;
     for (let i = 0; i < this.rings.length; i++) this.rings[i].t = 0;
     for (let i = 0; i < this.spills.length; i++) this.spills[i].t = 0;
@@ -1041,20 +1043,33 @@ const Ocean = {
     this.animT += dt * rate;
 
     const def = Object.prototype.hasOwnProperty.call(this.ANIM, a) ? this.ANIM[a] : this.ANIM.cruise;
-    let idx;
+    // A continuous position through the cycle, not just an index: the fractional
+    // part is what lets the draw cross-fade one pose into the next. These sheets
+    // are 4 frames per action, so without a blend they visibly flick.
+    let pos, wrap = true;
     if (a === 'roll') {
-      // exactly one revolution across the roll's duration
-      idx = clamp(Math.floor((1 - this.rollT / this.ROLL_T) * 4), 0, 3);
+      pos = (1 - this.rollT / this.ROLL_T) * 4; wrap = false;   // one revolution
     } else if (a === 'hurt') {
-      idx = clamp(Math.floor((1 - this.hurtT / this.HURT_T) * 8), 0, 7);
+      pos = (1 - this.hurtT / this.HURT_T) * 8; wrap = false;
     } else if (a === 'limp') {
       // 8..11 goes limp, then 12..15 floats belly-up and stays there
-      idx = this.overT < 1.3 ? clamp(Math.floor(this.overT / 0.33), 0, 3)
-                             : 4 + (Math.floor((this.overT - 1.3) * 2.2) % 4);
+      if (this.overT < 1.3) { pos = this.overT / 0.33; wrap = false; }
+      else { pos = 4 + ((this.overT - 1.3) * 2.2) % 4; }
     } else {
-      idx = Math.floor(this.animT * def.fps) % def.f.length;
+      pos = this.animT * def.fps;
     }
-    this.animFrame = def.f[clamp(idx, 0, def.f.length - 1)];
+    const n = def.f.length;
+    let idx = Math.floor(pos);
+    const phase = pos - idx;
+    idx = wrap ? ((idx % n) + n) % n : clamp(idx, 0, n - 1);
+    const prev = wrap ? ((idx - 1 + n) % n) : Math.max(0, idx - 1);
+    this.animFrame = def.f[idx];
+    this.animPrev = def.f[prev];
+    // Cross-fade across the first 45% of each frame's dwell. Beyond that only one
+    // frame is drawn, so the two-blit path is the exception, not the rule.
+    const BL = 0.45;
+    if (phase >= BL || prev === idx) this.animMix = 1;
+    else { const k = phase / BL; this.animMix = k * k * (3 - 2 * k); }
     this.animBox = def.box;
   },
 
@@ -1776,7 +1791,25 @@ const Ocean = {
       // belly-up: the limp frames already sag, this rolls him the rest of the way
       ctx.rotate(clamp((this.overT - 1.1) * 0.9, 0, 1) * Math.PI * (this.face > 0 ? 1 : -1) * 0.9);
     }
-    ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    // Cross-fade the outgoing pose into the incoming one. Only during the first
+    // slice of each frame's dwell, so this is one blit for most of every frame.
+    if (this.animMix < 1) {
+      const pimg = ASSETS[this.animPrev];
+      if (pimg && pimg.width) {
+        const pw = pimg.width >= pimg.height ? box : box * pimg.width / pimg.height;
+        const ph = pimg.width >= pimg.height ? box * pimg.height / pimg.width : box;
+        const base = ctx.globalAlpha;
+        ctx.globalAlpha = base * (1 - this.animMix);
+        ctx.drawImage(pimg, -pw / 2, -ph / 2, pw, ph);
+        ctx.globalAlpha = base * this.animMix;
+        ctx.drawImage(img, -w / 2, -h / 2, w, h);
+        ctx.globalAlpha = base;
+      } else {
+        ctx.drawImage(img, -w / 2, -h / 2, w, h);
+      }
+    } else {
+      ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    }
     ctx.restore();
     ctx.globalAlpha = 1;
   },

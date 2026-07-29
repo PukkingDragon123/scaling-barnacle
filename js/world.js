@@ -45,7 +45,7 @@ const WorldScene = {
   dust: [], dustT: 0,
   _lampGlows: [],
 
-  worldW() { return this.endX() + 80; },
+  worldW() { return this.endX() + 20; },   // just past the last plank, no empty runway
   endX() { return 340 + G.bridge * 90; },
   houseTop() { return DECK_Y - assetH('house_body', HOUSE_W); },
 
@@ -83,10 +83,12 @@ const WorldScene = {
       label: `Dive at the Piling — ${PILINGS[deepest].name}  (beds ~${Math.round(clamp(G.growth[deepest], 0, 1) * 100)}%)`,
       act: () => Game.go(DiveScene, deepest),
     });
-    // and straight off the planks into open water, from day one
+    // You go in off the END of the pier, where the planks stop — walking to the
+    // edge and jumping reads as entering the water; a hatch in the middle of the
+    // deck did not. The gate sprite marks it, so the affordance is visible.
     if (typeof Ocean !== 'undefined') {
       s.push({
-        x: 110, label: 'Jump In  (open ocean)',
+        x: this.endX() - 14, label: 'Jump In  (open ocean)',
         act: () => Game.go(Ocean, { from: 'dock' }),
       });
     }
@@ -152,15 +154,26 @@ const WorldScene = {
     // ---- the pier: ONE trestle module tiled edge to edge -------------------------
     const pierH = assetH('dock_11', SEG_W);
     const pierTop = DECK_Y - pierH * PIER_DECK;
-    const pierEnd = Math.max(endX, cam + W + SEG_W);
+    // The deck STOPS at endX. It used to tile out to the camera edge, which meant
+    // there was no visible end to the pier — and "walk to the edge and jump in"
+    // needs an edge you can see. The last module is clipped to the exact plank
+    // line so the boards finish cleanly instead of being cut mid-beam.
+    const pierEnd = endX;
     for (let x = PIER_START; x < pierEnd; x += SEG_W - 1) {
-      drawA(ctx, 'dock_11', x, pierTop, SEG_W, pierH);
+      const over = (x + SEG_W) - pierEnd;
+      if (over <= 0) { drawA(ctx, 'dock_11', x, pierTop, SEG_W, pierH); continue; }
+      const keep = SEG_W - over;
+      if (keep <= 1) break;
+      const img = ASSETS['dock_11'];
+      if (img && img.width) {
+        const sw = img.width * (keep / SEG_W);
+        ctx.drawImage(img, 0, 0, sw, img.height, x, pierTop, keep, pierH);
+      }
     }
-    // end-of-pier gate
-    if (G.bridge < 3) {
-      const gw = 30;
-      drawOnDeck(ctx, 'dock_10', endX - 16, gw, 0.035);
-    }
+    // The end-of-pier gate marks the edge you jump from, so it stands at every
+    // bridge level now — it used to vanish at bridge 3, which left the jump-in
+    // spot with nothing to look at.
+    drawOnDeck(ctx, 'dock_10', endX - 16, 30, 0.035);
 
     // ---- the house, its platform flush with the pier deck --------------------------
     const hh = assetH('house_body', HOUSE_W);

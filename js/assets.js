@@ -31,6 +31,57 @@ function drawA(ctx, name, x, y, w, h) {
   ctx.drawImage(img, x, y, w, h);
 }
 
+// ---- tweened frame playback ---------------------------------------------------
+// Hand-drawn sheets are 3-4 frames per action, so at any honest frame rate they
+// pop from pose to pose. This cross-fades the outgoing frame into the incoming one
+// across the first slice of each frame's time, and eases the sub-frame phase, so a
+// four-frame cycle reads as continuous motion instead of a flick-book.
+//
+//   frames  array of asset names
+//   t       elapsed seconds
+//   fps     frames per second of the cycle
+//   opts    { loop=true, blend=0.45, cx, cy, w, h, flip, rot, alpha }
+//
+// blend is the fraction of one frame's duration spent cross-fading. 0 disables it
+// (use that for anything that must read as crisp, like a UI icon strip).
+function drawAnim(ctx, frames, t, fps, opts) {
+  const n = frames.length;
+  if (!n) return;
+  const o = opts || {};
+  const step = 1 / (fps || 8);
+  const raw = t / step;
+  let i = Math.floor(raw);
+  const phase = raw - i;                       // 0..1 within the current frame
+  if (o.loop === false) { if (i >= n) i = n - 1; } else i = ((i % n) + n) % n;
+  const blend = o.blend === undefined ? 0.45 : o.blend;
+
+  const put = (name, alpha) => {
+    const img = ASSETS[name];
+    if (!img || !img.width || alpha <= 0.004) return;
+    let w = o.w, h = o.h;
+    if (w === undefined && h === undefined) { w = img.width * APIX; h = img.height * APIX; }
+    else if (h === undefined) h = w * img.height / img.width;
+    else if (w === undefined) w = h * img.width / img.height;
+    ctx.save();
+    ctx.globalAlpha = (o.alpha === undefined ? 1 : o.alpha) * alpha;
+    ctx.translate(o.cx || 0, o.cy || 0);
+    if (o.rot) ctx.rotate(o.rot);
+    if (o.flip) ctx.scale(-1, 1);
+    ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    ctx.restore();
+  };
+
+  // Outside the blend window there is only one frame to draw, which is the common
+  // case — so the two-blit path costs nothing for most of each frame's life.
+  if (blend <= 0 || phase >= blend) { put(frames[i], 1); return; }
+  const prev = o.loop === false ? Math.max(0, i - 1) : (i - 1 + n) % n;
+  // smoothstep the crossfade: a linear one reads as a double-exposure
+  const k = phase / blend;
+  const e = k * k * (3 - 2 * k);
+  put(frames[prev], 1 - e);
+  put(frames[i], e);
+}
+
 // draw centered at (cx, cy), optionally flipped horizontally
 function drawAC(ctx, name, cx, cy, w, h, flip) {
   const img = ASSETS[name];
