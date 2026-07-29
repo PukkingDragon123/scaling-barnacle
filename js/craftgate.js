@@ -48,12 +48,20 @@ const Forge = {
   selfWire: true,
 
   // Deck rules. The world's single [E] is a nearest-within-22 search, so a table
-  // needs MORE than 22 units of clearance or it would shadow (or be shadowed by)
-  // whatever it landed next to. 24 is the smallest honest number.
+  // needs MORE than 22 units of clearance from anything that is not one of ours.
+  // 24 is the number js/integrate.js's deck plan is built around: it lays every
+  // fixture out on a 26-unit grid and leaves three 52-unit LANES empty (x 290,
+  // 420, and 550/576) specifically so a crafted table has somewhere legal to go,
+  // and its comment names Forge.MIN_GAP as the reason. Keep the two in step: if
+  // this number grows, those lanes stop being wide enough.
   MIN_GAP: 24,
+  // Tables need only elbow room from EACH OTHER, because a cluster of them shares
+  // one [E] spot -- see spots(). That is what lets a whole workshop row live in a
+  // single 52-unit lane instead of eating the entire pier.
+  TABLE_GAP: 14,
   PLACE_MIN: 16,        // WorldScene's own walk clamp -- Otto cannot stand left of this
   PLACE_PAD: 12,        // ... and stops this far short of endX()
-  PLACE_MAX: 900,       // sanity clamp for a save from a longer dock
+  PLACE_MAX: 900,       // sanity clamp for a save written on a longer pier
   MAX_PER: 1,           // one of each table: a second bench shares the first one's queue
   MAX_PLACED: 8,
 
@@ -215,6 +223,8 @@ const Forge = {
   _hinted: false,
   _rowCache: null,
   _fx: null,
+  _bandSig: '',
+  _bandList: null,
   // gate cache: the filtered recipe lists, invalidated by an epoch counter
   _gepoch: 0,
   _gobj: null,
@@ -344,9 +354,9 @@ const Forge = {
   },
 
   _gateList: function (stKey, list) {
-    var ep = this._epoch();
+    var ep = this._epoch(), hl = !!this.HIDE_LOCKED;
     var c = this._gcache[stKey];
-    if (c && c.ep === ep && c.src === list) return c.out;
+    if (c && c.ep === ep && c.src === list && c.hl === hl) return c.out;
     var out = [], i, r;
     for (i = 0; i < list.length; i++) {
       r = list[i];
@@ -354,7 +364,7 @@ const Forge = {
       if (this.HIDE_LOCKED) continue;
       out.push(this._silhouette(r));
     }
-    this._gcache[stKey] = { ep: ep, src: list, out: out };
+    this._gcache[stKey] = { ep: ep, src: list, out: out, hl: hl };
     return out;
   },
 
@@ -472,19 +482,81 @@ const Forge = {
   // to beat the spot search to the press.
   placeWhy: function (x, key, moveIdx) {
     if (typeof WorldScene === 'undefined' || Game.scene !== WorldScene) return 'out on the planks only';
-    var maxX = (WorldScene.endX ? WorldScene.endX() : 430) - this.PLACE_PAD;
     if (x < this.PLACE_MIN) return 'not out over the water';
-    if (x > maxX) return 'the planks end here';
+    if (x > this._maxX()) return 'the planks end here';
     var spots = [], i, s, d;
     try { spots = WorldScene.spots() || []; } catch (e) { spots = []; }
+    // Somebody else's spot needs the full radius; our own tables only need elbow
+    // room, because the cluster shares one [E].
     for (i = 0; i < spots.length; i++) {
       s = spots[i];
-      if (!s || typeof s.x !== 'number') continue;
-      d = Math.abs(s.x - x);
-      if (d >= this.MIN_GAP) continue;
+      if (!s || typeof s.x !== 'number' || s.forge) continue;
+      if (Math.abs(s.x - x) >= this.MIN_GAP) continue;
       return 'too close to ' + this._shortLabel(s.label);
     }
+    var a = G.placed, skip = typeof moveIdx === 'number' ? moveIdx : -1;
+    for (i = 0; i < a.length; i++) {
+      if (i === skip) continue;
+      d = Math.abs(a[i].x - x);
+      if (d >= this.TABLE_GAP) continue;
+      return 'too close to the ' + String(this.table(a[i].key).short).toLowerCase();
+    }
     return null;
+  },
+
+  _maxX: function () {
+    var e = (typeof WorldScene !== 'undefined' && WorldScene.endX) ? WorldScene.endX() : 430;
+    return e - this.PLACE_PAD;
+  },
+
+  // Every stretch of planks a table would actually fit on, as [{a,b}] in deck
+  // units. Derived by unioning the blocked intervals and inverting -- exact, and
+  // O(n log n) instead of probing every x. Recomputed only when the deck changes,
+  // and only while placing, so it costs nothing the rest of the time.
+  bands: function () {
+    if (!this.ensure() || !this.placing) return [];
+    var maxX = this._maxX();
+    var spots = [];
+    try { spots = WorldScene.spots() || []; } catch (e) { spots = []; }
+    var a = G.placed, skip = this.placing.moveIdx;
+    var sig = G.bridge + '|' + spots.length + '|' + a.length + '|' + skip + '|' + Math.round(maxX);
+    if (this._bandSig === sig) return this._bandList;
+
+    var blocked = [], i, s;
+    for (i = 0; i < spots.length; i++) {
+      s = spots[i];
+      if (!s || typeof s.x !== 'number' || s.forge) continue;
+      blocked.push([s.x - this.MIN_GAP + 1, s.x + this.MIN_GAP - 1]);
+    }
+    for (i = 0; i < a.length; i++) {
+      if (i === skip) continue;
+      blocked.push([a[i].x - this.TABLE_GAP + 1, a[i].x + this.TABLE_GAP - 1]);
+    }
+    blocked.sort(function (p, q) { return p[0] - q[0]; });
+
+    var out = [], cur = this.PLACE_MIN;
+    for (i = 0; i < blocked.length; i++) {
+      if (blocked[i][0] > cur) out.push({ a: cur, b: Math.min(blocked[i][0] - 1, maxX) });
+      if (blocked[i][1] + 1 > cur) cur = blocked[i][1] + 1;
+      if (cur > maxX) break;
+    }
+    if (cur <= maxX) out.push({ a: cur, b: maxX });
+    for (i = out.length - 1; i >= 0; i--) if (out[i].b < out[i].a) out.splice(i, 1);
+
+    this._bandSig = sig;
+    this._bandList = out;
+    return out;
+  },
+
+  // The nearest legal x to `from`, or null when the planks really are full.
+  nearestSpot: function (from) {
+    var b = this.bands(), i, best = null, bd = Infinity, x, d;
+    for (i = 0; i < b.length; i++) {
+      x = from < b[i].a ? b[i].a : (from > b[i].b ? b[i].b : from);
+      d = Math.abs(x - from);
+      if (d < bd) { bd = d; best = x; }
+    }
+    return best;
   },
 
   _shortLabel: function (label) {
@@ -513,7 +585,12 @@ const Forge = {
     }
     if (this.open) this.close(true);
     this.placing = { key: key, moveIdx: moving ? moveIdx : -1, x: Math.round(WorldScene.px), why: null };
+    this._bandSig = '';                     // the deck's free stretches, once
     this._track();
+    if (!this.bands().length) {
+      Game.toast('The planks are full -- a longer dock would help.');
+      SND.alarm();
+    }
     SND.blip();
     Game.toast(TouchUI.enabled
       ? (moving ? 'Walk it somewhere better, then tap the paw.' : 'Walk to a clear spot and tap the paw to set it down.')
@@ -524,6 +601,7 @@ const Forge = {
   cancelPlace: function (quiet) {
     if (!this.placing) return;
     this.placing = null;
+    this._bandSig = '';
     if (!quiet) { SND.click(); Game.toast('Left it in your paws.'); }
   },
 
@@ -532,8 +610,7 @@ const Forge = {
     if (!p || typeof WorldScene === 'undefined') return;
     // The ghost simply IS Otto's position, snapped to a whole unit so the sprite
     // lands on the texel grid and does not shimmer as he walks.
-    p.x = Math.round(clamp(WorldScene.px, this.PLACE_MIN,
-      (WorldScene.endX ? WorldScene.endX() : 430) - this.PLACE_PAD));
+    p.x = Math.round(clamp(WorldScene.px, this.PLACE_MIN, this._maxX()));
     p.why = this.placeWhy(p.x, p.key, p.moveIdx);
   },
 
@@ -563,6 +640,7 @@ const Forge = {
     }
     this.placing = null;
     this._rowCache = {};
+    this._bandSig = '';
     if (SND.clank) SND.clank(); else SND.clink();
     if (SND.thump) SND.thump(0.5);
     Game.save();
@@ -583,16 +661,34 @@ const Forge = {
   // ==== deck presence =======================================================
   // Merge into WorldScene.spots(). Kept cheap and side-effect-free: it is called
   // two or three times a frame, and once more per frame while placing.
+  //
+  // ONE SPOT PER CLUSTER. Tables standing within MIN_GAP of each other are a
+  // workshop, not a queue of rival keypresses: the cluster contributes a single
+  // spot, sitting on whichever table Otto is nearest, so [E] always opens the one
+  // he is standing at and no table can ever be shadowed by its neighbour. That is
+  // what lets them be placed TABLE_GAP apart instead of MIN_GAP.
   spots: function () {
     if (!this.ensure()) return [];
-    var out = [], a = G.placed, i, e, t;
+    var a = G.placed;
+    if (!a.length) return [];
     var skip = this.placing && this.placing.moveIdx >= 0 ? this.placing.moveIdx : -1;
-    for (i = 0; i < a.length; i++) {
-      if (i === skip) continue;              // in your paws, not on the planks
-      e = a[i];
-      t = this.table(e.key);
-      if (!t) continue;
-      out.push(this._spotFor(t, e.x, i));
+    var px = (typeof WorldScene !== 'undefined' && WorldScene) ? WorldScene.px : 0;
+
+    // indices sorted by x, so a cluster is a run of neighbours
+    var idx = [], i, j;
+    for (i = 0; i < a.length; i++) if (i !== skip && this.table(a[i].key)) idx.push(i);
+    idx.sort(function (p, q) { return a[p].x - a[q].x; });
+
+    var out = [], best, bestD, d;
+    for (i = 0; i < idx.length; i = j) {
+      // walk the run: extend while the next table is within MIN_GAP
+      best = idx[i];
+      bestD = Math.abs(a[best].x - px);
+      for (j = i + 1; j < idx.length && a[idx[j]].x - a[idx[j - 1]].x <= this.MIN_GAP; j++) {
+        d = Math.abs(a[idx[j]].x - px);
+        if (d < bestD) { bestD = d; best = idx[j]; }
+      }
+      out.push(this._spotFor(this.table(a[best].key), a[best].x, best));
     }
     return out;
   },
@@ -603,6 +699,9 @@ const Forge = {
     var st = I && I.station_ ? I.station_(t.key) : null;
     return {
       x: x,
+      // `forge` marks it as ours, so placeWhy can tell "another table" (small gap)
+      // from "somebody else's spot" (full gap) without string-matching labels.
+      forge: true,
       label: t.short + '  (' + (st ? st.verb : 'use') + ')',
       act: function () { self.use(t.key, idx); },
     };
@@ -792,6 +891,9 @@ const Forge = {
     // A scene change or a peer panel dismisses both of our modes. Peer guard
     // lists ship without Forge, so this side has to give way.
     if (this.placing && (Game.fadeDir !== 0 || Game.scene !== WorldScene)) this.cancelPlace(true);
+    // Help is drawn OVER everything by main.js and closes on its own; it is the
+    // one overlay we wait out rather than give way to.
+    if (this.open && Game.helpOpen) return;
     if (this.open && (Game.fadeDir !== 0 || !this.canOpenIn(Game.scene) || this._peerOpen())) {
       this.close(true);
       return;
@@ -1040,7 +1142,7 @@ const Forge = {
     c.lineWidth = PIX * 2;
     c.strokeRect(this.WX + 3, this.WY + 3, this.WW - 6, this.WH - 6);
 
-    text(c, 'in otto’s paws', this.WX + 10, this.WY + 6, { size: 8, color: P.ink });
+    text(c, "in otto's paws", this.WX + 10, this.WY + 6, { size: 8, color: P.ink });
 
     // close box
     var cr = this._closeRect(), onC = this._in(cr, m.x, m.y);
@@ -1051,7 +1153,7 @@ const Forge = {
     this._drawGrid(c, row);
     this._drawButton(c, row, m);
     this._drawList(c, rows, m);
-    this._drawFooter(c, row);
+    this._drawFooter(c);
     this._drawFx(c);
   },
 
@@ -1064,8 +1166,14 @@ const Forge = {
       on = this._in(r, m.x, m.y);
       rrect(c, r.x, r.y, r.w, r.h,
         sel ? 'rgba(201,162,113,0.85)' : (on ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.3)'));
-      text(c, locked ? names[i] + ' –' : names[i], r.x + r.w / 2, r.y + 3.5,
+      text(c, names[i], r.x + r.w / 2, r.y + 3.5,
         { size: 7, color: sel ? '#4a3020' : (locked ? '#7a6a55' : P.dim), align: 'center' });
+      // a shackle bar on the locked tab: cheaper than a glyph and never a tofu box
+      if (!locked) continue;
+      c.fillStyle = 'rgba(0,0,0,0.35)';
+      c.fillRect(r.x + r.w - 10, r.y + 4, 6, 6);
+      c.fillStyle = 'rgba(201,162,113,0.7)';
+      c.fillRect(r.x + r.w - 9, r.y + 2, 4, PIX * 2);
     }
   },
 
@@ -1126,6 +1234,12 @@ const Forge = {
 
   _drawButton: function (c, row, m) {
     var P = this.PAL, r = this._btnRect(), ok = this.rowOk(row), on = this._in(r, m.x, m.y);
+
+    // what is on the bench, spelled out under the 2x2 -- the list column only has
+    // room for a clipped name
+    text(c, row ? this._clip(row.name, 22) : 'nothing picked', this.WX + 12, this.WY + 100,
+      { size: 7, color: row && row.kind === 'locked' ? '#7a6a55' : P.ink });
+
     rrect(c, r.x, r.y, r.w, r.h,
       ok ? (on ? 'rgba(255,230,110,0.95)' : 'rgba(246,232,201,0.9)') : 'rgba(60,42,28,0.85)',
       ok ? P.hi : 'rgba(226,200,150,0.28)');
@@ -1141,9 +1255,11 @@ const Forge = {
       msg = why || this.rowDesc(row);
       col = why ? P.bad : P.dim;
     }
+    // wrapped by character count, not measureText: Courier is monospace at 0.6em,
+    // so this is exact and free -- the npc.js / skills.js / inv.js idiom.
     var cols = Math.floor(90 / (6 * 0.6));
     var lines = this._wrap(msg, cols), i;
-    for (i = 0; i < lines.length && i < 3; i++) {
+    for (i = 0; i < lines.length && i < 2; i++) {
       c.globalAlpha = this.noteT > 0 ? clamp(this.noteT, 0, 1) : 1;
       text(c, lines[i], r.x, r.y + 22 + i * 8, { size: 6, color: col });
       c.globalAlpha = 1;
@@ -1178,24 +1294,35 @@ const Forge = {
 
       var ok = this.rowOk(row);
       var built = row.kind === 'table' && this.countPlaced(row.t.key) >= this.MAX_PER;
-      text(c, this._clip(row.name, 15), r.x + 15, r.y + 3,
+      text(c, this._clip(row.name, 14), r.x + 15, r.y + 3,
         { size: 6.5, color: row.kind === 'locked' ? '#7a6a55' : (sel ? P.hi : P.ink) });
-      // one glyph of status per row, right-aligned: built, ready, or short
-      text(c, built ? '✓' : (ok ? '•' : '×'), r.x + r.w - 3, r.y + 3,
-        { size: 6.5, color: built ? P.good : (ok ? P.good : 'rgba(255,106,122,0.7)'), align: 'right' });
+      // one pip of status per row: gold already standing, green ready, red short.
+      // Drawn, not lettered -- a glyph the font lacks would be a tofu box.
+      c.fillStyle = built ? P.hi : (ok ? P.good : 'rgba(255,106,122,0.75)');
+      c.fillRect(r.x + r.w - 6, r.y + 5, 3, 3);
     }
 
     if (rows.length <= this.ROW_VIS) return;
     var a0 = this._arrowRect(-1), a1 = this._arrowRect(1);
-    text(c, '▲', a0.x + 6, a0.y + 2, { size: 6, color: this.scroll > 0 ? P.ink : P.dim, align: 'center' });
-    text(c, '▼', a1.x + 6, a1.y + 2,
-      { size: 6, color: this.scroll < rows.length - this.ROW_VIS ? P.ink : P.dim, align: 'center' });
+    this._tri(c, a0, -1, this.scroll > 0);
+    this._tri(c, a1, 1, this.scroll < rows.length - this.ROW_VIS);
   },
 
-  _drawFooter: function (c, row) {
-    var P = this.PAL, y = this.WY + this.WH - 13;
-    var hint = TouchUI.enabled ? 'tap a row twice to make it' : '[1/2] tabs   arrows pick   [enter] make   [C] close';
-    text(c, hint, this.WX + 10, y, { size: 6, color: 'rgba(168,152,120,0.8)' });
+  _tri: function (c, r, dir, live) {
+    var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    c.fillStyle = live ? this.PAL.ink : 'rgba(168,152,120,0.45)';
+    c.beginPath();
+    if (dir < 0) { c.moveTo(cx, cy - 3); c.lineTo(cx + 4, cy + 3); c.lineTo(cx - 4, cy + 3); }
+    else { c.moveTo(cx, cy + 3); c.lineTo(cx + 4, cy - 3); c.lineTo(cx - 4, cy - 3); }
+    c.closePath();
+    c.fill();
+  },
+
+  _drawFooter: function (c) {
+    var hint = TouchUI.enabled
+      ? 'tap a row twice to make it  •  x to close'
+      : '[1/2] tabs   arrows pick   [enter] make   [C] close';
+    text(c, hint, this.WX + 10, this.WY + this.WH - 12, { size: 6, color: 'rgba(168,152,120,0.8)' });
   },
 
   // ==== draw: the dock ======================================================
@@ -1262,6 +1389,19 @@ const Forge = {
   _drawGhost: function (c, camX, deckY) {
     var p = this.placing, t = this.table(p.key);
     if (!t) return;
+
+    // Show WHERE it can go. The clearance rule is invisible otherwise, and the
+    // dock is crowded enough that hunting for a legal x by trial and error would
+    // be miserable. One flat strip per free stretch, culled, no per-frame maths:
+    // bands() is cached until the deck changes.
+    var b = this.bands(), i, x0, x1;
+    c.fillStyle = 'rgba(160,242,180,0.3)';
+    for (i = 0; i < b.length; i++) {
+      x0 = b[i].a; x1 = b[i].b;
+      if (x1 < camX - 20 || x0 > camX + W + 20) continue;
+      c.fillRect(Math.round(x0 * DPX) / DPX, deckY - 2, Math.max(PIX * 2, x1 - x0), PIX * 2);
+    }
+
     if (p.x < camX - 60 || p.x > camX + W + 60) return;
     var ok = !p.why;
     var pulse = 0.42 + 0.16 * Math.sin(this.time * 6);
@@ -1285,8 +1425,17 @@ const Forge = {
     uiPanel(c, b.x, b.y, b.w, b.h, 0.9, true);
     text(c, (p.moveIdx >= 0 ? 'Moving ' : 'Placing ') + t.short, b.x + 8, b.y + 4,
       { size: 7, color: '#4a3020', shadow: false });
-    text(c, ok ? 'looks like a good spot' : this._clip(p.why, 30), b.x + 8, b.y + 13,
-      { size: 6, color: ok ? '#3a6a3a' : '#a03028', shadow: false });
+    // When the spot is refused, say which way to walk -- the green strips on the
+    // planks show the same thing, but only if a free stretch is on screen.
+    var line;
+    if (ok) line = 'looks like a good spot';
+    else {
+      var near = this.nearestSpot(p.x);
+      line = this._clip(p.why, 26);
+      if (near === null) line = 'no room left on the planks';
+      else if (near !== p.x) line += '  ' + (near < p.x ? '<< ' : '>> ') + Math.abs(near - p.x) + ' steps';
+    }
+    text(c, line, b.x + 8, b.y + 13, { size: 6, color: ok ? '#3a6a3a' : '#a03028', shadow: false });
 
     var r1 = this._placeBtn(1), r0 = this._placeBtn(0);
     rrect(c, r1.x, r1.y, r1.w, r1.h, ok ? 'rgba(160,242,180,0.95)' : 'rgba(120,110,96,0.5)',
@@ -1340,6 +1489,7 @@ const Forge = {
 
     this._wireInv();
     this._wireSkills();
+    this._wirePeers();
 
     // --- 1. the only slot that ticks every frame while a scene is live -------
     var gUpdate = Game.globalUpdate.bind(Game);
@@ -1521,6 +1671,38 @@ const Forge = {
     }
     I.houseSpots = function () { return []; };
     I.drawHouse = function () { };
+  },
+
+  // The peers each check every OTHER panel's `open` flag by hand, and their guard
+  // lists shipped before this file existed. Eating Tab / KeyI / KeyK / KeyT in
+  // update() only works while our globalUpdate hook happens to run first, which
+  // is a fact about script order -- so the three panels that open from a bare
+  // keypress anywhere are also refused at their own front door. That holds no
+  // matter who installed first.
+  _wirePeers: function () {
+    var i, spec = [
+      { m: typeof Inv !== 'undefined' ? Inv : null, fns: ['openBag', 'station'], ret: false },
+      // toggleBag as well, or Inv answers a refused Tab with its own "not in the
+      // water" hint, which would be the wrong reason.
+      { m: typeof Inv !== 'undefined' ? Inv : null, fns: ['toggleBag'], ret: undefined },
+      { m: typeof Skills !== 'undefined' ? Skills : null, fns: ['openUI'], ret: undefined },
+      { m: typeof Tame !== 'undefined' ? Tame : null, fns: ['openUI'], ret: undefined },
+    ];
+    for (i = 0; i < spec.length; i++) this._guard(spec[i].m, spec[i].fns, spec[i].ret);
+  },
+
+  _guard: function (mod, fns, ret) {
+    if (!mod) return;
+    for (var i = 0; i < fns.length; i++) {
+      var name = fns[i];
+      if (typeof mod[name] !== 'function') continue;
+      mod[name] = (function (prev, refuse) {
+        return function () {
+          if (Forge.open) return refuse;
+          return prev.apply(this, arguments);
+        };
+      })(mod[name], ret);
+    }
   },
 
   _wireSkills: function () {

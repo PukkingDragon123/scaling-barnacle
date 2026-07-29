@@ -198,10 +198,17 @@ const fails = [];
   if (!surfaced) fails.push('swim-up surfacing failed');
 
   // 4) workbench: crack one clam (storage should have one from the pry)
-  // the shell workbench is at 300; approach from wherever surfacing left us
-  const benchDir = await page.evaluate(() => (WorldScene.px > 300 ? 'KeyA' : 'KeyD'));
+  // Ask the scene where the workbench IS rather than hardcoding it. The deck has
+  // been re-laid out twice now, and a literal 300 in here quietly walked Otto to
+  // an empty plank and reported the crack minigame as broken.
+  const benchX = await page.evaluate(() => {
+    const s = WorldScene.spots().find(v => v.label.indexOf('Workbench') >= 0);
+    return s ? s.x : null;
+  });
+  if (benchX === null) fails.push('no Workbench spot on the deck');
+  const benchDir = await page.evaluate((bx) => (WorldScene.px > bx ? 'KeyA' : 'KeyD'), benchX);
   await page.keyboard.down(benchDir);
-  await page.waitForFunction(() => Math.abs(WorldScene.px - 300) < 14, null, { timeout: 12000 });
+  await page.waitForFunction((bx) => Math.abs(WorldScene.px - bx) < 10, benchX, { timeout: 12000 });
   await page.keyboard.up(benchDir);
   await page.keyboard.press('KeyE');
   await page.waitForTimeout(400);

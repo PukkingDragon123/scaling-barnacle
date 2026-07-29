@@ -68,8 +68,8 @@ const Hood = {
   HOLD_T: 7,              // how long a resident stays put after you speak to them
   SAY_T: 5.4,             // speech bubble lifetime
   WAKE_MAX: 36,
-  BUBBLE_COLS: 27,        // character wrap width of a speech bubble
-  BUBBLE_LINES: 3,
+  BUBBLE_COLS: 36,        // character wrap width of a speech bubble
+  BUBBLE_LINES: 5,
 
   // The pier, in ocean world coordinates. G.ocean.x starts at 0 and that is where
   // Otto drops in off his own planks, so the origin IS home water.
@@ -79,6 +79,14 @@ const Hood = {
   FLOOR: 178,             // deck surface, screen y (the sea starts at SKY.HORIZON 118)
   DL: 96, DR: 384,        // walkable span
   customCursor: false,    // keyboard scene; let Game.drawCursor keep the arrow
+
+  // Where things stand on the deck, in screen units. The [E] search is the same
+  // nearest-within-26 the house uses, so every pair here is >= 30 apart or two of
+  // them would fight over one keypress and the loser would be unreachable. The
+  // draw code reads these same numbers, so a hit box can never drift off its art.
+  PLOT_X: 148, DOOR_X: 240, PROP_X: 318, EXIT_X: 378,
+  POST_TEND: 178,               // a resident who is tending stands at the planter
+  POSTS: [208, 118, 96],        // ...otherwise they take the next free post
 
   // ---- clock ------------------------------------------------------------------
   // G.clock is a 0..1 day cycle whose landmarks are fixed elsewhere: 0.06 is the
@@ -336,7 +344,7 @@ const Hood = {
   agents: null,
   _wakes: null, _wi: 0,
   time: 0,
-  _stamp: -1, _installed: false, _booted: false,
+  _stamp: -1, _installed: false, _booted: false, _touchHooked: false,
   _cobj: null,                     // identity of the G.hood we normalised
   // ocean-side interaction
   _reach: null, _reachKind: '',    // what [E] would do right now: 'climb' | 'talk'
@@ -347,7 +355,8 @@ const Hood = {
   _ret: { x: 0, y: 20 },
   _resume: null,                   // bag/position stash for the swim back
   _carrySrc: null, _carryStamp: -1,
-  _spots: null,
+  _spots: null, _present: null, _spotObjs: null, _lovesCache: null,
+  _noSpots: [],                    // shared empty result; never written to
 
   // =============================================================================
   // SAVE STATE
@@ -399,6 +408,10 @@ const Hood = {
     }
     this._cobj = s;
     this._boot();
+    // A different G.hood object means a load, or a new game: nobody's remembered
+    // position means anything any more, so put everybody where the clock says
+    // they are instead of letting them swim in from wherever they were.
+    this._snap();
     return true;
   },
 
@@ -435,7 +448,27 @@ const Hood = {
     }
     this._wakes = [];
     for (i = 0; i < this.WAKE_MAX; i++) this._wakes.push({ t: 0, x: 0, y: 0, vx: 0, vy: 0, r: 1, warm: false });
+
+    // The deck's spot list, built ONCE. spots() runs two or three times a frame
+    // (the [E] search, the prompt, and any wrapper), so it refills these in place
+    // rather than handing back five fresh closures every time.
+    var self = this;
     this._spots = [];
+    this._present = [];
+    this._spotObjs = {
+      res: [
+        { x: 0, label: '', act: function () { self.meet(self._present[0]); } },
+        { x: 0, label: '', act: function () { self.meet(self._present[1]); } },
+        { x: 0, label: '', act: function () { self.meet(self._present[2]); } },
+      ],
+      door: { x: 0, label: '', act: function () { self.knock(); } },
+      plot: { x: 0, label: '', act: function () { self.waterPlot(); } },
+      prop: { x: 0, label: '', act: function () { self.poke(); } },
+      exit: { x: 0, label: '', act: function () { self.leave(); } },
+    };
+    // merged love lists, resolved once: npc.js's adore+loved concat would
+    // otherwise allocate on every mood check, which is every agent every frame
+    this._lovesCache = null;
   },
 
   // Called from js/integrate.js on Ocean.enter. The seed only phases the idle
@@ -472,21 +505,20 @@ const Hood = {
     for (var i = 0; i < this.HOMES.length; i++) {
       var hm = this.HOMES[i];
       var p = s.plots[hm.key];
-      var m = s.who[hm.who];
       // Whether the resident got to their planter yesterday is the whole
-      // simulation: a watered night grows the crop, a missed one dries it out.
-      var watered = p.water > 0.4;
-      if (watered) {
+      // simulation: a watered night grows the crop, a missed one dries it out, and
+      // a dry planter is what puts its owner in a mood the next morning.
+      if (p.water > 0.4) {
         p.days++;
         p.dry = 0;
         if (p.days >= 3 && p.stage < 2) { p.stage++; p.days = 0; }
-      } else {
+        // ripe and looked after: the owner lifts it and starts again. Their crop
+        // is scenery with a life, not a bed the player can harvest.
+        else if (p.stage >= 2 && p.days >= 2) { p.stage = 0; p.days = 0; }
+      } else if (p.dry < 9) {
+        // clamped at the same ceiling ensure() enforces: an unvisited planter must
+        // not grow an unbounded number in the save file
         p.dry++;
-      }
-      // A ripe planter is lifted by its owner and started again -- their crop is
-      // scenery with a life, not a harvest the player can farm.
-      if (p.stage >= 2 && p.dry === 0 && m && m.meets >= 0 && p.days >= 2) {
-        p.stage = 0; p.days = 0;
       }
       p.water = 0;                 // the sun takes it back every night
     }
@@ -631,38 +663,65 @@ const Hood = {
     if (this._carryStamp === stamp) return this._carrySrc;
     this._carryStamp = stamp;
     var src = null;
-    if (typeof Ocean !== 'undefined' && Ocean && Ocean.bag &&
-        typeof Game !== 'undefined' && Game.scene === Ocean) src = Ocean.bag;
+    var scene = (typeof Game !== 'undefined') ? Game.scene : null;
+    if (typeof Ocean !== 'undefined' && Ocean && Ocean.bag && scene === Ocean) src = Ocean.bag;
+    // up on somebody's porch he is still holding the haul he climbed out with
+    else if (scene === this && this._resume && this._resume.bag) src = this._resume.bag;
     if (!src && typeof G !== 'undefined' && G) src = G.storage;
     this._carrySrc = src || null;
     return this._carrySrc;
   },
 
-  // The one thing they would notice: something on their loved list first, then
-  // anything outright precious.
+  // Two different questions, deliberately separate.
+  //
+  // lovedOn  -- are you carrying a thing THIS PERSON loves? That is what makes
+  //             them delighted, because the mood line is "that is one of MINE".
+  // notableOn-- would they clock it at all? Their loves, or anything precious
+  //             enough that a stranger would look twice. That is what the memory
+  //             records, so "you had a pearl on you last time" works for everyone.
   PRECIOUS: ['pearlPol', 'pearl', 'abalonePol', 'crystal', 'lens', 'ingot'],
 
-  notableOn: function (who) {
+  lovedOn: function (who) {
     var src = this._carry();
     if (!src) return '';
     var loves = this._loves(who);
-    var i, k;
-    for (i = 0; i < loves.length; i++) { k = loves[i]; if (src[k] > 0) return k; }
-    for (i = 0; i < this.PRECIOUS.length; i++) { k = this.PRECIOUS[i]; if (src[k] > 0) return k; }
+    for (var i = 0; i < loves.length; i++) if (src[loves[i]] > 0) return loves[i];
     return '';
   },
 
+  notableOn: function (who) {
+    var got = this.lovedOn(who);
+    if (got) return got;
+    var src = this._carry();
+    if (!src) return '';
+    for (var i = 0; i < this.PRECIOUS.length; i++) if (src[this.PRECIOUS[i]] > 0) return this.PRECIOUS[i];
+    return '';
+  },
+
+  // Resolved once and cached: this is read for every agent on every frame, and
+  // npc.js's adore list has to be merged with its loved list to get the order
+  // right -- doing that with concat() per call would allocate three arrays a frame
+  // forever, which is exactly the thing the budget rules forbid.
   _loves: function (who) {
+    var cache = this._lovesCache;
+    if (!cache) cache = this._lovesCache = {};
+    var got = cache[who];
+    if (got) return got;
+    var out = null;
     if (typeof NPCs !== 'undefined' && NPCs && NPCs.byKey) {
       var n = NPCs.byKey(who);
       if (n) {
         // adore beats loved beats liked, and npc.js already keeps them in that order
-        if (n.adore && n.adore.length) return n.adore.concat(n.loved || []);
-        if (n.loved && n.loved.length) return n.loved;
+        if (n.adore && n.adore.length) out = n.adore.concat(n.loved || []);
+        else if (n.loved && n.loved.length) out = n.loved;
       }
     }
-    var c = this.CAST[who];
-    return (c && c.loves) || [];
+    if (!out) {
+      var c = this.CAST[who];
+      out = (c && c.loves) || [];
+    }
+    cache[who] = out;
+    return out;
   },
 
   itemName: function (key) {
@@ -679,7 +738,8 @@ const Hood = {
   // what you are carrying, how dry their soil is, what hour it is, how you stand
   // with them.
   moodOf: function (a) {
-    if (this.notableOn(a.key)) return 'delighted';
+    // delighted is for THEIR treasure, not any treasure
+    if (this.lovedOn(a.key)) return 'delighted';
     var hm = this.HOMES[a.homeI];
     var p = this.plotOf(hm.key);
     if (p && (p.dry > 0 || (p.water < 0.35 && a.act !== 'tend'))) return 'worried';
@@ -703,6 +763,9 @@ const Hood = {
       this._stamp = Game.time;
     }
     if (dt > 0.05) dt = 0.05;
+    // the touch pads hook themselves on the first frame -- see _hookTouch for why
+    // it cannot happen at load time
+    if (!this._touchHooked) this._hookTouch();
     this.time += dt;
     if (G.hood.lastDay < G.day) this.newDay();
 
@@ -787,17 +850,14 @@ const Hood = {
     }
     a.arrived = false;
 
-    // waypoint: stay in the water until we are under the ladder
+    // Waypoint. A deck is only reachable up its own ladder, so anybody heading
+    // for one swims to the water underneath it first and climbs the last leg --
+    // which is what leaves them out in the open, crossing the map, where the
+    // player can cut them off.
     var wx = t.x, wy = t.y;
-    var hm = this.HOMES[a.homeI];
     a.climbing = false;
-    if (t.up && Math.abs(a.x - t.x) > 20 && a.y < 6) {
-      wy = 14;                        // drop back into the water to travel
-    } else if (t.up && Math.abs(a.x - t.x) > 20) {
-      wy = 14;
-    } else if (t.up) {
-      a.climbing = true;
-    }
+    if (t.up && Math.abs(a.x - t.x) > 20) wy = 14;   // still travelling: stay wet
+    else if (t.up) a.climbing = true;
 
     var sp = a.climbing ? this.CLIMB_SPEED : this.SWIM;
     var vdx = wx - a.x, vdy = wy - a.y;
@@ -811,9 +871,13 @@ const Hood = {
     a.y += a.vy * dt;
     if (a.vx > 4) a.face = 1; else if (a.vx < -4) a.face = -1;
 
-    // no swimming through the sky: only the ladder lifts anybody out
-    if (a.y < hm.deckY) a.y = hm.deckY;
-    if (!a.climbing && a.y < 2 && !t.up) a.y = 2;
+    // No swimming through the sky: nothing rises above the deck it is climbing
+    // to. Clamping against their OWN deck would strand a visitor whose host sits
+    // higher up, so the ceiling is whichever of the two is further up.
+    var ceil = this.HOMES[a.homeI].deckY;
+    if (t.up && t.y < ceil) ceil = t.y;
+    if (a.y < ceil) a.y = ceil;
+    if (!a.climbing && !t.up && a.y < 2) a.y = 2;
 
     // a wake, but only while actually swimming
     if (a.y > 3 && (a.vx * a.vx + a.vy * a.vy) > 900 && Math.random() < dt * 14) {
@@ -830,6 +894,7 @@ const Hood = {
       var p = this.plotOf(hm.key);
       if (p && a.workT > 1.6 && p.water < 1) {
         p.water = 1;
+        p.dry = 0;                 // they have dealt with it, so the worry lifts
         p.tendDay = G.day;
         if (Math.random() < 0.5) this._wake(a.x + a.face * 6, a.y + 4, 0, -10, true);
       }
@@ -917,6 +982,7 @@ const Hood = {
       var hm = this.HOMES[i];
       if (G.hood.seen[hm.key]) continue;
       if (Math.abs(px - hm.x) > 190) continue;
+      if (py > 270) continue;                 // swimming under it in the dark is not finding it
       G.hood.seen[hm.key] = true;
       if (typeof SND !== 'undefined' && SND.chime) SND.chime();
       Game.toast('You found ' + hm.name + ' -- ' + hm.of + '.');
@@ -947,27 +1013,30 @@ const Hood = {
   // live here: called with a home while the scene is something else it starts the
   // transition, and Game.updateFade calls it again as the scene's own enter().
   enter: function (arg) {
+    if (typeof Game === 'undefined') return;
     var home = this._resolveHome(arg);
-    if (typeof Game !== 'undefined' && Game.scene !== this) { this.climb(home); return; }
+    // Called as a REQUEST (Hood.enter(house) from anywhere) the scene is still
+    // whatever it was, so start the transition; called as the SCENE's own enter,
+    // Game.updateFade has already made us current, so do the setup.
+    if (Game.scene !== this) { this.climb(home); return; }
     if (!this.ensure()) return;
     if (!home) home = this.HOMES[0];
     this.home = home;
     this.resident = this.agentOf(home.who);
     this.dtime = 0;
     this.walkT = 0; this.idleT = 0;
-    // he comes up the ladder, so he starts at it and faces along the deck
-    var lx = clamp(this._deckX(home.x + home.climbDX), this.DL + 10, this.DR - 10);
-    this.px = lx;
-    this.dir = home.climbDX > 0 ? -1 : 1;
+    // he comes up the ladder at the exit end and turns to face the deck
+    this.px = this.EXIT_X - 14;
+    this.dir = -1;
     if (typeof SND !== 'undefined') {
       if (SND.setScene) SND.setScene('surface');
       if (SND.splash) SND.splash();
     }
     var m = this.memOf(home.who);
-    if (m) { m.visits++; }
+    if (m) m.visits++;
+    if (G.hood.seen) G.hood.seen[home.key] = true;
     Game.toast('You climb up onto ' + home.name + '.');
-    var home_ = this.residentHome(home);
-    if (!home_) Game.toast(this._nobodyHome(home));
+    if (!this.presentAt(home).length) Game.toast(this._nobodyHome(home));
     Game.save();
   },
 
@@ -1139,28 +1208,49 @@ const Hood = {
   // =============================================================================
   // THE DECK SCENE
   // =============================================================================
-  _deckX: function (worldX) {
-    // the home's world x maps to the middle of the deck; anything hung off it
-    // keeps its offset
-    if (!this.home) return 240;
-    return 240 + (worldX - this.home.x) * 1.25;
+  // Which home's deck is this agent standing on, if any? Their PLAN answers it --
+  // there is no "is home" flag to get out of step with where they actually are.
+  // Note this is deliberately not "is the owner in": a neighbour who walked here
+  // on their visit slot is standing on this deck too, and should be found.
+  deckOf: function (a) {
+    if (!a || !a.arrived) return '';
+    if (a.act === 'sleep') return '';                     // in, but not out here
+    if (a.act === 'fish' || a.act === 'dock') return '';  // not at any house
+    var where = a.slot ? a.slot.where : 'home';
+    if (where === 'home' || where === 'plot') return this.HOMES[a.homeI].key;
+    return where;                                         // a neighbour's key
   },
 
-  // Is the resident actually at home right now? Their plan answers, not a flag.
-  residentHome: function (home) {
-    var a = this.agentOf(home ? home.who : '');
-    if (!a) return null;
-    if (a.act === 'sleep') return null;                  // in, but not out here
-    if (!a.arrived) return null;
-    var hm = this.HOMES[a.homeI];
-    if (a.act === 'visit') {
-      // they are on SOMEBODY's deck -- possibly this one
-      var where = a.slot ? a.slot.where : '';
-      return (home && where === home.key) ? a : null;
+  // Everybody currently on this deck, newest arrival last. Refills a reused array
+  // -- spots() and the deck draw both ask, two or three times a frame.
+  presentAt: function (home) {
+    var out = this._present;
+    out.length = 0;
+    if (!home || !this.agents) return out;
+    for (var i = 0; i < this.agents.length; i++) {
+      var a = this.agents[i];
+      if (this.deckOf(a) !== home.key) continue;
+      if (out.length >= this._spotObjs.res.length) break;
+      out.push(a);
     }
-    if (!home || hm.key !== home.key) return null;
-    if (a.act === 'fish' || a.act === 'dock') return null;
-    return a;                                            // tend or drift, on their own deck
+    return out;
+  },
+
+  // Where somebody on this deck stands, in screen units. Whoever is tending takes
+  // the post by the planter; everyone else queues along the posts. The spot list
+  // and the draw both read this, so the label always sits over the right body.
+  postFor: function (a, idx) {
+    if (a && a.act === 'tend') return this.POST_TEND;
+    var posts = this.POSTS;
+    return posts[Math.min(idx, posts.length - 1)];
+  },
+
+  // The owner, if the owner is the one at home. Kept as the friendly name for the
+  // common case (and for the arrival toast).
+  residentHome: function (home) {
+    if (!home) return null;
+    var a = this.agentOf(home.who);
+    return (a && this.deckOf(a) === home.key) ? a : null;
   },
 
   _nobodyHome: function (home) {
@@ -1168,58 +1258,56 @@ const Hood = {
     var cast = this.CAST[home.who];
     var who = cast ? cast.name : 'the owner';
     if (!a) return 'Nobody home.';
-    if (a.act === 'sleep') return who + ' is asleep inside.';
-    var where = 'out';
-    if (a.act === 'fish') where = 'out on the fishing marks';
-    else if (a.act === 'dock') where = "down at your own pier";
+    if (a.act === 'sleep' && a.arrived) return who + ' is asleep inside.';
+    var where;
+    if (!a.arrived) where = 'still out in the water, on their way';
+    else if (a.act === 'fish') where = 'out on the fishing marks';
+    else if (a.act === 'dock') where = 'down at your own pier';
     else if (a.act === 'visit') {
       var oh = this.homeByKey(a.slot ? a.slot.where : '');
       where = oh ? 'over at ' + oh.name : 'visiting a neighbour';
-    } else if (!a.arrived) where = 'still swimming home';
+    } else where = 'about somewhere';
     return who + ' is ' + where + '.';
   },
 
-  // Rebuilt every frame, like every other spot list in the game -- the [E] search
-  // runs it two or three times a frame, so it stays cheap and side-effect free.
+  // Refilled in place two or three times a frame (the [E] search, the prompt, and
+  // any wrapper), so nothing here allocates: the spot objects and the array were
+  // built once in _boot and only their x and label move.
   spots: function () {
+    // Public, and callable before there is a save at all (a wiring layer that
+    // concatenated this into WorldScene.spots() would otherwise take the title
+    // screen down), so the pools have to be proven before they are touched.
+    if (!this.ensure() || !this._spots) return this._noSpots;
     var out = this._spots;
     out.length = 0;
     var home = this.home;
     if (!home) return out;
-    var self = this;
-    var res = this.residentHome(home);
-    var cast = this.CAST[home.who];
+    var S = this._spotObjs;
+    var here = this.presentAt(home);
     var p = this.plotOf(home.key);
+    var i;
 
-    if (res) {
-      out.push({
-        x: clamp(this._deckX(res.x), this.DL + 6, this.DR - 6),
-        label: 'Talk to ' + cast.name,
-        act: function () { self.meet(res); },
-      });
+    // whoever is actually standing here, at the post they are drawn on
+    for (i = 0; i < here.length; i++) {
+      var sp = S.res[i];
+      sp.x = this.postFor(here[i], i);
+      sp.label = 'Talk to ' + here[i].cast.name;
+      out.push(sp);
     }
-    out.push({
-      x: clamp(this._deckX(home.x + home.doorDX), this.DL + 6, this.DR - 6),
-      label: res ? 'The door  (stand and chat)' : 'Knock on the door',
-      act: function () { self.knock(); },
-    });
+    S.door.x = this.DOOR_X;
+    S.door.label = here.length ? 'The door  (someone is in)' : 'Knock on the door';
+    out.push(S.door);
     if (p) {
-      out.push({
-        x: clamp(this._deckX(home.x + home.plotDX), this.DL + 6, this.DR - 6),
-        label: this._plotLabel(p),
-        act: function () { self.waterPlot(); },
-      });
+      S.plot.x = this.PLOT_X;
+      S.plot.label = this._plotLabel(p);
+      out.push(S.plot);
     }
-    out.push({
-      x: clamp(this._deckX(home.x + home.propDX), this.DL + 6, this.DR - 6),
-      label: 'Poke about',
-      act: function () { self.poke(); },
-    });
-    out.push({
-      x: this.DR - 8,
-      label: 'Dive back in',
-      act: function () { self.leave(); },
-    });
+    S.prop.x = this.PROP_X;
+    S.prop.label = 'Poke about';
+    out.push(S.prop);
+    S.exit.x = this.EXIT_X;
+    S.exit.label = 'Dive back in';
+    out.push(S.exit);
     return out;
   },
 
@@ -1241,10 +1329,17 @@ const Hood = {
     var home = this.home;
     var S = this.SAY[home.who];
     var a = this.agentOf(home.who);
-    var res = this.residentHome(home);
     if (typeof SND !== 'undefined' && SND.clank) SND.clank();
-    if (res) { this.meet(res); return; }
-    if (a && a.act === 'sleep') {
+    // somebody out here answers before the door does -- the owner for preference,
+    // otherwise whichever neighbour happens to be standing on the planks
+    var here = this.presentAt(home);
+    if (here.length) {
+      var who = here[0];
+      for (var i = 0; i < here.length; i++) if (here[i].key === home.who) who = here[i];
+      this.meet(who);
+      return;
+    }
+    if (a && a.act === 'sleep' && a.arrived) {
       var m = G.hood.who[home.who];
       Game.toast(pick(S.asleep));
       // waking somebody up costs you a little, but only once a day
@@ -1389,9 +1484,13 @@ const Hood = {
     this._drawDeckPlot(ctx, FLOOR, t);
     this._drawProps(ctx, FLOOR, t);
 
-    // ---- the resident, if they are actually here
-    var res = this.residentHome(home);
-    if (res) this._drawPerson(ctx, res, clamp(this._deckX(res.x), this.DL + 6, this.DR - 6), FLOOR, res.cast.deckH, t, true);
+    // ---- everybody standing here, each on the post their spot is anchored to,
+    // which may be the owner, a visiting neighbour, or both at once
+    var here = this.presentAt(home);
+    var i;
+    for (i = 0; i < here.length; i++) {
+      this._drawPerson(ctx, here[i], this.postFor(here[i], i), FLOOR, here[i].cast.deckH, t, true);
+    }
 
     // ---- Otto
     this._drawOtto(ctx, FLOOR, t);
@@ -1399,10 +1498,11 @@ const Hood = {
     // ---- the rail, in FRONT of everybody: it is the front lip of the deck
     this._drawRail(ctx, FLOOR, this.DL - 10, this.DR + 10);
 
-    // ---- prompt
+    // ---- prompt: the same nearest-within-26 search the update runs, so the
+    // bubble always names the thing [E] would actually do
     var best = null, bd = 26;
     var sp = this.spots();
-    for (var i = 0; i < sp.length; i++) {
+    for (i = 0; i < sp.length; i++) {
       var d = Math.abs(this.px - sp[i].x);
       if (d < bd) { bd = d; best = sp[i]; }
     }
@@ -1425,9 +1525,10 @@ const Hood = {
       ctx.fillStyle = 'rgba(10,12,34,' + (nite * 0.3).toFixed(3) + ')';
       ctx.fillRect(0, 0, W, H);
     }
-    // the speech bubble sits over the resident on this deck too
-    if (res && res.sayT > 0) {
-      this._drawBubble(ctx, clamp(this._deckX(res.x), 60, W - 60), FLOOR - res.cast.deckH - 12, res);
+    // the speech bubble sits over whoever is talking, on this deck too
+    for (i = 0; i < here.length; i++) {
+      if (here[i].sayT <= 0) continue;
+      this._drawBubble(ctx, this.postFor(here[i], i), FLOOR - here[i].cast.deckH - 12, here[i], 0, 0);
     }
   },
 
@@ -1435,16 +1536,15 @@ const Hood = {
   // whichever house sprite is behind it, and it can be lit from the inside.
   _drawDoor: function (ctx, FLOOR, nite) {
     var home = this.home;
-    var dx = Math.round(clamp(this._deckX(home.x + home.doorDX), this.DL + 14, this.DR - 14));
+    var dx = Math.round(this.DOOR_X);
     var dw = 17, dh = 27;
     var dy = FLOOR - dh;
-    var lit = nite > 0.15 || this.agentOf(home.who) !== null;
-    var res = this.residentHome(home);
+    var here = this.presentAt(home).length > 0;
     var a = this.agentOf(home.who);
-    var inside = a && a.act === 'sleep';
+    var inside = !!(a && a.act === 'sleep' && a.arrived);
 
     // the light coming out from under and around it -- four flat arcs, no gradient
-    if ((inside || res) && nite > 0.08) {
+    if ((inside || here) && nite > 0.08) {
       var glow = clamp(nite, 0, 1) * 0.5;
       ctx.fillStyle = '#ffd27a';
       for (var i = 4; i >= 1; i--) {
@@ -1488,7 +1588,7 @@ const Hood = {
     var home = this.home;
     var p = this.plotOf(home.key);
     if (!p) return;
-    var cx = Math.round(clamp(this._deckX(home.x + home.plotDX), this.DL + 12, this.DR - 12));
+    var cx = Math.round(this.PLOT_X);
     var bw = 30, bh = 9;
     var by = FLOOR - bh;
     ctx.fillStyle = '#5a4526';
@@ -1526,7 +1626,7 @@ const Hood = {
   _drawProps: function (ctx, FLOOR, t) {
     var home = this.home;
     var list = this.PROPS[home.key] || [];
-    var bx = clamp(this._deckX(home.x + home.propDX), this.DL + 16, this.DR - 16);
+    var bx = this.PROP_X;
     for (var i = 0; i < list.length; i++) {
       var pr = list[i];
       var w = pr.w;
@@ -1534,7 +1634,8 @@ const Hood = {
       var px = bx + (i === 0 ? 0 : 14);
       drawA(ctx, pr.art, px - w / 2, FLOOR - h - (pr.lift || 0), w, h);
     }
-    drawCrate(ctx, bx - 30, FLOOR - 12, 12);
+    // the procedural crate needs no art at all, so the deck is never bare
+    if (typeof drawCrate === 'function') drawCrate(ctx, bx - 32, FLOOR - 12, 12);
   },
 
   _drawOtto: function (ctx, FLOOR, t) {
@@ -1583,9 +1684,13 @@ const Hood = {
       if (a.x < camX - 90 || a.x > camX + W + 90) continue;
       if (a.y < camY - 90 || a.y > camY + H + 90) continue;
       if (a.act === 'sleep' && a.arrived) continue;             // indoors
-      var onDeck = a.y <= this.HOMES[a.homeI].deckY + 3;
-      this._drawPerson(ctx, a, a.x, a.y + (onDeck ? 0 : 0), a.cast.h, t, onDeck);
-      if (a.sayT > 0) this._drawBubble(ctx, a.x, a.y - a.cast.h - 10, a);
+      // above the waterline they are standing on a deck, so the sprite is anchored
+      // at the feet; in the water it is anchored at the body centre
+      var onDeck = a.y <= -2;
+      this._drawPerson(ctx, a, a.x, a.y, a.cast.h, t, onDeck);
+      if (a.sayT > 0) {
+        this._drawBubble(ctx, a.x, a.y - a.cast.h * (onDeck ? 1 : 0.5) - 8, a, camX, camY);
+      }
     }
     this._drawReachMark(ctx, t);
   },
@@ -1726,19 +1831,28 @@ const Hood = {
     var h = boxH, w = h * img.width / img.height;
     ctx.save();
     ctx.translate(Math.round(cx * DPX) / DPX, feetY + bob);
-    if (!upright) {
-      // swimmers lean into where they are going; the lean IS the read
+    if (upright) {
+      // standing on planks: the anchor is the feet, like every other sprite that
+      // stands on a deck in this game
+      if (flip) ctx.scale(-1, 1);
+      ctx.drawImage(img, -w / 2, -h, w, h);
+    } else {
+      // In the water the anchor is the BODY CENTRE (that is what agent y means out
+      // there, and what hits/talk radii measure from), so the lean rotates about
+      // the middle instead of swinging the whole sprite around its tail.
       var sp = Math.sqrt(a.vx * a.vx + a.vy * a.vy);
       var lean = sp > 8 ? Math.atan2(a.vy, Math.abs(a.vx) + 0.001) * 0.55 : Math.sin(t * 1.3 + a.ph) * 0.06;
       ctx.rotate(clamp(lean, -0.7, 0.7) * (flip ? -1 : 1));
-      ctx.translate(0, h * 0.5);          // pivot about the body, not the feet
+      if (flip) ctx.scale(-1, 1);
+      ctx.drawImage(img, -w / 2, -h / 2, w, h);
     }
-    if (flip) ctx.scale(-1, 1);
-    ctx.drawImage(img, -w / 2, -h, w, h);
     ctx.restore();
   },
 
-  _drawBubble: function (ctx, cx, cy, a) {
+  // camX/camY are the camera origin in whatever space cx/cy are given in (0,0 for
+  // the deck scene, the ocean camera out in the water), so a bubble on somebody at
+  // the edge of the frame is nudged back inside instead of being half cut off.
+  _drawBubble: function (ctx, cx, cy, a, camX, camY) {
     var lines = a.say;
     if (!lines || !lines.length) return;
     var alpha = clamp(a.sayT, 0, 1);
@@ -1749,6 +1863,9 @@ const Hood = {
       if (lw > wmax) wmax = lw;
     }
     var bw = wmax + 12, bh = lines.length * 8 + 8;
+    var c0 = camX || 0, r0 = camY || 0;
+    cx = clamp(cx, c0 + bw / 2 + 3, c0 + W - bw / 2 - 3);
+    cy = clamp(cy, r0 + bh + 3, r0 + H - 3);
     var bx = cx - bw / 2, by = cy - bh;
     ctx.globalAlpha = alpha;
     uiPanel(ctx, bx, by, bw, bh, 0.95, true);
@@ -1892,6 +2009,17 @@ const Hood = {
       };
     }
 
+    // 3b. ...and a stash only ever means "he is up a ladder and going back down".
+    //    Any other destination (a blackout hauls him home to bed, for instance)
+    //    abandons the visit, so the stash must not be waiting to be restored into
+    //    some unrelated dive days later.
+    var gGo = Game.go.bind(Game);
+    Game.go = function (scene, arg) {
+      var back = (typeof Ocean !== 'undefined') ? Ocean : null;
+      if (self._resume && scene !== self && scene !== back) self._resume = null;
+      return gGo(scene, arg);
+    };
+
     // 4. npc.js freezes the dock scenes under its box but has never heard of the
     //    open water, so a conversation started mid-swim would let Otto drift off
     //    while the pages typed. Only OUR dialogue is frozen against.
@@ -1903,9 +2031,25 @@ const Hood = {
       };
     }
 
-    // 5. touch: our own deck pads, plus a climb/talk button appended to Ocean's
-    //    when there is something in reach. Buttons are matched by icon string, so
-    //    the two new ones get names of their own.
+    this._hookTouch();
+  },
+
+  // ---- the touch wrap, deliberately LAZY ---------------------------------------
+  // index.html loads this file after js/main.js, so install() runs at parse time --
+  // which is EARLIER than ocean.js's own TouchUI.layout wrap (that one waits for
+  // DOMContentLoaded). Ocean's wrap does not chain when its scene is up: it returns
+  // its seven pads outright. Wrapping at parse time would therefore bury this one
+  // where the ocean can never reach it and the climb pad would never appear.
+  //
+  // So the touch wrap is installed from the FIRST FRAME instead, the way farm.js
+  // and craft.js hook themselves, which puts it outside every DOMContentLoaded
+  // installer. The wrap chain rule still holds: always call the captured previous.
+  _hookTouch: function () {
+    if (this._touchHooked) return;
+    if (typeof TouchUI === 'undefined' || typeof Game === 'undefined') return;
+    this._touchHooked = true;
+    var self = this;
+
     var tLayout = TouchUI.layout.bind(TouchUI);
     TouchUI.layout = function () {
       if (typeof Game === 'undefined' || !G) return tLayout();
@@ -1966,8 +2110,11 @@ const Hood = {
 };
 
 // Load-order-agnostic install: Game and TouchUI are script-scoped consts in
-// js/main.js, so a file pulled in ahead of it has to wait for the document. This
-// file must load BEFORE js/integrate.js (which resolves `Hood` by eval) and
-// AFTER js/ocean.js (so the TouchUI wrap sits outside Ocean's own).
+// js/main.js, so a file pulled in ahead of it has to wait for the document.
+// index.html has this file at slot 26 -- after js/main.js and BEFORE
+// js/integrate.js, which is what matters: integrate resolves `Hood` by eval at its
+// own parse time, so a later slot would leave it undefined and the ocean would
+// never call reset/update/draw. The touch wrap is the one piece that must be
+// installed later still; _hookTouch does that from the first frame.
 if (typeof Game !== 'undefined' && typeof TouchUI !== 'undefined') Hood.install();
 else document.addEventListener('DOMContentLoaded', function () { Hood.install(); }, { once: true });

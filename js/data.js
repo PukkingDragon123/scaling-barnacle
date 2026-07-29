@@ -60,10 +60,13 @@ const PILINGS = [
   { name: 'Deep Piling',  depth: 1060, danger: 2 },
 ];
 
+// G.bridge no longer lengthens the pier (world.js PIER_END is a constant now), so
+// these are sold as what they actually buy: a piling rated for a deeper bed, and
+// with it the far stations on the planks.
 const BUILDS = {
-  bridge2: { name: 'Bridge East — Mid Piling',  price: 400,
-             desc: 'Richer beds out here: oysters!' },
-  bridge3: { name: 'Bridge Far — Deep Piling',  price: 1200,
+  bridge2: { name: 'Piling Rated — Mid Bed',  price: 400,
+             desc: 'Richer beds further down: oysters! Opens the far planks.' },
+  bridge3: { name: 'Piling Rated — Deep Bed',  price: 1200,
              desc: 'Abalone & pearls. Something big lives down there.' },
   house2:  { name: 'House: Cozy Cabin',  price: 500,  desc: 'Warm walls, second window.' },
   house3:  { name: 'House: Sea Manor',   price: 1500, desc: 'The fanciest hut on the water.' },
@@ -102,10 +105,10 @@ const GOALS = [
   { name: 'Send a crate to market',      hint: 'Sell on the laptop; the drone pays on pickup' },
   { name: 'Crack a shell at the workbench', hint: 'Tap when the marker is centered' },
   { name: 'Buy the Mesh Bag',            hint: 'GEAR tab on the laptop' },
-  { name: 'Extend the bridge east',      hint: 'BUILD tab — oysters live out there' },
+  { name: 'Rate the piling for the Mid Bed', hint: 'BUILD tab — oysters live further down' },
   { name: 'Find a pearl',                hint: 'Crack oysters — clean cracks find more' },
   { name: 'Polish something precious',   hint: 'Pearls & abalone gleam at the workbench' },
-  { name: 'Reach the Deep Piling',       hint: 'BUILD tab — bring a headlamp' },
+  { name: 'Reach the Deep Bed',          hint: 'BUILD tab — bring a headlamp' },
   { name: 'Survive the Gray One',        hint: "When the water goes quiet: DON'T MOVE" },
   { name: 'The dream: save $5,000',      hint: 'A manor, a trophy, and a full coin purse' },
 ];

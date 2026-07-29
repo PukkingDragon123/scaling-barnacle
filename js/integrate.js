@@ -25,42 +25,46 @@
   // things closer than that fight and the first one registered always wins. This
   // is the single place that owns who stands where, spaced so nothing collides:
   //
-  // The dock is now 610 long instead of 900, so the far content has to come in
-  // with it. Both Farm and Stock publish their layout tables, so this is the one
-  // place that decides where everything on the planks lives:
+  // The pier is a fixed 642 units (world.js PIER_END) and the jump-in sits at its
+  // one edge, so the whole deck is laid out ONCE, on a 26-unit grid, with three
+  // 52-unit LANES deliberately left empty. Every module that puts something on the
+  // planks publishes its position, so this is the single place that decides:
   //
-  //   30 piling dive | 56 house | 82 Marlow | 110 jump in | 150 Sprout
-  //   190 stall | 232 ClamNet | 268 the elder | 300 workbench
-  //   340,370,400,460,490 farm beds | 520 pen 1 | 550 crafting bench | 578 pen 2
-  //   endX = 340 + bridge*90
+  //    30 piling dive |  56 house     |  82 Marlow    | 108 Sprout's stall
+  //   134 Sprout      | 160 ClamNet   | 186 Fintan    | 212 workbench
+  //   238 craft bench | (290 LANE)    | 316,342 beds  | 368 bed
+  //   (420 LANE)      | 446 tide pool | 472,498 pens  | (550,576 LANE)
+  //   628 jump in       [pier edge, endX() - 14]
   //
-  // Every pair is >= 22 apart, which is the radius the world's single [E] search
-  // uses — anything closer and two things fight over the same keypress.
-  const STALL_X = 190;
+  // Every pair is >= 26 apart — the [E] search radius is 22, so 26 leaves four
+  // units of slack rather than sitting on the boundary. The bracketed lanes are
+  // >= 24 from both neighbours, which is Forge.MIN_GAP: they are where a crafted
+  // workbench / sawmill / furnace / smithy can legally be put down. Without them
+  // the "craft a table and place it" feature has nowhere on the deck to go.
+  const STALL_X = 108;
   if (M.NPCs && M.NPCs.LIST) {
-    const at = { farmer: 150, prof: 268, angler: 82 };
+    const at = { angler: 82, farmer: 134, prof: 186 };
     for (const n of M.NPCs.LIST) if (at[n.key] !== undefined) n.x = at[n.key];
   }
   if (M.Farm && M.Farm.PLOT_DEF) {
-    // three beds per bridge tier, all inside that tier's walk limit
-    const beds = [
-      { x: 340, b: 1 }, { x: 370, b: 1 }, { x: 400, b: 1 },
-      { x: 460, b: 2 }, { x: 490, b: 2 },
-    ];
+    // Three beds, not five. The dock beds are on their way out entirely — the
+    // planting is moving into the ocean — and five of them plus the stations left
+    // no lane wide enough to place a crafted table in.
+    const beds = [{ x: 316, b: 1 }, { x: 342, b: 1 }, { x: 368, b: 2 }];
     M.Farm.PLOT_DEF.length = 0;
     for (const b of beds) M.Farm.PLOT_DEF.push(b);
   }
   if (M.Stock && M.Stock.PEN_DEF) {
-    const pens = [{ x: 520, sx: 520, b: 3 }, { x: 578, sx: 578, b: 3 }];
+    const pens = [{ x: 472, sx: 472, b: 3 }, { x: 498, sx: 498, b: 3 }];
     M.Stock.PEN_DEF.length = 0;
     for (const p of pens) M.Stock.PEN_DEF.push(p);
     if (M.Stock.MAX_PENS > pens.length) M.Stock.MAX_PENS = pens.length;
   }
-  if (M.Battle) M.Battle.CANNON_X = 268;   // the fight happens amidships now
-  // Craft plants its bench at 434 by default, which lands on a farm bed now.
-  // Marlow goes to the near end (he is a fisherman; the ladder end suits him)
-  // and the bench sits between the two pens.
-  if (M.Craft && M.Craft.SITES && M.Craft.SITES.bench) M.Craft.SITES.bench.x = 550;
+  if (M.Battle) M.Battle.CANNON_X = 186;   // the fight happens amidships, by Fintan
+  if (M.Craft && M.Craft.SITES && M.Craft.SITES.bench) M.Craft.SITES.bench.x = 238;
+  // Tame publishes its tide pool as a single SITE; it lands between the last bed
+  // and the first pen, which is the only place a rock pool makes sense anyway.
+  if (M.Tame && M.Tame.SITE) M.Tame.SITE.x = 446;
 
   // ---- the deck's interaction list ---------------------------------------------
   // Every system that puts something on the dock contributes spots; the world

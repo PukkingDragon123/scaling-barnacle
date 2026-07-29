@@ -8,10 +8,21 @@ function nightness(clock) {
   return 0;
 }
 
-// The dock is deliberately SHORT now: everything worth walking to is inside 610
+// The dock is deliberately SHORT now: everything worth walking to is inside 642
 // units instead of 900, so you are never trudging across empty planks. The three
 // clam pilings collapsed into one, right under the house — bridge upgrades buy
-// reach along the dock, not more pilings to choose between.
+// DEPTH at that one piling (and unlock the far stations), not more pilings to
+// choose between and not more planks.
+//
+// PIER_END IS A CONSTANT, and that is load-bearing. The jump-in spot lives at the
+// end of the planks, and the deck's single [E] is a nearest-within-22 search — so
+// while the pier grew with G.bridge that one spot swept across the far half of the
+// deck and landed on top of a different station at every tier (a farm bed at
+// bridge 1, the tide pool at 2, a pen at 3). No spacing of the stations survives
+// all three positions. With the length fixed there is exactly one pier edge, the
+// stations are laid out once, and the gaps left between them stay free for the
+// tables the player crafts and places.
+const PIER_END = 642;
 const PILING_X = [30, 30, 30];
 const DECK_Y = 214;   // the dock sits low in frame, water filling the bottom
 
@@ -46,7 +57,7 @@ const WorldScene = {
   _lampGlows: [],
 
   worldW() { return this.endX() + 20; },   // just past the last plank, no empty runway
-  endX() { return 340 + G.bridge * 90; },
+  endX() { return PIER_END; },
   houseTop() { return DECK_Y - assetH('house_body', HOUSE_W); },
 
   enter(opts) {
@@ -71,8 +82,8 @@ const WorldScene = {
   spots() {
     const s = [
       { x: 56, label: 'Enter House', act: () => Game.go(HouseScene, {}) },
-      { x: 232, label: 'ClamNet  (sell & shop)', act: () => { Shop.openUI(); } },
-      { x: 300, label: 'Workbench  (crack & polish)', act: () => { Bench.openUI(); } },
+      { x: 160, label: 'ClamNet  (sell & shop)', act: () => { Shop.openUI(); } },
+      { x: 212, label: 'Workbench  (crack & polish)', act: () => { Bench.openUI(); } },
     ];
     // ONE piling, under the house. Which bed you work is the deepest your bridge
     // has been rated for, so an upgrade makes the same dive richer instead of

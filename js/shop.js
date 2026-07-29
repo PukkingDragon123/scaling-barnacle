@@ -138,7 +138,7 @@ const Shop = {
       if (G.bridge < 3) {
         const b = G.bridge === 1 ? BUILDS.bridge2 : BUILDS.bridge3;
         push({ label: b.name, sub: b.desc, btn: `$${b.price}`, price: b.price, act: () => this.buy(b.price, () => { G.bridge++; }, b.name) });
-      } else push({ info: 'The bridge reaches as far as it can go.' });
+      } else push({ info: 'The piling is rated for the deepest bed there is.' });
       if (G.house < 3) {
         const h = G.house === 1 ? BUILDS.house2 : BUILDS.house3;
         push({ label: h.name, sub: h.desc, btn: `$${h.price}`, price: h.price, act: () => this.buy(h.price, () => { G.house++; }, h.name) });
