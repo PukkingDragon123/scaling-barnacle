@@ -35,7 +35,12 @@ const fails = [];
   await page.waitForFunction(
     () => typeof G !== 'undefined' && G && typeof ASSETS !== 'undefined' && ASSETS.dock_11 && ASSETS.dock_11.width,
     null, { timeout: 60000 });
-  await page.waitForTimeout(600);
+  // And wait for the boot fade to finish. The scene does not update while a fade
+  // is running, so a keypress driven before then is swallowed by endFrame() and
+  // lost — which made this test pass or fail depending on how fast the machine
+  // decoded 27MB of art.
+  await page.waitForFunction(() => Game.fadeDir === 0 && Game.fade === 0, null, { timeout: 30000 });
+  await page.waitForTimeout(400);
   const cv = page.locator('#game');
   const box = () => cv.boundingBox();
   const toScreen = async (lx, ly) => { const b = await box(); return [b.x + lx * b.width / 480, b.y + ly * b.height / 270]; };
@@ -46,24 +51,46 @@ const fails = [];
   // Walk LEFT to the piling. There is one now, at x=30 under the house, instead
   // of three spread down a 900-unit dock — so this waypoint is derived from the
   // scene rather than hardcoded, and a future layout change cannot stale it.
+  // Walk to the piling and stop. There is one now, at x=30 under the house,
+  // instead of three spread down a 900-unit dock. Hold the key for a bounded
+  // time and then check reach: a predicate race on "has he stopped moving" was
+  // flaky, because the dock clamps him and two polls can read the same x for
+  // reasons that have nothing to do with arriving.
   const pilingX = await page.evaluate(() => PILING_X[0]);
   const pilingKey = pilingX < 160 ? 'KeyA' : 'KeyD';
+  // Walk until the piling is THE NEAREST spot, not merely within reach. Being
+  // inside the 22-unit radius is not enough: the house door sits at 56 and the
+  // piling at 30, so there is a band around x=47 where both are in range and the
+  // door wins. Stopping on radius alone made this test pass or fail at random.
+  const nearestIs = () => page.evaluate(() => {
+    let best = null, bd = 22;
+    for (const s of WorldScene.spots()) { const d = Math.abs(WorldScene.px - s.x); if (d < bd) { bd = d; best = s; } }
+    return best ? best.label : '';
+  });
   await page.keyboard.down(pilingKey);
-  // Walk until the spot is in reach OR Otto stops moving. The dock clamps his
-  // position, so a piling near an end can sit exactly at the interaction radius
-  // and an exact-distance wait would never fire.
-  await page.waitForFunction((tx) => {
-    const d = Math.abs(WorldScene.px - tx);
-    const stuck = WorldScene.px === window.__lastPx;
-    window.__lastPx = WorldScene.px;
-    return d < 21 || stuck;
-  }, pilingX, { timeout: 9000, polling: 120 });
+  let onPiling = false;
+  for (let i = 0; i < 45; i++) {
+    await page.waitForTimeout(100);
+    if ((await nearestIs()).indexOf('Piling') >= 0) { onPiling = true; break; }
+  }
   await page.keyboard.up(pilingKey);
+  await page.waitForTimeout(150);
+  if (!onPiling) fails.push('never reached the piling as the nearest spot');
   await page.keyboard.press('KeyE');
   await page.waitForTimeout(1300);
   const inDive = await page.evaluate(() => Game.scene === DiveScene);
   console.log('dive =', inDive);
-  if (!inDive) { fails.push('did not enter dive'); throw new Error('no dive'); }
+  if (!inDive) {
+    console.log('WHY:', await page.evaluate(() => {
+      let best = null, bd = 22;
+      for (const s of WorldScene.spots()) { const d = Math.abs(WorldScene.px - s.x); if (d < bd) { bd = d; best = s; } }
+      const open = ['Inv','Skills','Tame','Craft','NPCs','Stock','Shop','Bench']
+        .filter(n => { try { return eval(n).open; } catch (e) { return false; } });
+      return JSON.stringify({ px: Math.round(WorldScene.px), nearest: best ? best.label : 'NONE',
+        open, fade: Game.fade, fadeDir: Game.fadeDir, pending: !!Game.pending, help: Game.helpOpen });
+    }));
+    fails.push('did not enter dive'); throw new Error('no dive');
+  }
 
   // helper: find an alive node of given predicate on screen, swimming down if needed
   async function findNode(predName) {

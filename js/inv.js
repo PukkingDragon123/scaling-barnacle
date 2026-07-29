@@ -249,6 +249,8 @@ const Inv = {
   fx: null,
   _stamp: -1,
   _installed: false,
+  _waterHinted: false,
+  _hbStamp: -1,
   _wasDown: false,
   _pressX: 0,
   _pressY: 0,
@@ -505,9 +507,17 @@ const Inv = {
   // ---- the wider counting seam --------------------------------------------
   // The bins a cost may be paid from, in spend order. have() and spend() walk
   // this same list so "held" and "spendable" can never disagree.
+  // One accessor for the optional hotbar. `typeof` alone is not enough: a module
+  // that half-loaded can leave the name bound to null, and `!null.count` throws.
+  _hb: function () {
+    if (typeof Hotbar === 'undefined' || !Hotbar) return null;
+    return Hotbar;
+  },
+
   _hotCount: function (key) {
-    if (typeof Hotbar === 'undefined' || !Hotbar.count) return 0;
-    return Hotbar.count('item', key);      // BOTH arguments -- see hotbar.js
+    var hb = this._hb();
+    if (!hb || !hb.count) return 0;
+    return hb.count('item', key);          // BOTH arguments -- see hotbar.js
   },
 
   _storeCount: function (key) {
@@ -532,7 +542,8 @@ const Inv = {
       this.remove(key, fromBag);
       n -= fromBag;
     }
-    if (n > 0 && typeof Hotbar !== 'undefined' && Hotbar.take) n -= Hotbar.take('item', key, n);
+    var hb = this._hb();
+    if (n > 0 && hb && hb.take) n -= hb.take('item', key, n);
     if (n > 0) {
       var s = this._storeCount(key);
       var fromStore = s < n ? s : n;
@@ -614,22 +625,23 @@ const Inv = {
 
   // bag slot -> hotbar. Returns true if anything moved.
   toBar: function (i) {
-    if (!this.ensure() || typeof Hotbar === 'undefined' || !Hotbar.give) return false;
+    var hb = this._hb();
+    if (!this.ensure() || !hb || !hb.give) return false;
     var s = G.inv.slots[i];
     if (!s) return false;
     var shape = this._hotShape(s.key);
     if (shape.kind === 'tool') {
       // Hotbar.give returns 0 for a duplicate tool as well as for a placement,
       // so ask first -- otherwise a second hoe would vanish out of the bag.
-      if (Hotbar.count && Hotbar.count('tool', shape.key) > 0) {
+      if (hb.count && hb.count('tool', shape.key) > 0) {
         this._say('already on the bar');
         SND.blip();
         return false;
       }
-      if (Hotbar.give('tool', shape.key, 1) > 0) { this._say('the bar is full'); SND.blip(); return false; }
+      if (hb.give('tool', shape.key, 1) > 0) { this._say('the bar is full'); SND.blip(); return false; }
       this.remove(s.key, 1);
     } else {
-      var left = Hotbar.give('item', shape.key, s.n);
+      var left = hb.give('item', shape.key, s.n);
       if (left >= s.n) { this._say('the bar is full'); SND.blip(); return false; }
       this.remove(s.key, s.n - left);
     }
@@ -641,14 +653,15 @@ const Inv = {
 
   // hotbar slot -> bag.
   fromBar: function (i) {
-    if (!this.ensure() || typeof Hotbar === 'undefined' || !Hotbar.slot) return false;
-    var s = Hotbar.slot(i);
+    var hb = this._hb();
+    if (!this.ensure() || !hb || !hb.slot || !hb.take) return false;
+    var s = hb.slot(i);
     if (!s || !s.kind) return false;
     var key = s.kind === 'tool' ? (this._hotTool[s.key] || s.key) : s.key;
     var n = s.kind === 'tool' ? 1 : s.n;
     var left = this.add(key, n);
     if (left >= n) { this._say('the bag is full'); SND.blip(); return false; }
-    Hotbar.take(s.kind, s.key, n - left);
+    hb.take(s.kind, s.key, n - left);
     SND.click();
     this._buzz(8);
     Game.save();
@@ -949,7 +962,10 @@ const Inv = {
     this.open = true;
     this.st = st;
     G.inv.tab = st;
-    this.sel = 0;
+    // Nothing is selected to begin with, on purpose: a click on a row both
+    // selects and (on the second click) makes, so a pre-selected first row would
+    // turn one stray click into a spent recipe.
+    this.sel = -1;
     this.scroll = 0;
     this.drag = null;
     this._wasDown = Input.mouse.down;
@@ -975,7 +991,14 @@ const Inv = {
   toggleBag: function () {
     if (this.open && this.mode === 'bag') { this.close(); return; }
     if (this.open) { this.mode = 'bag'; this.hover = -1; SND.blip(); return; }
-    if (!this.openBag()) SND.blip();
+    if (this.openBag()) return;
+    SND.blip();
+    // Say why once a session, otherwise a refused keypress is just a mystery
+    // beep. Not persisted: it is a reminder, not a tutorial.
+    if (!this._waterHinted && !this._peerOpen() && Game.fadeDir === 0) {
+      this._waterHinted = true;
+      Game.toast('otto keeps the bag shut in the water');
+    }
   },
 
   // ==== update ==============================================================
@@ -1148,7 +1171,11 @@ const Inv = {
     if (this._in(this._arrow(-1), m.x, m.y)) { this.scroll = clamp(this.scroll - step, 0, maxScroll); SND.blip(); return; }
     if (this._in(this._arrow(1), m.x, m.y)) { this.scroll = clamp(this.scroll + step, 0, maxScroll); SND.blip(); return; }
     if (st.fuel && this._in(this._stokeRect(), m.x, m.y)) { this.stoke(false); return; }
-    if (this._in(this._verbRect(), m.x, m.y)) { this.craft(list[this.sel]); return; }
+    if (this._in(this._verbRect(), m.x, m.y)) {
+      if (this.sel < 0 || this.sel >= list.length) { this._say('pick something off the shelf'); SND.blip(); }
+      else this.craft(list[this.sel]);
+      return;
+    }
 
     // queue: ready jobs collect, running jobs cancel back to materials
     var jobs = this.jobsAt(this.st);
@@ -1177,7 +1204,7 @@ const Inv = {
     if (this.st === key) return;
     this.st = key;
     G.inv.tab = key;
-    this.sel = 0;
+    this.sel = -1;
     this.scroll = 0;
     SND.blip();
   },
@@ -1233,9 +1260,9 @@ const Inv = {
   _cardRect: function () { return { x: this.CARD_X, y: this.CARD_Y, w: this.CARD_W, h: this.CARD_H }; },
 
   _barAt: function (x, y) {
-    if (this.mode !== 'bag') return -1;
-    if (typeof Hotbar === 'undefined' || !Hotbar.hit) return -1;
-    return Hotbar.hit(x, y);
+    var hb = this._hb();
+    if (this.mode !== 'bag' || !hb || !hb.hit) return -1;
+    return hb.hit(x, y);
   },
 
   _tabRect: function (i) {
@@ -1359,7 +1386,8 @@ const Inv = {
 
     // The hotbar rides with the HUD, which we replaced -- draw it ourselves so
     // there is something to drag onto.
-    if (typeof Hotbar !== 'undefined' && Hotbar.draw) Hotbar.draw(c);
+    var hb = this._hb();
+    if (hb && hb.draw) hb.draw(c);
 
     this._drawTooltip(c);
     this._drawDrag(c);
@@ -1405,6 +1433,7 @@ const Inv = {
 
     var shape = this._hotShape(key);
     var bar = shape.kind === 'tool' ? 'a tool -- the bar holds one' : 'stacks onto the bar';
+    if (!this._hb()) bar = '';
     text(c, bar, r.x + 8, r.y + r.h - 26, { size: 6, color: '#a4805a', shadow: false });
     if (val > 0) {
       text(c, 'all of it: ' + (val * held) + ' sd', r.x + 8, r.y + r.h - 15, { size: 6.5, color: '#7a5232', shadow: false });
@@ -1665,9 +1694,10 @@ const Inv = {
     var list = this.recipesAt(this.st), pal = st.pal;
     var x = this.LIST_X, y = this.BAR_Y, w = this.SWW - (this.LIST_X - this.SWX) - 8;
     uiPanel(c, x, y, w, this.BAR_H, 0.5, false);
-    var rec = list[this.sel];
+    var rec = this.sel >= 0 ? list[this.sel] : null;
     if (!rec) {
-      text(c, 'nothing on this bench yet', x + 8, y + 10, { size: 7, color: pal.dim });
+      text(c, list.length ? 'pick something off the shelf' : 'nothing on this bench yet',
+        x + 8, y + 10, { size: 7, color: pal.dim });
       return;
     }
 
@@ -2162,6 +2192,21 @@ const Inv = {
     if (typeof HouseScene !== 'undefined') {
       var hu = HouseScene.update.bind(HouseScene);
       HouseScene.update = function (dt) { if (Inv.open) return; hu(dt); };
+    }
+
+    // The bag screen draws the hotbar itself so there is something to drag onto.
+    // Whether the wiring layer ALSO draws it depends on where this file's script
+    // tag sits, and the bar's backing plank is semi-transparent -- drawn twice it
+    // reads as a darker plank. First call in a frame wins, the same guard
+    // Craft.drawBuffs uses.
+    var hbar = this._hb();
+    if (hbar && hbar.draw) {
+      var hdraw = hbar.draw.bind(hbar);
+      hbar.draw = function (c) {
+        if (typeof Game !== 'undefined' && Game.time === Inv._hbStamp) return;
+        if (typeof Game !== 'undefined') Inv._hbStamp = Game.time;
+        hdraw(c);
+      };
     }
 
     if (!this.selfWire) return;

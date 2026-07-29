@@ -120,7 +120,8 @@
   // guards itself against Shop and Bench; these two it cannot know about.
   const modalUp = () => (M.Craft && M.Craft.open) || (M.NPCs && M.NPCs.open) ||
                         (M.Stock && M.Stock.open) || (M.Battle && M.Battle.active) ||
-                        (M.Inv && M.Inv.open) || (M.Skills && M.Skills.open);
+                        (M.Inv && M.Inv.open) || (M.Skills && M.Skills.open) ||
+                        (M.Tame && M.Tame.open);
 
   const gUpdate = Game.globalUpdate.bind(Game);
   Game.globalUpdate = function (dt) {
@@ -146,6 +147,7 @@
   Game.go = function (scene, arg) {
     if (M.Craft) M.Craft.open = false;
     if (M.Inv) M.Inv.open = false;
+    if (M.Tame) M.Tame.open = false;
     if (M.Skills) M.Skills.open = false;
     return gGo(scene, arg);
   };
@@ -209,14 +211,12 @@
       oUpdate(dt);
       const seed = (G && G.ocean && G.ocean.seed) | 0;
       if (M.Mining) {
-        // cover the visible rect plus one chunk of margin, in Mining's grid
-        if (M.Mining.ensureChunk) {
-          const cw = M.Mining.CHUNK_W || 480, ch = M.Mining.CHUNK_H || 280;
-          const c0 = Math.floor((O.camX - cw) / cw), c1 = Math.floor((O.camX + W + cw) / cw);
-          const r0 = Math.floor((O.camY - ch) / ch), r1 = Math.floor((O.camY + H + ch) / ch);
-          for (let cx = c0; cx <= c1; cx++)
-            for (let cy = r0; cy <= r1; cy++) M.Mining.ensureChunk(cx, cy, seed);
-        }
+        // Mining owns its own chunk grid (480x280, not the ocean's 512x320) and
+        // ships ensureAround for exactly this — it derives the indices with its
+        // own chunkXAt/chunkYAt and clamps the rows above the waterline. Rolling
+        // that by hand here produced indices from the wrong origin and spawned
+        // nothing at all.
+        if (M.Mining.ensureAround) M.Mining.ensureAround(O.camX, O.camY, seed);
         if (M.Mining.update) M.Mining.update(dt, O.px, O.py, { x: O.camX, y: O.camY });
       }
       if (M.Tame && M.Tame.update) M.Tame.update(dt, O.px, O.py);
@@ -237,12 +237,41 @@
       ctx.restore();
     };
 
-    // Loot goes into the new bag if there is one, otherwise into flat storage.
-    if (M.Mining) {
-      M.Mining.give = function (key, n) {
-        if (M.Inv && M.Inv.add) return M.Inv.add(key, n);
-        if (G && G.storage) { G.storage[key] = (G.storage[key] || 0) + n; return 0; }
-        return n;
+    // Loot and animal produce both go into the new bag when there is one, and fall
+    // back to flat storage so nothing is silently dropped on the seabed.
+    const stow = function (key, n) {
+      if (M.Inv && M.Inv.add) return M.Inv.add(key, n);
+      if (G && G.storage) { G.storage[key] = (G.storage[key] || 0) + n; return 0; }
+      return n;
+    };
+    if (M.Mining) M.Mining.give = stow;
+    if (M.Tame && M.Tame.give) M.Tame.give = stow;
+  }
+
+  // ---- the tamed animals that followed you home ----------------------------------------
+  // They live on the dock, so their care verbs join the deck's spot list, and they
+  // age and produce on the same nightly clock as everything else.
+  if (M.Tame) {
+    // NOTE: Tame and Inv both register their own dock spots in their install(),
+    // so they must NOT be concatenated again here — doing so listed the tide pool
+    // twice and stacked three spots on x=430.
+    if (M.Tame.drawWorld) {
+      const wd2 = WorldScene.draw.bind(WorldScene);
+      WorldScene.draw = function (ctx) {
+        wd2(ctx);
+        ctx.save();
+        ctx.translate(-this.camX, 0);
+        M.Tame.drawWorld(ctx, this.camX);
+        ctx.restore();
+      };
+    }
+    if (M.Tame.newDay) {
+      const hu3 = HouseScene.update.bind(HouseScene);
+      let rolled = -1;
+      HouseScene.update = function (dt) {
+        const before = G ? G.day : 0;
+        hu3(dt);
+        if (G && G.day !== before && G.day !== rolled) { rolled = G.day; M.Tame.newDay(); }
       };
     }
   }

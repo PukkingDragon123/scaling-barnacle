@@ -28,7 +28,12 @@ const errors = [];
   await p.waitForFunction(
     () => typeof G !== 'undefined' && G && typeof ASSETS !== 'undefined' && ASSETS.dock_11 && ASSETS.dock_11.width,
     null, { timeout: 60000 });
-  await p.waitForTimeout(600);
+  // And wait for the boot fade to finish. The scene does not update while a fade
+  // is running, so a keypress driven before then is swallowed by endFrame() and
+  // lost — which made this test pass or fail depending on how fast the machine
+  // decoded 27MB of art.
+  await p.waitForFunction(() => Game.fadeDir === 0 && Game.fade === 0, null, { timeout: 30000 });
+  await p.waitForTimeout(400);
   await p.evaluate(() => {
     const cv = document.getElementById('game');
     window.touchAt = (id, type, lx, ly) => {
