@@ -521,7 +521,16 @@ const Mining = {
     var span = this.CHUNK_W - this.MARGIN * 2, spanY = this.CHUNK_H - this.MARGIN * 2;
     if (span < 8 || spanY < 8) return out;
 
-    var i, j, tries, x, y, ok, df, kind, pairs, k, def, w, uid;
+    // Nodes SIT ON THE SEABED. A stone outcrop hanging in open water was the
+    // loudest of the floating scenery, and it also made no sense to mine. When
+    // the scene publishes a ground line (Ocean.floorAt), the picked x is dropped
+    // onto it -- and only the chunk row that CONTAINS the floor at that x keeps
+    // the node, or every row above the sand would stack its own copy on the same
+    // spot. Rows of open water therefore spawn nothing, which is correct: there
+    // is nothing to stand an ore vein on up there. Without a ground line (some
+    // other scene hosting this module) the old mid-water placement still works.
+    var grounded = typeof Ocean !== 'undefined' && Ocean && typeof Ocean.floorAt === 'function';
+    var i, j, tries, x, y, fy, ok, df, kind, pairs, k, def, w, uid, node;
     for (i = 0; i < count; i++) {
       x = 0; y = 0; ok = false;
       for (tries = 0; tries < 6 && !ok; tries++) {
@@ -533,6 +542,12 @@ const Mining = {
         }
       }
       if (!ok) continue;
+
+      if (grounded) {
+        fy = Ocean.floorAt(x);
+        if (!(fy >= baseY && fy < baseY + this.CHUNK_H)) continue;   // another row's sand
+        y = fy;
+      }
 
       df = this.depthFrac(y);
       pairs = [];
@@ -546,7 +561,11 @@ const Mining = {
       if (!kind || !Object.prototype.hasOwnProperty.call(this.NODES, kind)) continue;
       def = this.NODES[kind];
       uid = chunkX + ':' + chunkY + ':' + i;
-      out.push(this._makeNode(uid, kind, def, x, y, rng));
+      node = this._makeNode(uid, kind, def, x, y, rng);
+      // the node is drawn centred, so lift half its height off the line and then
+      // bed it in by a few units -- nothing balances on the sand, it sits in it
+      if (grounded) node.y = Math.round((y - node.h * 0.5 + 3) * DPX) / DPX;
+      out.push(node);
     }
     return out;
   },

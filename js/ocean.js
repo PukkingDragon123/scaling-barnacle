@@ -11,6 +11,29 @@
 // else in this file -- the parallax, the caustics, the air meter -- exists to
 // make that movement read.
 //
+// THERE IS A SEABED, and it is the spine of the whole look. floorAt(x) is the one
+// answer to "where is the ground here": a shelf that falls away from the dock plus
+// three octaves of value noise, sampled into a per-column cache so nothing
+// recomputes noise per frame. Every coral, weed, shell, boulder and vent is
+// PLANTED on that line -- their base sits on it and they sway from the base, like
+// plants. Nothing but driftwood (and bubbles, motes and wildlife) is allowed to
+// hang in open water, because floating scenery is exactly what makes a sea read as
+// a blue void with stickers in it.
+//
+// Two consequences worth knowing before you edit:
+//   * Planted things CANNOT be parallaxed. A prop drawn at 0.92 while the sand is
+//     drawn at 1.0 slides off the sand the moment the camera moves vertically, and
+//     that slide is the "floating" the player sees. Ground contact wins; the depth
+//     read comes from size, alpha and the hazed layers behind instead.
+//   * Depth is distance from home. The shelf runs from FLOOR_TOP just off the
+//     pilings to FLOOR_DEEP a few thousand units out, so swimming OUT is how you
+//     get DOWN -- which is also what keeps Mining's deep bands reachable now that
+//     the sand is solid.
+// Above the water line the scene switches treatments: real sky from SKY's day
+// palette, a cloud bank on the horizon, sun/moon, chop with foam caps. The switch
+// is a lerped camera limit and a screen-space split at the water line, so crossing
+// it is continuous rather than a cut.
+//
 // FRAME BUDGET. The backing store is 1920x1080 with high-quality smoothing, so
 // the two expensive mistakes are guarded against structurally:
 //   * Nothing evaluates a gradient or filters a large source image per frame.
@@ -63,11 +86,28 @@ const Ocean = {
   // The layer speeds, and the whole depth read: far 0.16, mid 0.55, the props
   // that sit behind Otto 0.92, Otto and anything gameplay places 1.0, and the
   // near-field props 1.1 -- so the foreground whips past faster than he swims.
-  PAR_FAR: 0.16, PAR_MID: 0.55, PAR_BACK: 0.92, PAR_FRONT: 1.1,
+  // PAR_BACK and PAR_FRONT now belong to the layers with no ground contact: the
+  // distant ridge behind the sand takes PAR_BACK horizontally, and PAR_FRONT is
+  // kept for anything a wiring layer wants to put in the near field. Props that
+  // stand on the seabed draw at world scale, see the header.
+  PAR_FAR: 0.16, PAR_MID: 0.55, PAR_BACK: 0.86, PAR_FRONT: 1.1,
   PX_PER_M: 12,           // matches the dive's depth readout
 
+  // ---- the seabed -------------------------------------------------------------
+  // The shelf: shallow sand right off the pilings, falling away to a dark plain.
+  // FLOOR_TOP is deliberately shallow enough that the sand is in frame from the
+  // moment he drops in -- a first screen of empty blue is the whole complaint.
+  FLOOR_TOP: 230,         // world y of the sand nearest the dock
+  FLOOR_DEEP: 3000,       // world y the shelf bottoms out at
+  FLOOR_SHELF: 5200,      // how far out (world x) that fall takes
+  FLOOR_STEP: 8,          // world units between cached profile samples
+  FLOOR_CLEAR: 9,         // how close Otto's centre may get to the sand
+  FLOOR_SAND: 13,         // thickness of the pale sand band under the lip
+  FLOOR_SILT: 22,         // and of the silt band under that
+  COL_CAP: 32,            // cached seabed columns (32 * CW = 16k units of coast)
+
   // ---- pool sizes -------------------------------------------------------------
-  BUB_MAX: 96, MOTE_MAX: 72, RING_MAX: 10, SPILL_MAX: 8, SIL_MAX: 3,
+  BUB_MAX: 96, MOTE_MAX: 72, RING_MAX: 10, SPILL_MAX: 8, SIL_MAX: 3, DROP_MAX: 30,
 
   // ---- animation table --------------------------------------------------------
   // `box` is the longest side of the sprite in logical units, so a wide cruise
@@ -104,22 +144,30 @@ const Ocean = {
   _stamp: -1, _installed: false, _init: false,
   _ft: 0.016, _qt: 0,
   _prevDir: null, _tapT: null, _prevDash: false,
-  bubbles: null, motes: null, rings: null, spills: null, sils: null,
+  bubbles: null, motes: null, rings: null, spills: null, sils: null, drops: null,
   _chunks: null, _order: null,
+  // seabed: one 1-D cache keyed by chunk COLUMN, plus two scratch sample rows for
+  // the bed and the ridge behind it (allocated once, refilled every frame)
+  _cols: null, _colOrder: null, _fs: 0,
+  _fy: null, _gy: null,
+  _clouds: null, _sky: 0, _sp: null, _spKey: -1, _landT: 0,
   _farCv: null, _midCv: null, _caCv: null, _rayCv: null, _silCv: null,
   _farW: 0, _farH: 0, _midW: 0, _caW: 0, _caH: 0, _rayW: 0, _rayH: 0,
   SIL_W: 220,             // canonical silhouette bake width; blits scale from it
 
   // ---- palette ----------------------------------------------------------------
   // Depth stops, lerped per frame. The whole scene reads off these so the water,
-  // the haze and the props can never disagree about how deep it is.
+  // the haze, the sand and the props can never disagree about how deep it is.
+  // Seven stops, not five: the shallow end has to be a green-tinged teal and the
+  // 500-1200 range has to move fast, or every depth looks like the same blue.
   STOPS: [
-    [0, [74, 178, 200]],
-    [260, [42, 138, 178]],
-    [700, [26, 92, 140]],
-    [1400, [16, 56, 100]],
-    [2400, [9, 30, 62]],
-    [4600, [4, 14, 34]],
+    [0, [86, 190, 206]],
+    [190, [52, 156, 190]],
+    [520, [30, 112, 160]],
+    [1100, [18, 74, 124]],
+    [1900, [11, 44, 86]],
+    [2900, [6, 22, 52]],
+    [4600, [3, 10, 26]],
   ],
 
   // =============================================================================
@@ -146,6 +194,14 @@ const Ocean = {
     if (typeof s.lastDay !== 'number' || !isFinite(s.lastDay)) s.lastDay = G.day;
     if (s.lastDay > G.day) s.lastDay = G.day;   // hand-edited save or a new game
     if (!this._init) this._initPools();
+    // The seed IS the world, and both the chunk cache and the seabed profile are
+    // derived from it. If a different save is loaded into a live session (new game
+    // from the title, mostly) every one of those caches is now a lie.
+    if (this._fs !== s.seed) {
+      this._fs = s.seed;
+      this._chunks.clear(); this._order.length = 0;
+      this._cols.clear(); this._colOrder.length = 0;
+    }
     return true;
   },
 
@@ -180,14 +236,38 @@ const Ocean = {
     this.rings = mk(this.RING_MAX, { r: 2, vr: 90, w: 1.4 });
     this.spills = mk(this.SPILL_MAX, { key: '', rot: 0, vr: 0 });
     this.motes = mk(this.MOTE_MAX, { r: 1, ph: 0, sp: 1, glow: false });
+    // Two things share this pool because they are the same draw: a 1x2 speck with
+    // an alpha. tone 0 is water thrown off a breach, tone 1 is silt kicked off the
+    // sand -- one arcs and dies at the water line, the other swells and settles.
+    this.drops = mk(this.DROP_MAX, { r: 1, tone: 0 });
     this.bag = {};
     this._chunks = new Map();
     this._order = [];
+    this._cols = new Map();
+    this._colOrder = [];
+    // Screen-space sample rows for the seabed and the ridge behind it. Sized for
+    // the widest step either pass uses, refilled in place every frame.
+    this._fy = new Float32Array(Math.ceil(W / this.FLOOR_STEP) + 4);
+    this._gy = new Float32Array(Math.ceil(W / 16) + 4);
     this._prevDir = [false, false, false, false];
     this._tapT = [0, 0, 0, 0];
     this.sils = new Array(this.SIL_MAX);
     for (let i = 0; i < this.SIL_MAX; i++) this.sils[i] = { art: '', fx: 0, fy: 0, vx: 0, w: 120, ph: 0 };
+    // The cloud bank. Fixed count, fixed art, deterministic layout: it scrolls in
+    // its own wide space and is pinned to the horizon, so it never needs updating.
+    const crng = mulberry32(0x0C10D5);
+    this._clouds = new Array(9);
+    for (let i = 0; i < this._clouds.length; i++) {
+      this._clouds[i] = {
+        i: (crng() * 3) | 0,
+        x: crng() * this.CLOUD_SPAN,
+        alt: 6 + crng() * 96,               // logical units above the water line
+        s: 1.5 + crng() * 2.6,
+      };
+    }
   },
+
+  CLOUD_SPAN: 900,          // the cloud bank's own wrap-around width
 
   _take(pool) {
     let oldest = 0, best = 1e9;
@@ -258,12 +338,15 @@ const Ocean = {
     this.leaving = 0; this.forcedExit = false; this.surfT = 0;
     this.over = false; this.overT = 0;
     this.flash = 0; this.shakeT = 0; this.splashT = 0;
+    this._sky = clamp(-this.py / 26, 0, 1);   // he drops in under the surface
+    this._landT = 0;
     this.msg = ''; this.msgT = 0;
     this.anim = 'cruise'; this.animFrame = 'oswim_0';
     this.animPrev = 'oswim_0'; this.animMix = 1; this.animT = 0;
     for (let i = 0; i < this.bubbles.length; i++) this.bubbles[i].t = 0;
     for (let i = 0; i < this.rings.length; i++) this.rings[i].t = 0;
     for (let i = 0; i < this.spills.length; i++) this.spills[i].t = 0;
+    for (let i = 0; i < this.drops.length; i++) this.drops[i].t = 0;
     this._prevDash = false;
     for (let i = 0; i < 4; i++) { this._prevDir[i] = false; this._tapT[i] = 0; }
     this._seedMotes();
@@ -481,6 +564,191 @@ const Ocean = {
   },
 
   // =============================================================================
+  // THE SEABED
+  // =============================================================================
+  // One function answers "where is the ground here", and everything else in the
+  // scene -- the sand, the plants, the vents, the landmarks, the physics -- reads
+  // it. It has to be deterministic (the same stretch of coast tomorrow), cheap
+  // (called ~130 times a frame) and single-valued in x, which is what makes a
+  // 1-D column cache the right shape: the chunk grid is 2-D and the ground is not.
+
+  // 32-bit value hash on the lattice. Folded with the world seed, so a new game is
+  // a genuinely different coastline.
+  _h1(i) {
+    let h = Math.imul((i | 0) ^ this._fs, 0x27d4eb2d);
+    h ^= h >>> 15;
+    h = Math.imul(h, 0x85ebca6b);
+    h ^= h >>> 13;
+    return (h >>> 0) / 4294967296;
+  },
+
+  // Smoothstepped value noise, 0..1. Two hashes per octave; three octaves is all
+  // the seabed needs and it only ever runs while a column is being baked.
+  _vn(u) {
+    const i = Math.floor(u), f = u - i;
+    const a = this._h1(i), b = this._h1(i + 1);
+    return a + (b - a) * (f * f * (3 - 2 * f));
+  },
+
+  // The raw profile. PRIVATE: everything else goes through floorAt so the cache is
+  // never bypassed.
+  _profile(x) {
+    // The shelf. smoothstep so there is a flat sandy lagoon by the pilings, a real
+    // slope out of it, and a plain at the bottom instead of a funnel.
+    const s = clamp(Math.abs(x) / this.FLOOR_SHELF, 0, 1);
+    const base = this.FLOOR_TOP + (this.FLOOR_DEEP - this.FLOOR_TOP) * (s * s * (3 - 2 * s));
+    // Relief scales with depth: gentle dunes in the shallows, real trenches and
+    // banks out on the plain. The three octaves sum to at most +-1.
+    const amp = 26 + base * 0.14;
+    const n = (this._vn(x / 1700) - 0.5) * 1.24
+            + (this._vn(x / 520 + 11.3) - 0.5) * 0.56
+            + (this._vn(x / 165 + 41.7) - 0.5) * 0.2;
+    return base + n * amp;
+  },
+
+  // One chunk column's worth of seabed: the sampled profile plus every piece of
+  // dressing that stands on it. Baked once, then it is pure lookup.
+  _col(ci) {
+    const key = ci | 0;
+    const had = this._cols.get(key);
+    if (had) return had;
+
+    const step = this.FLOOR_STEP;
+    const n = Math.max(2, Math.round(this.CW / step));
+    const x0 = key * this.CW;
+    const ys = new Float32Array(n + 1);
+    let lo = 1e9, hi = -1e9;
+    for (let i = 0; i <= n; i++) {
+      const y = this._profile(x0 + i * step);
+      ys[i] = y;
+      if (y < lo) lo = y;
+      if (y > hi) hi = y;
+    }
+    const mid = ys[n >> 1];
+    // `band` is how deep THIS STRETCH OF SAND is, not how deep the chunk row is.
+    // That is the difference between a species mix that follows the coast and one
+    // that changes every 320 units of nothing.
+    const band = clamp(mid / 2600, 0, 1);
+
+    const rng = mulberry32((Math.imul(this._fs, 2654435761) ^ Math.imul(key, 1597334677)) | 0);
+    // The MIX is per column: coral gardens, weed thickets, bare rock ridges, shell
+    // rubble and the odd empty run of sand. This is what stops a scrolled seabed
+    // from reading as wallpaper.
+    const kind = weightedPick([
+      ['garden', 3.0 - band * 2.2],
+      ['thicket', 2.2 - band * 1.2],
+      ['ridge', 1.3 + band * 0.8],
+      ['rubble', 1.0 + band * 1.0],
+      ['sparse', 0.7 + band * 3.0],
+    ], rng());
+    const rocky = kind === 'ridge' || kind === 'rubble';
+
+    // Ripples in the sand: short dashes lying along the line. `o` is how far below
+    // the lip they sit, so they read as surface texture and not as debris.
+    const ripples = [];
+    const nr = 7 + ((rng() * 11) | 0);
+    for (let i = 0; i < nr; i++) {
+      ripples.push({
+        x: x0 + rng() * this.CW,
+        w: 5 + rng() * 15,
+        o: 1.4 + rng() * (this.FLOOR_SAND - 2),
+        a: 0.05 + rng() * 0.1,
+      });
+    }
+    // Pebbles: two tones, so the whole field is two fillStyle writes.
+    const pebbles = [];
+    const np = (rocky ? 20 : 9) + ((rng() * 18) | 0);
+    for (let i = 0; i < np; i++) {
+      pebbles.push({
+        x: x0 + rng() * this.CW,
+        r: 0.7 + rng() * (rocky ? 2.3 : 1.4),
+        o: rng() * 4.5,
+        tone: rng() < 0.38 ? 1 : 0,
+      });
+    }
+    // Boulders: half-domes bedded into the sand. Procedural rather than art, so
+    // they are always exactly the sand's own colour at this depth.
+    const boulders = [];
+    const nb = rocky ? 2 + ((rng() * 4) | 0) : ((rng() * 2.4) | 0);
+    for (let i = 0; i < nb; i++) {
+      const w = 11 + rng() * 26;
+      boulders.push({ x: x0 + rng() * this.CW, w, h: w * (0.3 + rng() * 0.32), flip: rng() < 0.5 });
+    }
+
+    // A landmark every few columns: something big enough to navigate by. Height is
+    // capped against the local depth so an arch never pokes through the surface.
+    let mark = null;
+    if (rng() < 0.36) {
+      const type = weightedPick([['arch', 1.1], ['kelp', 1.5 - band], ['rib', 0.7 + band * 0.6]], rng());
+      const room = Math.max(40, mid * 0.62);
+      const mx = x0 + 40 + rng() * (this.CW - 80);
+      if (type === 'kelp') {
+        // A forest, not a plant: enough strands to occlude, few enough to stroke.
+        const h = Math.min(150, room);
+        const strands = [];
+        const ns = 8 + ((rng() * 7) | 0);
+        for (let i = 0; i < ns; i++) {
+          strands.push({
+            dx: (rng() - 0.5) * 78,
+            h: h * (0.5 + rng() * 0.5),
+            ph: rng() * TAU,
+            lean: (rng() - 0.5) * 0.5,
+            w: 1.4 + rng() * 1.6,
+          });
+        }
+        mark = { type, x: mx, strands };
+      } else if (type === 'arch') {
+        const h = Math.min(128, room);
+        mark = {
+          type, x: mx, h,
+          w: h * (0.7 + rng() * 0.5),
+          lw: 7 + rng() * 7,
+          thick: 8 + rng() * 7,
+          flip: rng() < 0.5,
+        };
+      } else {
+        const h = Math.min(74, room * 0.6);
+        const ribs = [];
+        const nrib = 4 + ((rng() * 4) | 0);
+        for (let i = 0; i < nrib; i++) {
+          ribs.push({ dx: (i - (nrib - 1) / 2) * (9 + rng() * 5), h: h * (0.45 + rng() * 0.55), bend: (rng() - 0.5) * 0.9 });
+        }
+        mark = { type, x: mx, h, span: nrib * 12, ribs, flip: rng() < 0.5 };
+      }
+    }
+
+    const c = {
+      ci: key, x0, step, n, y: ys, lo, hi, mid, band, kind,
+      ripples, pebbles, boulders, mark, ext: {},
+    };
+    this._cols.set(key, c);
+    this._colOrder.push(key);
+    while (this._colOrder.length > this.COL_CAP) {
+      const drop = this._colOrder.shift();
+      if (drop !== key) this._cols.delete(drop);
+    }
+    return c;
+  },
+
+  // PUBLIC: the world y of the seabed at x. Linear between 8-unit samples, which
+  // is far finer than the shortest wavelength in the profile, so it is smooth.
+  // Anything that wants to sit on the ground -- here, in mining.js, in tame.js --
+  // should place itself against this and nothing else.
+  floorAt(x) {
+    if (typeof G === 'undefined' || !G || !this._cols) return this.FLOOR_DEEP;
+    if (!isFinite(x)) return this.FLOOR_DEEP;
+    const c = this._col(Math.floor(x / this.CW));
+    const u = (x - c.x0) / c.step;
+    let i = Math.floor(u);
+    if (i < 0) i = 0; else if (i > c.n - 1) i = c.n - 1;
+    const f = u - i;
+    return c.y[i] + (c.y[i + 1] - c.y[i]) * f;
+  },
+
+  // how far Otto is off the bottom, in world units (negative means he is in it)
+  altitude() { return this.floorAt(this.px) - this.py; },
+
+  // =============================================================================
   // CHUNKS -- the endless world
   // =============================================================================
   // Deterministic from one persisted seed, so the same water always looks the
@@ -506,64 +774,120 @@ const Ocean = {
     return made;
   },
 
+  // Everything a chunk owns is either PLANTED on the seabed or ADRIFT in open
+  // water, and planted things belong to whichever chunk ROW the sand happens to
+  // run through -- `owns` below is that test. Without it every row in a column
+  // would dress the same line of sand and the seabed would grow eight coral
+  // gardens stacked on one spot.
+  SHELL_ART: ['shell_clam', 'shell_mussel', 'shell_cockle', 'shell_scallop', 'urchin_1', 'urchin_3'],
+  DRIFT_ART: ['res_driftwood', 'res_driftwood', 'res_driftwood', 'res_plank'],
+
   _gen(ci, cj, key) {
     // Mix the two axes into the seed with large odd multipliers so neighbours
     // never share a layout (a plain ci+cj*k visibly rhymes along diagonals).
     const seed = ((G.ocean.seed * 7919) ^ Math.imul(ci, 374761393) ^ Math.imul(cj, 668265263)) | 0;
     const rng = mulberry32(seed);
     const x0 = ci * this.CW, y0 = cj * this.CH;
-    const band = clamp(y0 / 2600, 0, 1);          // 0 sunlit, 1 the deep
-    // The MIX is per chunk, not global: gardens, kelp thickets, bare ridges and
-    // the odd empty stretch. This is what stops a scrolled background from
-    // reading as wallpaper.
-    const kind = weightedPick([
-      ['garden', 3.2 - band * 2.4],
-      ['thicket', 2.2 - band],
-      ['ridge', 1.4 + band * 0.6],
-      ['sparse', 0.8 + band * 3.4],
-    ], rng());
-    const dens = kind === 'garden' ? 1 : kind === 'thicket' ? 0.85 : kind === 'ridge' ? 0.6 : 0.28;
-    const nBack = Math.round((3 + rng() * 7) * dens);
-    const nFront = Math.round((2 + rng() * 4) * dens);
+    // The species mix and the depth band come off the COLUMN, because they are
+    // properties of this stretch of coast rather than of a 320-unit slice of water.
+    const col = this._col(ci);
+    const band = col.band;                        // 0 sunlit shelf, 1 the deep plain
+    const kind = col.kind;
+    const dens = kind === 'garden' ? 1.15 : kind === 'thicket' ? 1
+      : kind === 'ridge' ? 0.55 : kind === 'rubble' ? 0.5 : 0.25;
+    const shellCh = kind === 'rubble' ? 0.34 : kind === 'sparse' ? 0.2 : 0.12;
+    const nBack = Math.round((4 + rng() * 7) * dens);
+    const nFront = Math.round((2 + rng() * 3.5) * dens);
     const props = [];
-    const push = (front) => {
-      // Coral art is 20 variants; pick a small palette per chunk and stay with it
-      // so a chunk has an identity instead of being confetti.
-      const base = (rng() * 20) | 0;
-      const art = 'coral_' + ((base + ((rng() * 4) | 0)) % 20);
-      const soft = rng() < (kind === 'thicket' ? 0.75 : 0.42);
-      const s = front ? 34 + rng() * 30 * (1 - band * 0.35) : 15 + rng() * 17;
+    const owns = (fy) => fy >= y0 && fy < y0 + this.CH;
+
+    // Coral art is 20 variants; pick a small palette per chunk and stay with it so
+    // a chunk has an identity instead of being confetti.
+    const palette = (rng() * 20) | 0;
+    const plant = (front) => {
+      const x = x0 + rng() * this.CW;
+      const shell = rng() < shellCh;
+      const art = shell
+        ? this.SHELL_ART[(rng() * this.SHELL_ART.length) | 0]
+        : 'coral_' + ((palette + ((rng() * 4) | 0)) % 20);
+      const soft = !shell && rng() < (kind === 'thicket' ? 0.78 : 0.42);
+      // Near-field props are bigger AND crisper; the back row is small and dim.
+      // With no parallax left to sell depth, this ratio is doing that whole job.
+      const s = shell ? (front ? 9 + rng() * 7 : 5 + rng() * 4)
+        : front ? 34 + rng() * 24 * (1 - band * 0.3) : 14 + rng() * 18;
+      const fy = this.floorAt(x);
+      if (!owns(fy)) return;                      // another row's patch of sand
       props.push({
         art,
-        x: x0 + rng() * this.CW,
-        y: y0 + rng() * this.CH,
+        x,
+        y: fy,                                    // y IS THE BASE for a planted prop
         s,
         front,
-        // seaweed sways, hard coral barely moves; stiffness is what the sway reads
-        stiff: soft ? 0.16 + rng() * 0.22 : 0.7 + rng() * 0.26,
+        base: true,
+        // bedded in by a texel or three, so nothing balances on the line
+        sink: shell ? 1 + rng() * 1.6 : 2 + rng() * 3.5,
+        // seaweed sways, hard coral barely moves, a shell not at all; stiffness is
+        // what the sway reads as
+        stiff: shell ? 1 : soft ? 0.16 + rng() * 0.22 : 0.7 + rng() * 0.26,
         ph: rng() * TAU,
         flip: rng() < 0.5,
-        dim: (front ? 0.86 + rng() * 0.14 : 0.5 + rng() * 0.28) * (1 - band * 0.4),
+        dim: (front ? 0.9 + rng() * 0.1 : 0.52 + rng() * 0.3) * (1 - band * 0.34),
         wreck: false,
+        rot: 0,
       });
     };
-    for (let i = 0; i < nBack; i++) push(false);
-    for (let i = 0; i < nFront; i++) push(true);
-    // Deep water gets the occasional sunken ship, held as a silhouette. It is the
-    // one thing out there big enough to be a landmark.
-    if (band > 0.42 && rng() < 0.1) {
+    for (let i = 0; i < nBack; i++) plant(false);
+    for (let i = 0; i < nFront; i++) plant(true);
+
+    // ADRIFT: driftwood, and only driftwood. It is the one thing that has any
+    // business hanging in open water, so it is the one thing allowed to.
+    const nd = rng() < 0.55 ? 1 + ((rng() * 2) | 0) : 0;
+    for (let i = 0; i < nd; i++) {
+      const x = x0 + rng() * this.CW;
+      const y = y0 + 18 + rng() * (this.CH - 36);
+      // keep it clear of the bed, or a "floating" plank lands in the sand and
+      // reintroduces exactly the thing we are fixing
+      if (y > this.floorAt(x) - 34) continue;
       props.push({
-        art: 'ship', x: x0 + rng() * this.CW, y: y0 + 40 + rng() * (this.CH - 80),
-        s: 190 + rng() * 90, front: false, stiff: 1, ph: rng() * TAU, flip: rng() < 0.5,
-        dim: 0.5 + rng() * 0.22, wreck: true,
+        art: this.DRIFT_ART[(rng() * this.DRIFT_ART.length) | 0],
+        x, y,
+        s: 11 + rng() * 13,
+        front: rng() < 0.3,
+        base: false,
+        sink: 0,
+        stiff: 1,
+        ph: rng() * TAU,
+        flip: rng() < 0.5,
+        dim: (0.7 + rng() * 0.25) * (1 - band * 0.45),
+        wreck: false,
+        rot: (rng() - 0.5) * 1.2,                 // its own resting angle
       });
     }
-    // Air pockets: a vent trickling bubbles is a lung down here, and it is what
-    // makes the deep worth committing to.
+
+    // Deep water gets the occasional sunken ship, held as a silhouette and RESTING
+    // ON THE SAND. It is the one thing out there big enough to navigate by.
+    if (band > 0.4 && rng() < 0.12) {
+      const x = x0 + rng() * this.CW;
+      const fy = this.floorAt(x);
+      if (owns(fy)) {
+        props.push({
+          art: 'ship', x, y: fy,
+          s: 190 + rng() * 90, front: false, base: true, sink: 10 + rng() * 16,
+          stiff: 1, ph: rng() * TAU, flip: rng() < 0.5,
+          dim: 0.5 + rng() * 0.22, wreck: true, rot: 0,
+        });
+      }
+    }
+
+    // Air pockets: a vent hissing out of the seabed is a lung down here, and it is
+    // what makes the deep worth committing to.
     const vents = [];
-    const nv = rng() < 0.34 ? 1 + ((rng() * 2) | 0) : 0;
+    const nv = rng() < 0.4 ? 1 + ((rng() * 2) | 0) : 0;
     for (let i = 0; i < nv; i++) {
-      vents.push({ x: x0 + rng() * this.CW, y: y0 + rng() * this.CH, next: rng() * 0.8, ph: rng() * TAU });
+      const x = x0 + rng() * this.CW;
+      const fy = this.floorAt(x);
+      if (!owns(fy)) continue;
+      vents.push({ x, y: fy - 2, next: rng() * 0.8, ph: rng() * TAU });
     }
     return { key, ci, cj, x0, y0, w: this.CW, h: this.CH, seed, band, kind, props, vents, ext: {} };
   },
@@ -857,13 +1181,35 @@ const Ocean = {
     this.py += this.vy * dt;
     if (this.py < -46) { this.py = -46; if (this.vy < 0) this.vy = 0; }
 
+    // ---- the sand is solid ------------------------------------------------------
+    // A soft stop, not a wall: he beds into it, keeps his sideways momentum (sand
+    // is draggy, so a little less of it), and kicks up silt when he lands hard.
+    // This is also what makes the seabed read as ground rather than as a painting.
+    if (this._landT > 0) this._landT -= dt;
+    const fy = this.floorAt(this.px) - this.FLOOR_CLEAR;
+    if (this.py > fy) {
+      const impact = this.vy;
+      this.py = fy;
+      if (this.vy > 0) this.vy = -this.vy * 0.16;
+      this.vx *= Math.pow(0.55, dt);
+      if (impact > 70 && this._landT <= 0) {
+        this._landT = 0.35;
+        this._silt(this.px, fy + this.FLOOR_CLEAR - 1, impact > 160 ? 7 : 4);
+        if (typeof SND !== 'undefined') SND.thump(clamp(impact / 260, 0.2, 1));
+      }
+    }
+
     // breaking the surface, in either direction
     if (wasAbove !== (this.py < 0) && Math.abs(this.vy) > 45) {
       this.splashT = 0.45;
       this._puff(this.px, 0, 9, 70);
       this._ring(this.px, 0, 3, 200);
+      // Water thrown clear of the sea is the whole reason a breach reads as one.
+      this._drip(this.px, -2, 12, Math.abs(this.vy));
       if (typeof SND !== 'undefined') SND.splash();
     }
+    // and a trail of it while he is genuinely airborne
+    if (this.py < -3 && this.speed() > 55 && Math.random() < dt * 20) this._drip(this.px, this.py, 1, 40);
 
     // facing + bank. He points where he is going, leans into the turn, and the
     // lean is smoothed so a flick of the keys does not snap him around.
@@ -934,6 +1280,33 @@ const Ocean = {
     o.life = o.t = 0.4;
   },
 
+  // Water thrown off a breach: it arcs, and it dies the instant it touches the sea
+  // again, which is what sells the water line as a boundary.
+  _drip(x, y, n, force) {
+    const f = clamp((force || 60) / 140, 0.4, 1.6);
+    for (let i = 0; i < n; i++) {
+      const d = this._take(this.drops);
+      d.x = x + rand(-5, 5); d.y = y + rand(-4, 2);
+      d.vx = rand(-70, 70) * f + this.vx * 0.22;
+      d.vy = rand(-150, -30) * f;
+      d.r = rand(0.7, 1.6);
+      d.tone = 0;
+      d.life = d.t = rand(0.4, 1.1);
+    }
+  },
+
+  // Silt kicked off the bottom: it swells, drifts and settles instead of falling.
+  _silt(x, y, n) {
+    for (let i = 0; i < n; i++) {
+      const d = this._take(this.drops);
+      d.x = x + rand(-7, 7); d.y = y + rand(-3, 2);
+      d.vx = rand(-26, 26); d.vy = rand(-16, -3);
+      d.r = rand(2.4, 5.5);
+      d.tone = 1;
+      d.life = d.t = rand(0.7, 1.5);
+    }
+  },
+
   _particles(dt) {
     // bubbles rise, wobble and expire
     for (let i = 0; i < this.bubbles.length; i++) {
@@ -960,6 +1333,21 @@ const Ocean = {
       r.r += r.vr * dt;
       r.vr *= Math.pow(0.25, dt);
     }
+    for (let i = 0; i < this.drops.length; i++) {
+      const d = this.drops[i];
+      if (d.t <= 0) continue;
+      d.t -= dt;
+      if (d.tone === 0) {
+        d.vy += 320 * dt;                               // in air, so it just falls
+        d.x += d.vx * dt; d.y += d.vy * dt;
+        if (d.y > 0.5) d.t = 0;                          // back in the sea
+      } else {
+        const f = Math.pow(0.18, dt);
+        d.vx *= f; d.vy *= f;
+        d.x += d.vx * dt; d.y += d.vy * dt;
+        d.r += 7 * dt;                                   // a cloud, not a pellet
+      }
+    }
     for (let i = 0; i < this.spills.length; i++) {
       const s = this.spills[i];
       if (s.t <= 0) continue;
@@ -969,6 +1357,9 @@ const Ocean = {
       s.vx *= d; s.vy *= d;
       s.x += s.vx * dt; s.y += s.vy * dt;
       s.rot += s.vr * dt;
+      // ...and come to rest on the sand instead of sinking forever
+      const fl = this.floorAt(s.x) - 2;
+      if (s.y > fl) { s.y = fl; if (s.vy > 0) s.vy *= -0.2; s.vr *= 0.4; }
     }
     // motes: endless drift, recycled across the camera rect so the pool never
     // grows and the specks stay anchored to the water rather than the screen
@@ -1019,10 +1410,17 @@ const Ocean = {
     // leads the direction of travel a touch, so you see where you are going
     const tx = this.px - W * 0.5 + clamp(this.vx * 0.28, -52, 52);
     const ty = this.py - H * 0.46 + clamp(this.vy * 0.20, -34, 40);
+    // How much sky the frame is allowed to give up. Underwater the water line stays
+    // near the top -- the interesting things are below him. Once he is genuinely
+    // clear of the sea it opens to nearly two thirds of the frame, so a breach
+    // shows real sky instead of a blue ceiling. `_sky` is lerped and the camera
+    // itself eases, so the two treatments cross over continuously: there is no cut.
+    const airK = clamp(-this.py / 26, 0, 1);
+    this._sky = lerp(this._sky, airK, clamp(dt * 3.2, 0, 1));
+    const lift = lerp(H * 0.24, H * 0.62, this._sky);
     const k = 1 - Math.pow(0.0025, dt);
     this.camX += (tx - this.camX) * k;
-    // never let the camera climb so far that the sky owns the frame
-    this.camY += (Math.max(ty, -H * 0.24) - this.camY) * k;
+    this.camY += (Math.max(ty, -lift) - this.camY) * k;
   },
 
   // ---- animation state machine ------------------------------------------------
@@ -1321,6 +1719,7 @@ const Ocean = {
       this._drawWater(b, t);
       this._drawFar(b, t);
       this._drawMid(b, t);
+      this._drawFloorFar(b);
       this._drawHaze(b);
       // A FILTERED 2x magnify of 960x540 costs as much as the fill it saved, so
       // the upscale is nearest-neighbour. On a blurred, hazed backdrop the
@@ -1333,13 +1732,19 @@ const Ocean = {
       this._drawWater(ctx, t);
       this._drawFar(ctx, t);
       this._drawMid(ctx, t);
+      this._drawFloorFar(ctx);
       this._drawHaze(ctx);
     }
     this._drawSurfaceLine(ctx, t);
     this._drawRays(ctx, t);
+    // The seabed is the one crisp thing in the distance, so it lands on the main
+    // context rather than in the half-res backdrop -- and it goes down AFTER the
+    // rays, because light shafts stop at the sand.
+    this._drawFloor(ctx, t);
     this._drawProps(ctx, t, false);
     this._drawMotes(ctx, t);
     this._drawBubbles(ctx);
+    this._drawDrops(ctx);
     this._drawSpills(ctx);
     this._drawOtto(ctx, t);
     this._drawProps(ctx, t, true);
@@ -1367,48 +1772,191 @@ const Ocean = {
   },
 
   // ---- the water itself -------------------------------------------------------
+  // Where on screen the water starts. Everything that is "underwater treatment"
+  // (the bands, the haze, the deep tint) is clipped to below this by arithmetic
+  // rather than by ctx.clip, because a clip is a per-pixel cost and this is a
+  // horizontal split.
+  _waterTop() { return clamp(-this.camY, 0, H); },
+
   _drawWater(ctx, t) {
-    // Twelve flat bands from the tint at the top of the screen to the tint at the
-    // bottom. A canvas gradient over 1920x1080 every frame is exactly the thing
-    // this codebase has been burned by; twelve fillRects cost nothing.
-    const top = this._tintAt(this.camY), bot = this._tintAt(this.camY + H);
+    const wy0 = this._waterTop();
+    if (wy0 > 0.5) this._drawSky(ctx, t, wy0);
+    if (wy0 >= H) return;
+    // Twelve flat bands, each sampling the depth ramp at its OWN centre rather than
+    // lerping two endpoints -- the ramp is deliberately non-linear now, and that is
+    // what makes the descent read. A canvas gradient over 1920x1080 every frame is
+    // exactly the thing this codebase has been burned by; twelve fillRects cost
+    // nothing.
     const nf = this._nightF();
-    const BANDS = 12, bh = H / BANDS;
+    const BANDS = 12, bh = (H - wy0) / BANDS;
     for (let i = 0; i < BANDS; i++) {
-      let c = rgbLerp(top, bot, i / (BANDS - 1));
+      let c = this._tintAt(this.camY + wy0 + (i + 0.5) * bh);
       if (nf > 0) c = rgbLerp(c, [6, 14, 34], nf * 0.6);
       ctx.fillStyle = cssRGB(c);
-      ctx.fillRect(0, i * bh, W, bh + 0.6);
-    }
-    // the sky, when the surface is in frame
-    const surf = -this.camY;
-    if (surf > 0.5) {
-      const day = 1 - nf;
-      const skyTop = rgbLerp([22, 30, 58], [126, 196, 226], day);
-      const skyBot = rgbLerp([44, 52, 84], [232, 222, 186], day);
-      const sh = Math.min(H, surf);
-      const SB = 6, sbh = sh / SB;
-      for (let i = 0; i < SB; i++) {
-        ctx.fillStyle = cssRGB(rgbLerp(skyTop, skyBot, i / (SB - 1)));
-        ctx.fillRect(0, i * sbh, W, sbh + 0.6);
-      }
+      ctx.fillRect(0, wy0 + i * bh, W, bh + 0.6);
     }
   },
 
-  // The underside of the surface: a bright wobbling lip. Drawn after the haze so
-  // the water line stays the brightest thing in frame, which is what makes "up"
-  // legible from any depth it is visible at.
+  // ---- above the water --------------------------------------------------------
+  // SKY.pal is the game's day palette and reusing it is the only way the open sea
+  // and the pier can agree about what time it is. It allocates eight arrays, so it
+  // is cached per clock step (the clock advances 1/300 per second: a step every
+  // 2.5s) instead of being called per frame.
+  _skyPal(clock) {
+    const key = Math.round(clock * 120);
+    if (this._spKey === key && this._sp) return this._sp;
+    if (typeof SKY !== 'undefined' && SKY.pal) {
+      this._sp = SKY.pal(clock);
+      this._spKey = key;
+      return this._sp;
+    }
+    // SKY missing is not a crash: a plain day sky, once.
+    if (!this._sp) {
+      this._sp = [[18, 87, 184], [58, 146, 216], [143, 212, 242],
+        [99, 210, 234], [65, 191, 226], [42, 166, 212], [255, 251, 224], [255, 255, 255]];
+      this._spKey = key;
+    }
+    return this._sp;
+  },
+
+  // sh = how many screen units of sky there are, measured down to the water line.
+  _drawSky(ctx, t, sh) {
+    const clock = typeof G !== 'undefined' && G ? G.clock : 0.3;
+    const p = this._skyPal(clock);
+    const nite = typeof nightness === 'function' ? nightness(clock) : 0;
+
+    // Seven bands, top colour into mid into low. Flat fills, no gradient.
+    const BN = 7, bh = sh / BN;
+    for (let i = 0; i < BN; i++) {
+      const f = i / (BN - 1);
+      const c = f < 0.5 ? rgbLerp(p[0], p[1], f * 2) : rgbLerp(p[1], p[2], (f - 0.5) * 2);
+      ctx.fillStyle = cssRGB(c);
+      ctx.fillRect(0, i * bh, W, bh + 0.6);
+    }
+
+    // Stars: one fillStyle, alpha per star, deterministic positions.
+    if (nite > 0.12 && sh > 22) {
+      const rng = mulberry32(0x57A45);
+      ctx.fillStyle = '#eef4ff';
+      for (let i = 0; i < 40; i++) {
+        const sx = rng() * W, sy = rng() * (sh - 8), ph = rng() * TAU;
+        ctx.globalAlpha = nite * (0.35 + 0.5 * Math.abs(Math.sin(t * 0.9 + ph)));
+        ctx.fillRect(Math.round(sx), Math.round(sy), 1, 1);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // Sun or moon on the same arc the pier uses, so they rise together.
+    if (sh > 8) {
+      const isDay = clock > 0.09 && clock < 0.72;
+      const tt = isDay ? (clock - 0.09) / 0.63
+        : clamp((clock >= 0.72 ? clock - 0.72 : clock + 0.28) / 0.37, 0, 1);
+      const bx = 44 + tt * (W - 88);
+      const by = sh - 8 - Math.sin(tt * Math.PI) * (sh * 0.62 + 20);
+      const R = isDay ? 10 : 7;
+      const col = p[6];
+      for (let i = 3; i >= 1; i--) {
+        ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${0.06 * i})`;
+        ctx.beginPath(); ctx.arc(bx, by, R + i * 5, 0, TAU); ctx.fill();
+      }
+      ctx.fillStyle = cssRGB(col);
+      ctx.beginPath(); ctx.arc(bx, by, R, 0, TAU); ctx.fill();
+      if (!isDay) {
+        // bite a crescent out of the moon with the sky behind it
+        ctx.fillStyle = cssRGB(rgbLerp(p[0], p[1], 0.4));
+        ctx.beginPath(); ctx.arc(bx + R * 0.55, by - R * 0.3, R * 0.92, 0, TAU); ctx.fill();
+      }
+    }
+
+    // The cloud bank, pinned to the horizon and scrolling at a hair of the camera:
+    // three canvases baked by sprites.js, blitted, never rebuilt.
+    if (typeof SPR !== 'undefined' && SPR.clouds) {
+      const SPAN = this.CLOUD_SPAN;
+      ctx.globalAlpha = 0.9 * (1 - nite * 0.55);
+      for (let i = 0; i < this._clouds.length; i++) {
+        const c = this._clouds[i];
+        const cv = SPR.clouds[c.i % SPR.clouds.length];
+        if (!cv) continue;
+        const w = cv.width / DPX * c.s, hh = cv.height / DPX * c.s;
+        let x = c.x - this.camX * 0.045;
+        x = ((x % SPAN) + SPAN) % SPAN - 210;
+        const y = sh - c.alt - hh;
+        if (x > W + 20 || x + w < -20 || y + hh < -8) continue;
+        ctx.drawImage(cv, x, y, w, hh);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // The sea meeting the sky. A couple of flat bands of the far-water colour is
+    // all a side-on horizon needs, and it stops the water line from looking like a
+    // cut edge.
+    const far = p[3];
+    ctx.fillStyle = `rgba(${far[0]},${far[1]},${far[2]},0.85)`;
+    ctx.fillRect(0, sh - 3.5, W, 3.5);
+    ctx.fillStyle = `rgba(${p[5][0]},${p[5][1]},${p[5][2]},0.5)`;
+    ctx.fillRect(0, sh - 6, W, 2.6);
+  },
+
+  // The water line, from either side. Seen from below it is a bright wobbling lip
+  // -- the thing that makes "up" legible from any depth. Seen from above it is a
+  // skyline: a far chop row, the line itself, a near chop row with white caps and
+  // sun glitter. `air` crossfades between the two treatments off the same geometry,
+  // so swimming up through it is continuous.
   _drawSurfaceLine(ctx, t) {
     const surf = -this.camY;
-    if (surf < -6 || surf > H + 6) return;
-    ctx.fillStyle = 'rgba(226,248,255,0.5)';
-    ctx.fillRect(0, surf - 1, W, 1.4);
-    ctx.fillStyle = 'rgba(255,255,255,0.22)';
-    for (let x = 0; x < W; x += 4) {
-      const wob = Math.sin(t * 1.7 + (x + this.camX) * 0.07) * 1.3
-                + Math.sin(t * 3.1 + (x + this.camX) * 0.021) * 0.9;
-      ctx.fillRect(x, surf - 2.2 + wob, 4, 1);
+    if (surf < -8 || surf > H + 8) return;
+    const cx = this.camX;
+    const air = clamp(surf / 46, 0, 1);
+    const p = this._skyPal(typeof G !== 'undefined' && G ? G.clock : 0.3);
+
+    // FAR CHOP: a low, desaturated row a few units above the line. This is the one
+    // thing that turns a flat waterline into open sea once the camera is above it.
+    if (air > 0.02) {
+      const far = p[4];
+      ctx.fillStyle = cssRGB(far);
+      for (let x = 0; x < W; x += 6) {
+        const w1 = Math.sin(t * 1.1 + (x + cx) * 0.035) * 1.1 + Math.sin(t * 2.3 + (x + cx) * 0.012) * 0.8;
+        ctx.globalAlpha = 0.5 * air;
+        ctx.fillRect(x, surf - 4 + w1, 6, 1.7);
+      }
+      ctx.globalAlpha = 1;
     }
+
+    // the line itself: brightest thing in frame, from below especially
+    ctx.fillStyle = `rgba(226,248,255,${(0.5 - air * 0.16).toFixed(3)})`;
+    ctx.fillRect(0, surf - 1, W, 1.4);
+
+    // NEAR CHOP + CAPS. One fillStyle for the whole row; the crest drives alpha and
+    // the caps, which is the house rule for anything this repetitive.
+    ctx.fillStyle = '#eaf9ff';
+    for (let x = 0; x < W; x += 5) {
+      const ph = (x + cx) * 0.07;
+      const crest = Math.sin(t * 1.7 + ph) * 0.6 + Math.sin(t * 3.1 + ph * 0.31) * 0.4;
+      const y = surf - 2.2 + crest * (1.5 + air * 2.1);
+      ctx.globalAlpha = 0.16 + 0.16 * (crest + 1);
+      ctx.fillRect(x, y, 5, 1);
+      if (air > 0.12 && crest > 0.6) {
+        ctx.globalAlpha = 0.5 * air;
+        ctx.fillRect(x + 0.6, y - 1.7, 3.4, 1.4);
+      }
+    }
+
+    // Sun glitter, anchored in WORLD space on a 34-unit lattice so it twinkles in
+    // place instead of sliding along with the camera.
+    const clock = typeof G !== 'undefined' && G ? G.clock : 0.3;
+    if (air > 0.1 && clock > 0.12 && clock < 0.7) {
+      const i0 = Math.floor(cx / 34);
+      for (let i = 0; i <= 15; i++) {
+        const wx = (i0 + i) * 34;
+        const sx = wx - cx;
+        if (sx < -6 || sx > W + 6) continue;
+        const tw = Math.sin(t * 3.1 + wx * 0.21);
+        if (tw < 0.3) continue;
+        ctx.globalAlpha = (tw - 0.3) * 0.85 * air;
+        ctx.fillRect(sx, surf - 2, 2.4, 1.2);
+      }
+    }
+    ctx.globalAlpha = 1;
   },
 
   // ---- far layer + silhouettes ------------------------------------------------
@@ -1426,7 +1974,9 @@ const Ocean = {
     const oy = Math.max(-this.camY, clamp(-this.camY * 0.1, -(lh - H), 0));
     const i0 = Math.floor(ox / lw);
     ctx.save();
-    ctx.globalAlpha = 0.9 * fade * (1 - this._nightF() * 0.55);
+    // The far layer is meant to be a suggestion, not a painting you can read: it
+    // stays soft and low-contrast so the mid band and the seabed carry the depth.
+    ctx.globalAlpha = 0.6 * fade * (1 - this._nightF() * 0.55);
     // One copy of this layer is 648x364 logical — 2592x1456 device pixels, of
     // which at most 480x270 can ever land on screen. Blitting the whole rect and
     // letting the canvas clip cost 46ms a frame on a software canvas, so the
@@ -1473,51 +2023,335 @@ const Ocean = {
     const cv = this._midTile();
     if (!cv) return;
     const tw = this._midW;
-    const par = this.PAR_MID;
-    const ox = this.camX * par;
-    const oy = this.camY * par;
-    // bands of reef every MID_GAP through the column; which ones are on screen
-    // falls out of the parallaxed offset
-    const n0 = Math.floor((oy - this.MID_H) / this.MID_GAP);
-    const n1 = Math.floor((oy + H) / this.MID_GAP);
-    const i0 = Math.floor(ox / tw);
-    for (let n = n0; n <= n1; n++) {
-      const wy = n * this.MID_GAP + 90;
-      const sy = wy - oy;
-      if (sy > H || sy + this.MID_H < 0) continue;
-      const fade = clamp(1 - Math.max(0, wy) / 3000, 0.12, 1) * (1 - this._nightF() * 0.5);
-      ctx.save();
-      ctx.globalAlpha = 0.85 * fade;
-      for (let i = i0; i * tw - ox < W; i++) {
-        const x = i * tw - ox;
-        // flip every other tile and every other band: the source tiles cleanly,
-        // and this stops the eye from finding the repeat
-        if ((i + n) & 1) {
-          ctx.save();
-          ctx.translate(x + tw, sy);
-          ctx.scale(-1, 1);
-          ctx.drawImage(cv, 0, 0, tw, this.MID_H);
-          ctx.restore();
-        } else {
-          ctx.drawImage(cv, x, sy, tw, this.MID_H);
+    // The reef band SITS ON the distant ridge — the same parallax, profile and
+    // lift as the nearer of _drawFloorFar's two lines, whose fill is drawn right
+    // after this and so covers the tile's bottom edge. It used to repeat at fixed
+    // heights through the whole water column, and a reef strip hanging mid-water
+    // with a razor bottom edge was the single worst "everything is floating" in
+    // the scene. Now it only exists where its ground does; deep open water gets
+    // haze and silhouettes instead, which is what deep open water looks like.
+    const par = 0.78, lift = 46;
+    const cx = this.camX * par, cy = this.camY * par;
+    const nf = this._nightF();
+    const i0 = Math.floor(cx / tw);
+    for (let i = i0; i * tw - cx < W; i++) {
+      const x = i * tw - cx;
+      if (x + tw < 0) continue;
+      // The ridge slopes under the flat-bottomed tile, so sample the line at both
+      // ends and the middle and seat the tile on the LOWEST of them: a reef half
+      // buried in a dune is a reef; a reef with water under one corner is floating.
+      const p0 = this._profile(x + cx), p1 = this._profile(x + tw / 2 + cx), p2 = this._profile(x + tw + cx);
+      const gy = Math.max(p0, p1, p2) - lift - cy;
+      const sy = gy - this.MID_H + 4;
+      if (sy > H || sy + this.MID_H < -20) continue;
+      const fade = clamp(1 - Math.max(0, p1) / 3200, 0.15, 1) * (1 - nf * 0.5);
+      ctx.globalAlpha = 0.8 * fade;
+      // flip every other tile: the source tiles cleanly, and this stops the eye
+      // from finding the repeat
+      if (i & 1) {
+        ctx.save();
+        ctx.translate(x + tw, sy);
+        ctx.scale(-1, 1);
+        ctx.drawImage(cv, 0, 0, tw, this.MID_H);
+        ctx.restore();
+      } else {
+        ctx.drawImage(cv, x, sy, tw, this.MID_H);
+      }
+    }
+    ctx.globalAlpha = 1;
+  },
+
+  // ---- the seabed -------------------------------------------------------------
+  // Its palette is keyed to the depth of the sand in frame, so the same bank is
+  // warm cream in the lagoon and cold grey out on the plain. Quantised and cached:
+  // the strings only get rebuilt when the depth or the hour has actually moved.
+  _bpal: null, _bkey: -1,
+
+  _bedPal(mid) {
+    const nf = this._nightF();
+    const key = (((mid / 12) | 0) * 32) + ((nf * 16) | 0);
+    if (this._bkey === key && this._bpal) return this._bpal;
+    const wt = this._tintAt(mid);
+    const df = clamp(mid / this.DEEP, 0, 1);
+    const k = 0.3 + df * 0.44;
+    // one helper, so every tone drowns in the same water colour at the same rate
+    const tone = (base, mix) => {
+      let c = rgbLerp(base, wt, clamp(mix, 0, 1));
+      if (nf > 0) c = rgbLerp(c, [6, 14, 34], nf * 0.5);
+      return cssRGB(c);
+    };
+    const o = this._bpal || (this._bpal = {});
+    o.lip = tone([252, 240, 212], k * 0.55);
+    o.sand = tone([224, 202, 160], k);
+    o.silt = tone([150, 126, 94], k + 0.08);
+    o.dark = tone([52, 44, 36], 0.2 + df * 0.22);
+    o.peb0 = tone([198, 178, 140], k * 0.85);
+    o.peb1 = tone([104, 90, 70], k + 0.05);
+    o.rip = tone([246, 232, 201], k * 0.6);
+    o.mark = tone([28, 30, 36], 0.34 + df * 0.2);
+    this._bkey = key;
+    return o;
+  },
+
+  // The ridge BEHIND the sand: same profile, sampled in its own parallax space and
+  // held a fixed distance above the near bed. It is what gives the bottom a middle
+  // distance instead of one hard edge. Lives in the half-res backdrop, so it comes
+  // out soft and hazed for free.
+  _drawFloorFar(ctx) {
+    if (typeof G === 'undefined' || !G || !this._cols) return;
+    const STEP = 16;
+    const n = Math.min(this._gy.length - 1, Math.ceil(W / STEP) + 2);
+    const gy = this._gy;
+    // HORIZONTAL parallax only. A vertical one would slide this ridge into (or out
+    // of) the near bed as the camera rose, and that drift is exactly what reads as
+    // floating -- so the vertical offset is a flat "further away and higher".
+    const ox = this.camX * this.PAR_BACK;
+    let top = 1e9;
+    for (let i = 0; i < n; i++) {
+      const sy = this.floorAt(ox + i * STEP) - this.camY - 58;
+      gy[i] = sy;
+      if (sy < top) top = sy;
+    }
+    if (top > H + 2) return;
+    let c = rgbLerp([112, 98, 78], this._tintAt(Math.max(0, this.camY + H * 0.6)), 0.66);
+    const nf = this._nightF();
+    if (nf > 0) c = rgbLerp(c, [6, 14, 34], nf * 0.5);
+    ctx.save();
+    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = cssRGB(c);
+    ctx.beginPath();
+    ctx.moveTo(-2, gy[0]);
+    for (let i = 1; i < n; i++) ctx.lineTo(i * STEP, gy[i]);
+    ctx.lineTo((n - 1) * STEP, H + 2);
+    ctx.lineTo(-2, H + 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  },
+
+  // The bank itself: a solid silted body, a pale sand band, a lit lip, then the
+  // dressing that makes it a place -- ripples, pebbles, boulders and one landmark
+  // per few columns. Four filled paths and a few dozen rects; no gradients, no
+  // per-frame canvas, and every colour string comes from the cached palette above.
+  _drawFloor(ctx, t) {
+    if (typeof G === 'undefined' || !G || !this._cols) return;
+    const STEP = this.FLOOR_STEP;
+    const n = Math.min(this._fy.length - 1, Math.ceil(W / STEP) + 2);
+    const fy = this._fy;
+    const camX = this.camX, camY = this.camY;
+    let top = 1e9;
+    for (let i = 0; i < n; i++) {
+      const sy = this.floorAt(camX + i * STEP) - camY;
+      fy[i] = sy;
+      if (sy < top) top = sy;
+    }
+    if (top > H + 2) return;                    // the bed is below the frame
+    const pal = this._bedPal(this.floorAt(camX + W * 0.5));
+    const right = (n - 1) * STEP;
+
+    // screen y of the sand at an arbitrary screen x, off the row we just sampled
+    const atX = (sx) => {
+      const u = clamp(sx / STEP, 0, n - 1.001);
+      const i = u | 0;
+      return fy[i] + (fy[i + 1] - fy[i]) * (u - i);
+    };
+    // one band of the bank, following the profile out and back
+    const band = (o0, o1) => {
+      ctx.beginPath();
+      ctx.moveTo(-2, fy[0] + o0);
+      for (let i = 1; i < n; i++) ctx.lineTo(i * STEP, fy[i] + o0);
+      ctx.lineTo(right, fy[n - 1] + o1);
+      for (let i = n - 2; i >= 0; i--) ctx.lineTo(i * STEP, fy[i] + o1);
+      ctx.lineTo(-2, fy[0] + o1);
+      ctx.closePath();
+      ctx.fill();
+    };
+
+    // Landmarks go down FIRST, so the sand buries their footings and they read as
+    // rising out of the bottom rather than resting on it.
+    const ci0 = Math.floor((camX - 160) / this.CW), ci1 = Math.floor((camX + W + 160) / this.CW);
+    for (let ci = ci0; ci <= ci1; ci++) {
+      const c = this._col(ci);
+      if (c.mark) this._drawMark(ctx, c.mark, pal, t);
+    }
+
+    // the body, all the way to the bottom of the frame
+    const SS = this.FLOOR_SAND + this.FLOOR_SILT - 1;
+    ctx.fillStyle = pal.dark;
+    ctx.beginPath();
+    ctx.moveTo(-2, fy[0] + SS);
+    for (let i = 1; i < n; i++) ctx.lineTo(i * STEP, fy[i] + SS);
+    ctx.lineTo(right, H + 2);
+    ctx.lineTo(-2, H + 2);
+    ctx.closePath();
+    ctx.fill();
+    // silt, sand, then the lit lip -- each band overlaps the next so there is no
+    // hairline seam when the profile is steep
+    ctx.fillStyle = pal.silt;
+    band(this.FLOOR_SAND - 1, SS + 1);
+    ctx.fillStyle = pal.sand;
+    band(-0.5, this.FLOOR_SAND + 1);
+    ctx.fillStyle = pal.lip;
+    band(-0.6, 2);
+
+    // ---- dressing -------------------------------------------------------------
+    // Ripples: dashes lying in the sand. One fillStyle, alpha per dash.
+    ctx.fillStyle = pal.rip;
+    for (let ci = ci0; ci <= ci1; ci++) {
+      const c = this._col(ci);
+      for (let i = 0; i < c.ripples.length; i++) {
+        const r = c.ripples[i];
+        const sx = r.x - camX;
+        if (sx < -20 || sx > W + 2) continue;
+        ctx.globalAlpha = r.a;
+        ctx.fillRect(sx, atX(sx) + r.o, r.w, 0.8);
+      }
+    }
+    ctx.globalAlpha = 1;
+    // Pebbles: two tones, two passes, two fillStyle writes for the whole field.
+    for (let pass = 0; pass < 2; pass++) {
+      ctx.fillStyle = pass ? pal.peb1 : pal.peb0;
+      for (let ci = ci0; ci <= ci1; ci++) {
+        const c = this._col(ci);
+        for (let i = 0; i < c.pebbles.length; i++) {
+          const p = c.pebbles[i];
+          if ((p.tone === 1 ? 1 : 0) !== pass) continue;
+          const sx = p.x - camX;
+          if (sx < -6 || sx > W + 6) continue;
+          ctx.fillRect(sx, atX(sx) + p.o, p.r, p.r * 0.8);
         }
       }
-      ctx.restore();
     }
+    // Boulders: half-domes bedded into the bank. Procedural, so they are always
+    // exactly this depth's sand colour.
+    for (let ci = ci0; ci <= ci1; ci++) {
+      const c = this._col(ci);
+      for (let i = 0; i < c.boulders.length; i++) {
+        const b = c.boulders[i];
+        const sx = b.x - camX;
+        if (sx < -b.w || sx > W + b.w) continue;
+        const sy = atX(sx) + 2;
+        if (sy < -20 || sy > H + 20) continue;
+        const r = b.w * 0.5;
+        ctx.save();
+        ctx.translate(Math.round(sx * DPX) / DPX, sy);
+        ctx.scale(b.flip ? -1 : 1, b.h / r);
+        ctx.fillStyle = pal.silt;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, Math.PI, TAU);
+        ctx.closePath();
+        ctx.fill();
+        // a lit crown, so it is a rock and not a hole
+        ctx.fillStyle = pal.sand;
+        ctx.beginPath();
+        ctx.arc(-r * 0.18, -r * 0.12, r * 0.62, Math.PI, TAU);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+    ctx.globalAlpha = 1;
+  },
+
+  // ---- landmarks --------------------------------------------------------------
+  // Three shapes, all drawn as flat silhouettes in the bank's own dark tone: a rock
+  // arch, a kelp forest and the ribs of something that did not make it. They exist
+  // so the seabed has things you can navigate by instead of uniform scatter.
+  _drawMark(ctx, m, pal, t) {
+    const sx = m.x - this.camX;
+    if (sx < -300 || sx > W + 300) return;
+    const sy = this.floorAt(m.x) - this.camY;
+    if (sy < -340 || sy > H + 40) return;
+    ctx.save();
+    ctx.translate(Math.round(sx * DPX) / DPX, sy);
+    if (m.type === 'kelp') {
+      // Constant-width strokes, one colour: a ribbon per strand would be four times
+      // the path ops for a difference nothing at this contrast can see. Each strand
+      // sways from its ROOT, with the amplitude growing up the stipe.
+      ctx.strokeStyle = pal.mark;
+      ctx.globalAlpha = 0.7;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < m.strands.length; i++) {
+        const s = m.strands[i];
+        ctx.lineWidth = s.w;
+        ctx.beginPath();
+        ctx.moveTo(s.dx, 6);
+        for (let k = 1; k <= 5; k++) {
+          const f = k / 5;
+          ctx.lineTo(
+            s.dx + Math.sin(t * 0.7 + s.ph + f * 1.7) * 8 * f * f + s.lean * s.h * f * f,
+            6 - s.h * f
+          );
+        }
+        ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
+      ctx.lineWidth = 1;
+    } else if (m.type === 'arch') {
+      if (m.flip) ctx.scale(-1, 1);
+      ctx.fillStyle = pal.mark;
+      ctx.globalAlpha = 0.82;
+      // R is the opening; the springing line sits R below the crown, so a squat
+      // arch stays an arch instead of turning inside out
+      const R = Math.min(m.w * 0.5, m.h * 0.62);
+      const cy = -(m.h - R);
+      const lw = m.lw;
+      // the span: one closed half-ring, outer arc out and inner arc back
+      ctx.beginPath();
+      ctx.arc(0, cy, R + lw, Math.PI, TAU);
+      ctx.lineTo(R, cy);
+      ctx.arc(0, cy, R, TAU, Math.PI, true);
+      ctx.closePath();
+      ctx.fill();
+      // two splayed legs down into the sand
+      for (let s = -1; s <= 1; s += 2) {
+        ctx.beginPath();
+        ctx.moveTo(s * R, cy);
+        ctx.lineTo(s * (R + lw), cy);
+        ctx.lineTo(s * (R + lw * 1.5), 10);
+        ctx.lineTo(s * (R - lw * 0.15), 10);
+        ctx.closePath();
+        ctx.fill();
+      }
+    } else {
+      if (m.flip) ctx.scale(-1, 1);
+      ctx.strokeStyle = pal.mark;
+      ctx.globalAlpha = 0.72;
+      ctx.lineWidth = 2.6;
+      ctx.lineCap = 'round';
+      // the keel, mostly buried
+      ctx.beginPath();
+      ctx.moveTo(-m.span * 0.5, 3);
+      ctx.quadraticCurveTo(0, -7, m.span * 0.5, 3);
+      ctx.stroke();
+      for (let i = 0; i < m.ribs.length; i++) {
+        const r = m.ribs[i];
+        ctx.beginPath();
+        ctx.moveTo(r.dx, 4);
+        ctx.quadraticCurveTo(r.dx + r.bend * r.h * 0.5, -r.h * 0.6, r.dx + r.bend * r.h, -r.h);
+        ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
+      ctx.lineWidth = 1;
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
   },
 
   // ---- aerial perspective -----------------------------------------------------
   // The haze goes over the background layers and UNDER Otto, which is what keeps
   // him readable while the distance drowns in water colour.
   _drawHaze(ctx) {
+    const wy0 = this._waterTop();
+    if (wy0 >= H) return;                     // nothing but sky in frame
     const d = this.depthFrac();
     const base = this._tintAt(this.camY + H * 0.5);
     const a0 = 0.16 + d * 0.4;
-    const BANDS = 8, bh = H / BANDS;
+    const BANDS = 8, bh = (H - wy0) / BANDS;
     for (let i = 0; i < BANDS; i++) {
       const a = a0 * (0.45 + 0.55 * (i / (BANDS - 1)));
       ctx.fillStyle = `rgba(${base[0]},${base[1]},${base[2]},${a.toFixed(3)})`;
-      ctx.fillRect(0, i * bh, W, bh + 0.6);
+      ctx.fillRect(0, wy0 + i * bh, W, bh + 0.6);
     }
   },
 
@@ -1528,8 +2362,10 @@ const Ocean = {
     const nf = this._nightF();
     const a = d * 0.34 + nf * 0.22;
     if (a <= 0.01) return;
+    const wy0 = this._waterTop();
+    if (wy0 >= H) return;                     // the sky is not the deep
     ctx.fillStyle = `rgba(3,10,24,${a.toFixed(3)})`;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, wy0, W, H - wy0);
   },
 
   // ---- surface light ----------------------------------------------------------
@@ -1584,13 +2420,16 @@ const Ocean = {
     const sm = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = false;
     if (this.quality > 0) {
+      // The bright additive copy is the SHORTER one: its cutoff is a razor line
+      // over a lit scene, so it hands over to the taller, fainter copy and the
+      // light steps down instead of stopping.
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 0.44 * fade;
-      ctx.drawImage(ca.cv, ca.ax, top, ca.w, 112);
+      ctx.drawImage(ca.cv, ca.ax, top, ca.w, 76);
       // the second copy slides the other way; the interference IS the shimmer
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 0.24 * fade;
-      ctx.drawImage(ca.cv, ca.bx, top + 8, ca.w, 74);
+      ctx.drawImage(ca.cv, ca.bx, top + 8, ca.w, 116);
     } else {
       // Once the watchdog has given up on the frame, the additive pass is the
       // first thing to go: the light is still there, it just stops glowing.
@@ -1599,6 +2438,302 @@ const Ocean = {
     }
     ctx.imageSmoothingEnabled = sm;
     ctx.restore();
+  },
+
+  // =============================================================================
+  // THE SAND
+  // =============================================================================
+  // floorAt(x) says where the ground is; these three draw it. Everything here is
+  // flat fills and short strokes -- no gradient is evaluated, no image is
+  // filtered, and no colour string is built inside a loop. The body of the sand
+  // is three stacked fills of the SAME path at increasing offsets, which is what
+  // makes a lit lip, a pale sand band and a dark mass out of three fill calls
+  // instead of a clip or a gradient.
+
+  // The colour of sand at depth y. Warm shell sand in the lagoon, cold grey silt
+  // out on the plain, and then fogged toward the water's own colour -- because
+  // sand that keeps its contrast at 2000 units down reads as a painted backdrop,
+  // and the fog is the only thing that puts air (water) between you and it.
+  _sandAt(y) {
+    const d = clamp(y / this.DEEP, 0, 1);
+    const warm = rgbLerp([224, 206, 163], [94, 102, 114], d * d * (3 - 2 * d));
+    let c = rgbLerp(warm, this._tintAt(y), 0.20 + d * 0.42);
+    const nf = this._nightF();
+    if (nf > 0) c = rgbLerp(c, [8, 16, 36], nf * 0.5);
+    return c;
+  },
+
+  // The columns whose sand can be on screen. Only ever two or three of them.
+  _eachFloorCol(cb, pad) {
+    const p = pad === undefined ? 48 : pad;
+    const c0 = Math.floor((this.camX - p) / this.CW);
+    const c1 = Math.floor((this.camX + W + p) / this.CW);
+    for (let ci = c0; ci <= c1; ci++) cb(this._col(ci));
+  },
+
+  // Trace the sand line across the frame and close the path down to the bottom
+  // edge, `dy` below the true line. Reused for each of the stacked bands.
+  _floorPath(ctx, dy) {
+    const step = this.FLOOR_STEP;
+    const gx0 = Math.floor((this.camX - step) / step) * step;
+    const n = Math.ceil((W + step * 3) / step);
+    ctx.beginPath();
+    ctx.moveTo(-6, H + 6);
+    for (let i = 0; i <= n; i++) {
+      const wx = gx0 + i * step;
+      ctx.lineTo(wx - this.camX, this.floorAt(wx) - this.camY + dy);
+    }
+    ctx.lineTo(W + 6, H + 6);
+    ctx.closePath();
+  },
+
+  // The distant ridges: the same profile read through a parallax, lifted up the
+  // frame and drained of contrast. This is what stops the real sand from being the
+  // only thing between the mid band and the bottom of the screen -- one line of
+  // ground reads as a cutout, three read as a seabed going away from you.
+  // Composited into the half-res backdrop, so it costs a quarter of what it looks
+  // like it should.
+  _drawFloorFar(ctx) {
+    const water = this._tintAt(this.camY + H * 0.62);
+    for (let k = 0; k < 2; k++) {
+      const par = k === 0 ? 0.55 : 0.78;
+      const lift = k === 0 ? 104 : 46;
+      const cx = this.camX * par, cy = this.camY * par;
+      const step = 32;
+      const gx0 = Math.floor((cx - step) / step) * step;
+      const n = Math.ceil((W + step * 3) / step);
+      // Every sample of this ridge is off the bottom of the frame most of the
+      // time, and a fill that covers nothing still costs a path: check first.
+      let top = 1e9;
+      for (let i = 0; i <= n; i += 2) {
+        const y = this._profile(gx0 + i * step) - lift - cy;
+        if (y < top) top = y;
+      }
+      if (top > H + 4) continue;
+      ctx.fillStyle = cssRGB(rgbLerp(water, [9, 18, 33], 0.16 + k * 0.14));
+      ctx.beginPath();
+      ctx.moveTo(-6, H + 6);
+      for (let i = 0; i <= n; i++) {
+        const wx = gx0 + i * step;
+        ctx.lineTo(wx - cx, this._profile(wx) - lift - cy);
+      }
+      ctx.lineTo(W + 6, H + 6);
+      ctx.closePath();
+      ctx.fill();
+    }
+  },
+
+  _drawFloor(ctx, t) {
+    // In open water the sand is off the bottom of the frame, which is the common
+    // case, so the cheapest possible rejection comes first.
+    let lo = 1e9;
+    this._eachFloorCol((c) => { if (c.lo < lo) lo = c.lo; });
+    if (lo - this.camY > H + 4) return;
+
+    // One depth drives the whole palette for this frame: sampling per-pixel would
+    // mean a gradient, and the frame cannot afford one.
+    const fy = this.floorAt(this.camX + W * 0.5);
+    const sand = this._sandAt(fy);
+    // how much surface light still reaches this sand -- the lip is only bright
+    // while there is something up there to light it
+    const light = clamp(1 - Math.max(0, fy) / (this.LIGHT_END * 2.4), 0, 1) * (1 - this._nightF());
+    const lit = rgbLerp(sand, [255, 250, 230], 0.14 + 0.26 * light);
+    const body = rgbLerp(sand, [0, 0, 0], 0.24);
+    const deep = rgbLerp(sand, [0, 0, 0], 0.5);
+
+    // Light to dark, each offset further down the same line: what is left visible
+    // of each fill is the band above the next one.
+    ctx.fillStyle = cssRGB(lit);
+    this._floorPath(ctx, 0); ctx.fill();
+    ctx.fillStyle = cssRGB(sand);
+    this._floorPath(ctx, 2.5); ctx.fill();
+    ctx.fillStyle = cssRGB(body);
+    this._floorPath(ctx, this.FLOOR_SAND); ctx.fill();
+    ctx.fillStyle = cssRGB(deep);
+    this._floorPath(ctx, this.FLOOR_SAND + this.FLOOR_SILT); ctx.fill();
+
+    // ---- texture on the sand -------------------------------------------------
+    const rippleCol = cssRGB(rgbLerp(sand, [0, 0, 0], 0.16));
+    const peb0 = cssRGB(rgbLerp(sand, [0, 0, 0], 0.3));
+    const peb1 = cssRGB(rgbLerp(sand, [255, 250, 230], 0.24));
+    const boulder = cssRGB(rgbLerp(sand, [0, 0, 0], 0.2));
+    const boulderLit = cssRGB(rgbLerp(sand, [255, 250, 230], 0.16 + 0.2 * light));
+
+    this._eachFloorCol((c) => {
+      let i, o, sx, gy;
+      // ripples: short dashes lying along the line, so they read as the surface
+      // of the sand rather than as things on it
+      ctx.fillStyle = rippleCol;
+      for (i = 0; i < c.ripples.length; i++) {
+        o = c.ripples[i];
+        sx = o.x - this.camX;
+        if (sx + o.w < 0 || sx > W) continue;
+        gy = this.floorAt(o.x) - this.camY + o.o;
+        if (gy < -2 || gy > H + 2) continue;
+        ctx.globalAlpha = o.a;
+        ctx.fillRect(sx, gy, o.w, 0.9);
+      }
+      ctx.globalAlpha = 1;
+      // pebbles: two tones, two fillStyle writes for the whole field
+      for (let tone = 0; tone < 2; tone++) {
+        ctx.fillStyle = tone ? peb1 : peb0;
+        for (i = 0; i < c.pebbles.length; i++) {
+          o = c.pebbles[i];
+          if (o.tone !== tone) continue;
+          sx = o.x - this.camX;
+          if (sx < -4 || sx > W + 4) continue;
+          gy = this.floorAt(o.x) - this.camY + 1.2 + o.o;
+          if (gy < -4 || gy > H + 4) continue;
+          ctx.fillRect(sx - o.r / 2, gy - o.r / 2, o.r, o.r);
+        }
+      }
+      // boulders: half-domes bedded into the line. Procedural, so they are always
+      // exactly the sand's own colour at this depth and can never clash with it.
+      for (i = 0; i < c.boulders.length; i++) {
+        o = c.boulders[i];
+        sx = o.x - this.camX;
+        if (sx + o.w < -8 || sx - o.w > W + 8) continue;
+        gy = this.floorAt(o.x) - this.camY + 2;
+        if (gy < -o.h - 8 || gy > H + 8) continue;
+        ctx.fillStyle = boulder;
+        ctx.beginPath();
+        ctx.ellipse(sx, gy, o.w / 2, o.h, 0, Math.PI, TAU);
+        ctx.closePath();
+        ctx.fill();
+        // one lit arc along the top -- the whole read of "solid" comes from this
+        ctx.strokeStyle = boulderLit;
+        ctx.lineWidth = PIX * 2;
+        ctx.beginPath();
+        ctx.ellipse(sx, gy, o.w / 2 - PIX, o.h - PIX, 0, Math.PI * 1.12, Math.PI * 1.78);
+        ctx.stroke();
+      }
+      if (c.mark) this._drawMark(ctx, c, t, light, sand);
+    });
+  },
+
+  // The one thing in a column big enough to navigate by. All three are drawn
+  // rather than blitted: an arch or a whale rib in exactly the local sand colour
+  // seats itself, where a sprite would sit on top of the scene.
+  _drawMark(ctx, c, t, light, sand) {
+    const m = c.mark;
+    const sx = m.x - this.camX;
+    if (sx < -160 || sx > W + 160) return;
+    const gy = this.floorAt(m.x) - this.camY;
+    if (gy < -220 || gy > H + 40) return;
+
+    if (m.type === 'kelp') {
+      // A forest: stroked strands, one colour, swaying from the root. Kelp is the
+      // one landmark that occludes, which is what makes it feel like a place.
+      ctx.strokeStyle = cssRGB(rgbLerp(rgbLerp(sand, [46, 92, 54], 0.62),
+                                       this._tintAt(this.camY + H * 0.5), 0.3));
+      ctx.lineCap = 'round';
+      for (let i = 0; i < m.strands.length; i++) {
+        const s = m.strands[i];
+        const bx = sx + s.dx;
+        if (bx < -20 || bx > W + 20) continue;
+        const by = this.floorAt(m.x + s.dx) - this.camY;
+        const sway = Math.sin(t * 0.6 + s.ph) * 13 + s.lean * 26;
+        ctx.lineWidth = s.w;
+        ctx.globalAlpha = 0.5 + (i % 3) * 0.14;
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.quadraticCurveTo(bx + sway * 0.35, by - s.h * 0.55, bx + sway, by - s.h);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      return;
+    }
+
+    if (m.type === 'arch') {
+      // Two legs and a span, as one path, so the inside of the arch is a real hole
+      // you can see the water through.
+      const w = m.w, h = m.h, lw = m.lw, th = m.thick;
+      ctx.save();
+      ctx.translate(sx, gy);
+      if (m.flip) ctx.scale(-1, 1);
+      ctx.fillStyle = cssRGB(rgbLerp(sand, [0, 0, 0], 0.26));
+      ctx.beginPath();
+      ctx.moveTo(-w / 2 - lw / 2, 2);
+      ctx.lineTo(-w / 2 - lw / 2, -h + th);
+      ctx.quadraticCurveTo(0, -h - th * 0.5, w / 2 + lw / 2, -h + th);
+      ctx.lineTo(w / 2 + lw / 2, 2);
+      ctx.lineTo(w / 2 - lw / 2, 2);
+      ctx.lineTo(w / 2 - lw / 2, -h + th * 0.6);
+      ctx.quadraticCurveTo(0, -h + th * 1.6, -w / 2 + lw / 2, -h + th * 0.6);
+      ctx.lineTo(-w / 2 + lw / 2, 2);
+      ctx.closePath();
+      ctx.fill();
+      // a lit rim on the top of the span, so it does not read as a flat cutout
+      ctx.strokeStyle = cssRGB(rgbLerp(sand, [255, 250, 230], 0.1 + 0.24 * light));
+      ctx.lineWidth = PIX * 2;
+      ctx.beginPath();
+      ctx.moveTo(-w / 2 - lw / 2 + PIX, -h + th);
+      ctx.quadraticCurveTo(0, -h - th * 0.5, w / 2 + lw / 2 - PIX, -h + th);
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
+
+    // ribs: something died out here. Bone keeps its own colour -- it is the one
+    // pale thing on the plain, and that is exactly why it works as a landmark.
+    ctx.save();
+    ctx.translate(sx, gy);
+    if (m.flip) ctx.scale(-1, 1);
+    ctx.strokeStyle = cssRGB(rgbLerp([226, 220, 200], this._tintAt(this.camY + H * 0.5), 0.42));
+    ctx.lineCap = 'round';
+    for (let i = 0; i < m.ribs.length; i++) {
+      const r = m.ribs[i];
+      ctx.lineWidth = 1.6 + PIX;
+      ctx.globalAlpha = 0.72;
+      ctx.beginPath();
+      ctx.moveTo(r.dx, 1);
+      ctx.quadraticCurveTo(r.dx + r.bend * r.h * 0.7, -r.h * 0.6, r.dx + r.bend * r.h * 0.35, -r.h);
+      ctx.stroke();
+    }
+    // the spine they hang off
+    ctx.lineWidth = 2 + PIX;
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(-m.span / 2, -m.h * 0.1);
+    ctx.quadraticCurveTo(0, -m.h * 0.3, m.span / 2, -m.h * 0.06);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  },
+
+  // Water thrown off a breach, and silt kicked off the bottom. Two buckets, two
+  // fillStyle writes: the tone is baked in at spawn precisely so this loop never
+  // has to decide anything.
+  _drawDrops(ctx) {
+    let any = false;
+    for (let i = 0; i < this.drops.length; i++) if (this.drops[i].t > 0) { any = true; break; }
+    if (!any) return;
+
+    ctx.fillStyle = '#e4f6ff';
+    for (let i = 0; i < this.drops.length; i++) {
+      const d = this.drops[i];
+      if (d.t <= 0 || d.tone !== 0) continue;
+      const sx = d.x - this.camX, sy = d.y - this.camY;
+      if (sx < -6 || sx > W + 6 || sy < -6 || sy > H + 6) continue;
+      ctx.globalAlpha = clamp(d.t / Math.max(d.life, 0.01), 0, 1) * 0.85;
+      // stretched along the fall, which is what reads as a droplet and not a dot
+      ctx.fillRect(sx - d.r / 2, sy - d.r, d.r, d.r * 2.2);
+    }
+
+    ctx.fillStyle = cssRGB(rgbLerp(this._sandAt(this.floorAt(this.px)), [255, 255, 255], 0.2));
+    for (let i = 0; i < this.drops.length; i++) {
+      const d = this.drops[i];
+      if (d.t <= 0 || d.tone !== 1) continue;
+      const sx = d.x - this.camX, sy = d.y - this.camY;
+      if (sx < -20 || sx > W + 20 || sy < -20 || sy > H + 20) continue;
+      // a cloud thins as it swells, so alpha falls off faster than the timer
+      const k = clamp(d.t / Math.max(d.life, 0.01), 0, 1);
+      ctx.globalAlpha = k * k * 0.34;
+      ctx.beginPath();
+      ctx.arc(sx, sy, d.r, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   },
 
   _drawSurfaceFoam(ctx, t) {
@@ -1617,21 +2752,44 @@ const Ocean = {
   },
 
   // ---- props ------------------------------------------------------------------
+  // Two populations with different rules, in one pass:
+  //
+  //   PLANTED (p.base): the y in the record is the BASE of the sprite, sitting on
+  //     floorAt(x). Drawn at world scale with NO parallax. This is not a style
+  //     choice -- a prop parallaxed at 0.86 against sand drawn at 1.0 slides off
+  //     the sand the instant the camera moves vertically, and that slide is
+  //     precisely the "everything is floating" the seabed exists to fix. The depth
+  //     read is carried by size, alpha and the hazed layers behind instead.
+  //
+  //   ADRIFT (driftwood, and only driftwood): centred on its y, with its own
+  //     resting angle and a slow bob. Buoyant things are allowed to hang in open
+  //     water because that is what buoyant means.
+  //
+  // BOTH draw at world scale. Parallaxing the adrift layer would be free depth,
+  // but the chunk query window would then have to live in the parallax layer's
+  // space, and at 2400 units down a 1.1 layer is 240 units out of register with
+  // the window -- so planks would pop in and out along the bottom of the frame.
+  // PAR_BACK / PAR_FRONT stay declared for the hazed layers that have no ground
+  // contact and for anything a wiring layer wants in the near field.
   _drawProps(ctx, t, front) {
     const nf = this._nightF();
-    const par = front ? this.PAR_FRONT : this.PAR_BACK;
-    const cx = this.camX * par, cy = this.camY * par;
     this.eachVisibleChunk((c) => {
       for (let i = 0; i < c.props.length; i++) {
         const p = c.props[i];
         if (!!p.front !== !!front) continue;
-        // wrecks are landmarks, so they ride at world scale like Otto does
-        const sx = p.x - (p.wreck ? this.camX : cx);
-        const sy = p.y - (p.wreck ? this.camY : cy);
+        const planted = p.base !== false;
+        const sx = p.x - this.camX;
+        const sy = p.y - this.camY;
         const half = p.s;
-        if (sx + half < -20 || sx - half > W + 20 || sy + half < -20 || sy - half > H + 20) continue;
+        if (sx + half < -24 || sx - half > W + 24) continue;
+        if (sy + half < -24 || sy - half > H + 24) continue;
         if (p.wreck) {
-          this._silDraw(ctx, p.art, sx, sy, p.s, p.flip, p.dim * (1 - nf * 0.4));
+          // a hull half-buried in the sand: the silhouette is anchored by its
+          // waterline-equivalent, so shift the centre up off the base
+          const r = this._sil(p.art);
+          const hh = r ? p.s * r.ar : p.s;
+          this._silDraw(ctx, p.art, sx, sy - hh / 2 + (p.sink || 0), p.s, p.flip,
+                        p.dim * (1 - nf * 0.4));
           continue;
         }
         const img = ASSETS[p.art];
@@ -1640,19 +2798,28 @@ const Ocean = {
         const wide = img.width >= img.height;
         const w = wide ? p.s : p.s * img.width / img.height;
         const h = wide ? p.s * img.height / img.width : p.s;
-        const sway = Math.sin(t * (1.5 - p.stiff) + p.ph) * (1 - p.stiff) * 0.3;
         ctx.save();
-        ctx.translate(Math.round(sx * DPX) / DPX, sy);
         ctx.globalAlpha = clamp(p.dim, 0.1, 1) * (1 - nf * 0.45);
-        // a plant bends from where it is rooted, so pivot at its base
-        ctx.translate(0, h / 2);
-        ctx.rotate(sway);
-        ctx.translate(0, -h / 2);
-        if (p.flip) ctx.scale(-1, 1);
-        ctx.drawImage(img, -w / 2, -h / 2, w, h);
+        if (planted) {
+          // Pin the BASE, bedded in by p.sink, and pivot the sway there: a plant
+          // bends from its root and a shell does not move at all.
+          const by = sy + (p.sink || 0);
+          const sway = Math.sin(t * (1.5 - p.stiff) + p.ph) * (1 - p.stiff) * 0.3;
+          ctx.translate(Math.round(sx * DPX) / DPX, by);
+          if (sway) ctx.rotate(sway);
+          if (p.flip) ctx.scale(-1, 1);
+          ctx.drawImage(img, -w / 2, -h, w, h);
+        } else {
+          const bob = Math.sin(t * 0.7 + p.ph) * 2.2;
+          const roll = p.rot + Math.sin(t * 0.5 + p.ph * 1.7) * 0.08;
+          ctx.translate(Math.round(sx * DPX) / DPX, sy + bob);
+          ctx.rotate(roll);
+          if (p.flip) ctx.scale(-1, 1);
+          ctx.drawImage(img, -w / 2, -h / 2, w, h);
+        }
         ctx.restore();
       }
-    }, 120, par);
+    }, 140, 1);
   },
 
   // ---- particles --------------------------------------------------------------
