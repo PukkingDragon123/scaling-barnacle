@@ -267,6 +267,7 @@ const Skills = {
   _cobj: null,            // the G.skills we last normalised, by reference
   _cache: null,           // buff name -> value. rebuilt only when ownership moves
   _buffKeys: null,        // the cache's key list, so a rebuild never allocates
+  _ident: null,           // the same names at their identities, for the pre-save read
   _own: null,             // node key -> bool
   _flat: null,            // every node, flat, for cheap whole-tree walks
   _byKey: null,
@@ -409,7 +410,8 @@ const Skills = {
   },
 
   // xp needed to go from `lv` to `lv + 1`. Roughly 50 * lv^1.5: 50, 141, 260,
-  // 400, 559 ... 4363 at level 19, which is about 26k for a full track.
+  // 400, 559 ... 4363 at level 19. That is 7,133 xp to reach level 11, which is
+  // where a tree's ten points are all earned, and 33,567 to cap a track at 20.
   need: function (lv) {
     if (lv >= this.MAX_LV) return 0;
     if (lv < 1) lv = 1;
@@ -743,6 +745,7 @@ const Skills = {
     if (typeof NPCs !== 'undefined' && NPCs.open) return;
     if (typeof Stock !== 'undefined' && Stock.open) return;
     if (typeof Farm !== 'undefined' && Farm.open) return;
+    if (typeof Inv !== 'undefined' && Inv.open) return;
     if (typeof Battle !== 'undefined' && Battle.active) return;
 
     var k = prof ? this.resolve(prof) : '';
@@ -1282,6 +1285,7 @@ const Skills = {
       if (typeof NPCs !== 'undefined' && NPCs.open) return;
       if (typeof Stock !== 'undefined' && Stock.open) return;
       if (typeof Farm !== 'undefined' && Farm.open) return;
+      if (typeof Inv !== 'undefined' && Inv.open) return;
 
       if (Input.p('KeyK')) { self.openUI(); return; }
       // touch has no keyboard, so the badge is the way in

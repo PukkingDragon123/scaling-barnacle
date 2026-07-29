@@ -955,14 +955,17 @@ const Inv = {
     this._wasDown = Input.mouse.down;
     this.note = '';
     this.noteT = 0;
+    if (!G.flags.invSeenBench) {
+      G.flags.invSeenBench = true;
+      Game.toast('a job keeps working while you walk away');
+    }
     SND.blip();
     return true;
   },
 
   close: function () {
     if (!this.open) return;
-    // A stack in mid-air goes back where it came from rather than evaporating.
-    if (this.drag) { this._dropBack(); this.drag = null; }
+    this.drag = null;
     this.open = false;
     this.mode = null;
     SND.click();
@@ -993,9 +996,11 @@ const Inv = {
     this._tickFx(dt);
 
     // The bag key works from anywhere it is allowed; while open it also closes.
+    // Both edges are read (not short-circuited) so neither key can be left
+    // pending in Input.pressed for something else to pick up next frame.
     if (Game.fadeDir === 0 && !Game.helpOpen) {
-      var wants = Input.p('Tab') || Input.p('KeyI');
-      if (wants) this.toggleBag();
+      var kTab = Input.p('Tab'), kI = Input.p('KeyI');
+      if (kTab || kI) this.toggleBag();
     }
 
     if (!this.open) { this._wasDown = Input.mouse.down; return; }
@@ -1042,12 +1047,10 @@ const Inv = {
         else { SND.blip(); this._say('the crates are empty'); }
         return;
       }
-      // start a drag out of a filled cell
+      // start a drag out of a filled cell (the stack stays put until we drop)
       if (this.hover >= 0 && G.inv.slots[this.hover] && !this.drag) {
-        var s = G.inv.slots[this.hover];
         this.pick = this.hover;
-        this.drag = { key: s.key, n: s.n, from: this.hover, src: 'bag' };
-        G.inv.slots[this.hover] = null;
+        this.drag = { from: this.hover };
         return;
       }
       var hb = this._barAt(m.x, m.y);
@@ -1060,29 +1063,20 @@ const Inv = {
     }
 
     if (released && this.drag) {
+      var from = this.drag.from;
       var moved = Math.abs(m.x - this._pressX) + Math.abs(m.y - this._pressY);
       var cell = this._cellAt(m.x, m.y);
       var bar = this._barAt(m.x, m.y);
-      if (moved < 3 && cell === this.drag.from) {
-        // a click, not a drag: shuttle it to the bar
-        var from = this.drag.from;
-        G.inv.slots[from] = { key: this.drag.key, n: this.drag.n };
-        this.drag = null;
+      this.drag = null;
+      if (bar >= 0 || (moved < 3 && cell === from)) {
+        // dropped on the bar, or a click rather than a drag: same intent either
+        // way -- send it to the hotbar. toBar() says why when it cannot.
         this.toBar(from);
-      } else if (bar >= 0) {
-        var from2 = this.drag.from;
-        G.inv.slots[from2] = { key: this.drag.key, n: this.drag.n };
-        this.drag = null;
-        if (!this.toBar(from2)) { /* it stayed in the bag; toBar already said why */ }
-      } else if (cell >= 0) {
-        this._dropOn(cell);
-        this.drag = null;
+      } else if (cell >= 0 && cell !== from) {
+        this._moveStack(from, cell);
         SND.click();
         this._buzz(8);
         Game.save();
-      } else {
-        this._dropBack();
-        this.drag = null;
       }
       return;
     }
@@ -1096,35 +1090,35 @@ const Inv = {
     }
   },
 
-  // Put the dragged stack into cell i: merge if it is the same key, else swap.
-  _dropOn: function (i) {
-    var a = G.inv.slots, d = this.drag, cap = this.stackCap(d.key);
-    var t = a[i];
-    if (!t) { a[i] = { key: d.key, n: d.n }; this.pick = i; return; }
-    if (t.key === d.key && t.n < cap) {
-      var take = cap - t.n;
-      if (take > d.n) take = d.n;
-      t.n += take;
-      d.n -= take;
-      if (d.n > 0) this._fill(a, d.key, d.n);      // remainder finds its own home
-      this.pick = i;
-      return;
+  // Move the stack in `from` onto `to`: pour into it when the keys match, else
+  // swap the two cells. Two full stacks of the same thing swap rather than
+  // silently doing nothing, so the gesture always reads as having worked.
+  _moveStack: function (from, to) {
+    var a = G.inv.slots, s = a[from], t = a[to];
+    if (!s || from === to) return;
+    if (t && t.key === s.key) {
+      var take = this.stackCap(s.key) - t.n;
+      if (take > s.n) take = s.n;
+      if (take > 0) {
+        t.n += take;
+        s.n -= take;
+        if (s.n <= 0) a[from] = null;
+      } else {
+        a[from] = t;
+        a[to] = s;
+      }
+    } else {
+      a[from] = t || null;
+      a[to] = s;
     }
-    a[d.from] = t;                                  // straight swap
-    a[i] = { key: d.key, n: d.n };
-    this.pick = i;
-  },
-
-  _dropBack: function () {
-    var a = G.inv.slots, d = this.drag;
-    if (!d) return;
-    if (!a[d.from]) a[d.from] = { key: d.key, n: d.n };
-    else this._refund(d.key, d.n);
+    this.pick = to;
   },
 
   // ---- station input -------------------------------------------------------
   _stationInput: function (dt) {
-    var m = Input.mouse, list = this.recipesAt(this.st), st = this.station_(this.st);
+    var m = Input.mouse, st = this.station_(this.st);
+    if (!st) { this.st = this.STATIONS[0].key; return; }
+    var list = this.recipesAt(this.st);
     var vis = st.layout === 'cards' ? this.CARD_COLS * this.CARD_ROWS : this.ROW_VIS;
     var maxScroll = Math.max(0, list.length - vis);
     var step = st.layout === 'cards' ? this.CARD_COLS : 1;
@@ -1189,10 +1183,9 @@ const Inv = {
   },
 
   _move: function (d) {
-    var list = this.recipesAt(this.st);
-    if (!list.length) return;
+    var list = this.recipesAt(this.st), st = this.station_(this.st);
+    if (!list.length || !st) return;
     this.sel = clamp(this.sel + d, 0, list.length - 1);
-    var st = this.station_(this.st);
     var vis = st.layout === 'cards' ? this.CARD_COLS * this.CARD_ROWS : this.ROW_VIS;
     if (this.sel < this.scroll) this.scroll = this.sel;
     if (this.sel >= this.scroll + vis) this.scroll = this.sel - vis + 1;
@@ -1335,10 +1328,14 @@ const Inv = {
       c.lineWidth = sel ? 1.2 : 1;
       c.stroke();
       if (!s) continue;
+      // the cell a drag started in reads as lifted, not as empty
+      var lifted = this.drag && this.drag.from === i;
+      if (lifted) c.globalAlpha = 0.35;
       this.drawIcon(c, s.key, r.x + r.w / 2, r.y + r.h / 2 - 0.5, 15);
       if (s.n > 1) {
         text(c, String(s.n), r.x + r.w - 1.6, r.y + r.h - 7.5, { size: 6.5, color: '#fff8e0', align: 'right' });
       }
+      if (lifted) c.globalAlpha = 1;
     }
 
     // sort / stack / gather
@@ -1346,19 +1343,19 @@ const Inv = {
     this._drawBtn(c, this._btn('stack'), 'stack', mx, my);
     this._drawBtn(c, this._btn('gather'), 'gather', mx, my);
 
-    var iy = this._btn('sort').y + 22;
+    var iy = this._btn('sort').y + 20;
     text(c, 'worth ' + this.totalValue() + ' sd', this.GX, iy, { size: 7, color: '#a0f2b4' });
     if (this.noteT > 0) {
       c.globalAlpha = clamp(this.noteT, 0, 1);
-      text(c, this.note, this.GX, iy + 11, { size: 6.5, color: '#ffe66e' });
+      text(c, this.note, this.GX, iy + 10, { size: 6.5, color: '#ffe66e' });
       c.globalAlpha = 1;
     }
 
     this._drawDetail(c);
 
     text(c, 'drag to rearrange  --  click a stack to send it to the bar',
-      w.x + w.w / 2, w.y + w.h - 28, { size: 6.5, color: '#8a9484', align: 'center' });
-    text(c, this._hintText(), w.x + w.w / 2, w.y + w.h - 15, { size: 7, color: '#d8ccb4', align: 'center' });
+      w.x + w.w / 2, w.y + w.h - 26, { size: 6.5, color: '#8a9484', align: 'center' });
+    text(c, this._hintText(), w.x + w.w / 2, w.y + w.h - 14, { size: 7, color: '#d8ccb4', align: 'center' });
 
     // The hotbar rides with the HUD, which we replaced -- draw it ourselves so
     // there is something to drag onto.
@@ -1377,9 +1374,8 @@ const Inv = {
   // The detail card doubles as the tooltip body: hover wins, otherwise the last
   // cell you touched, so it never blanks out mid-drag.
   _detailKey: function () {
-    var i = this.hover >= 0 ? this.hover : this.pick;
-    if (this.drag) return this.drag.key;
-    if (i < 0) return null;
+    var i = this.drag ? this.drag.from : (this.hover >= 0 ? this.hover : this.pick);
+    if (i < 0 || i >= G.inv.slots.length) return null;
     var s = G.inv.slots[i];
     return s ? s.key : null;
   },
@@ -1431,6 +1427,8 @@ const Inv = {
 
   _drawDrag: function (c) {
     if (!this.drag) return;
+    var s = G.inv.slots[this.drag.from];
+    if (!s) return;
     var x = Input.mouse.x, y = Input.mouse.y;
     c.globalAlpha = 0.9;
     this._cellPath(c, x - 10, y - 10, 20, 20, 2.5);
@@ -1439,14 +1437,14 @@ const Inv = {
     c.strokeStyle = '#ffe66e';
     c.lineWidth = 1;
     c.stroke();
-    this.drawIcon(c, this.drag.key, x, y, 14);
-    if (this.drag.n > 1) text(c, String(this.drag.n), x + 9, y + 3, { size: 6.5, color: '#fff8e0', align: 'right' });
+    this.drawIcon(c, s.key, x, y, 14);
+    if (s.n > 1) text(c, String(s.n), x + 9, y + 3, { size: 6.5, color: '#fff8e0', align: 'right' });
     c.globalAlpha = 1;
   },
 
   // ---- the station screen --------------------------------------------------
   _drawStation: function (c) {
-    var st = this.station_(this.st), pal = st.pal, w = this._window();
+    var st = this.station_(this.st) || this.STATIONS[0], pal = st.pal, w = this._window();
     var mx = Input.mouse.x, my = Input.mouse.y, i, r;
 
     // panel: the station's own wash over the standard driftwood frame
@@ -1459,15 +1457,18 @@ const Inv = {
     this._drawDeco(c, st, w);
     c.restore();
 
-    text(c, st.name, w.x + 10, w.y + 5, { size: 8, color: pal.hi });
-    text(c, this._hintText(), w.x + w.w - 32, w.y + 7, { size: 6, color: pal.dim, align: 'right' });
+    text(c, st.name, w.x + 10, w.y + 4, { size: 8, color: pal.hi });
+    text(c, this._hintText(), w.x + w.w - 32, w.y + 6, { size: 6, color: pal.dim, align: 'right' });
 
     r = this._closeRect();
     var overX = this._in(r, mx, my);
     uiPanel(c, r.x, r.y, r.w, r.h, overX ? 0.95 : 0.7);
     text(c, 'x', r.x + r.w / 2, r.y + 4, { size: 8, color: overX ? pal.hi : pal.dim, align: 'center' });
 
-    text(c, st.blurb, w.x + 10, w.y + 17, { size: 6.5, color: pal.dim });
+    text(c, st.blurb, w.x + 10, w.y + 15, { size: 6.5, color: pal.dim });
+    if (!TouchUI.enabled) {
+      text(c, '[<-] [->] bench', w.x + w.w - 32, w.y + 15, { size: 6, color: pal.dim, align: 'right' });
+    }
 
     // station rail
     for (i = 0; i < this.STATIONS.length; i++) {
