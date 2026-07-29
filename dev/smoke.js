@@ -38,10 +38,13 @@ const fails = [];
   await page.waitForTimeout(1400);
   console.log('scene =', await page.evaluate(() => Game.scene === WorldScene ? 'world' : 'OTHER'));
 
-  // walk to piling 1 and dive
-  await page.keyboard.down('KeyD');
-  await page.waitForFunction(() => WorldScene.px >= 455, null, { timeout: 9000 });
-  await page.keyboard.up('KeyD');
+  // Walk LEFT to the piling. There is one now, at x=30 under the house, instead
+  // of three spread down a 900-unit dock — so this waypoint is derived from the
+  // scene rather than hardcoded, and a future layout change cannot stale it.
+  const pilingX = await page.evaluate(() => PILING_X[0]);
+  await page.keyboard.down(pilingX < 160 ? 'KeyA' : 'KeyD');
+  await page.waitForFunction((tx) => Math.abs(WorldScene.px - tx) < 14, pilingX, { timeout: 9000 });
+  await page.keyboard.up(pilingX < 160 ? 'KeyA' : 'KeyD');
   await page.keyboard.press('KeyE');
   await page.waitForTimeout(1300);
   const inDive = await page.evaluate(() => Game.scene === DiveScene);
@@ -154,9 +157,11 @@ const fails = [];
   if (!surfaced) fails.push('swim-up surfacing failed');
 
   // 4) workbench: crack one clam (storage should have one from the pry)
-  await page.keyboard.down('KeyA');
-  await page.waitForFunction(() => WorldScene.px <= 318, null, { timeout: 9000 });
-  await page.keyboard.up('KeyA');
+  // the shell workbench is at 300; approach from wherever surfacing left us
+  const benchDir = await page.evaluate(() => (WorldScene.px > 300 ? 'KeyA' : 'KeyD'));
+  await page.keyboard.down(benchDir);
+  await page.waitForFunction(() => Math.abs(WorldScene.px - 300) < 14, null, { timeout: 12000 });
+  await page.keyboard.up(benchDir);
   await page.keyboard.press('KeyE');
   await page.waitForTimeout(400);
   console.log('bench open =', await page.evaluate(() => Bench.open));

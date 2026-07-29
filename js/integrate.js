@@ -29,15 +29,16 @@
   // with it. Both Farm and Stock publish their layout tables, so this is the one
   // place that decides where everything on the planks lives:
   //
-  //   30 piling dive | 56 house | 110 jump in | 150 Sprout | 190 stall
-  //   232 ClamNet | 268 the elder | 300 workbench | 340..490 farm beds
-  //   520,550 pens | endX = 340 + bridge*90
+  //   30 piling dive | 56 house | 82 Marlow | 110 jump in | 150 Sprout
+  //   190 stall | 232 ClamNet | 268 the elder | 300 workbench
+  //   340,370,400,460,490 farm beds | 520 pen 1 | 550 crafting bench | 578 pen 2
+  //   endX = 340 + bridge*90
   //
   // Every pair is >= 22 apart, which is the radius the world's single [E] search
   // uses — anything closer and two things fight over the same keypress.
   const STALL_X = 190;
   if (M.NPCs && M.NPCs.LIST) {
-    const at = { farmer: 150, prof: 268, angler: 430 };
+    const at = { farmer: 150, prof: 268, angler: 82 };
     for (const n of M.NPCs.LIST) if (at[n.key] !== undefined) n.x = at[n.key];
   }
   if (M.Farm && M.Farm.PLOT_DEF) {
@@ -56,6 +57,10 @@
     if (M.Stock.MAX_PENS > pens.length) M.Stock.MAX_PENS = pens.length;
   }
   if (M.Battle) M.Battle.CANNON_X = 268;   // the fight happens amidships now
+  // Craft plants its bench at 434 by default, which lands on a farm bed now.
+  // Marlow goes to the near end (he is a fisherman; the ladder end suits him)
+  // and the bench sits between the two pens.
+  if (M.Craft && M.Craft.SITES && M.Craft.SITES.bench) M.Craft.SITES.bench.x = 550;
 
   // ---- the deck's interaction list ---------------------------------------------
   // Every system that puts something on the dock contributes spots; the world
