@@ -33,7 +33,14 @@ const Hotbar = {
     basket: 'ftool_9',
     bucket: 'ftool_10',
     gloves: 'ftool_11',
-    pick: 'opick_1',       // the pickaxe, mid-swing, reads well small
+    // The three pickaxe tiers have their own art now, so a better pick LOOKS
+    // better in the bar instead of every tier sharing a swing frame.
+    pick: 'pick_stone',
+    pick_stone: 'pick_stone',
+    pick_iron: 'pick_iron',
+    pick_crystal: 'pick_crystal',
+    pot: 'res_pot',
+    lens: 'res_lens',
     cutlass: 'wpn_cutlass',
     flint: 'wpn_flint',
     bomb: 'wpn_bomb',
@@ -55,6 +62,11 @@ const Hotbar = {
     bucket: 'Bucket',
     gloves: 'Work Gloves',
     pick: 'Pickaxe',
+    pick_stone: 'Stone Pickaxe',
+    pick_iron: 'Iron Pickaxe',
+    pick_crystal: 'Crystal Pickaxe',
+    pot: 'Crab Pot',
+    lens: 'Jeweller\u2019s Lens',
     cutlass: 'Cutlass',
     flint: 'Flintlock',
     bomb: 'Powder Bomb',

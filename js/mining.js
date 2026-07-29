@@ -62,7 +62,11 @@ const Mining = {
     nail: { name: 'old nail', art: 'res_nail', value: 5, tier: 0 },
     plank: { name: 'salvaged plank', art: 'res_plank', value: 9, tier: 1 },
     ingot: { name: 'iron ingot', art: 'res_ingot', value: 16, tier: 2 },
-    crystal: { name: 'sea crystal', art: 'res_crystal', value: 26, tier: 3 }
+    crystal: { name: 'sea crystal', art: 'res_crystal', value: 26, tier: 3 },
+    // from the newest sheet: the softer finds a stone pick already turns up
+    sand: { name: 'coarse sand', art: 'res_sand', value: 1, tier: 0 },
+    glass: { name: 'sea glass', art: 'res_glass', value: 12, tier: 0 },
+    beam: { name: 'oak beam', art: 'res_beam', value: 14, tier: 1 }
   },
 
   // THE INVENTORY SEAM. Everything mined is counted through _bin/have/give/take,

@@ -608,6 +608,25 @@ for k, alt in (('bison', 'res_driftwood'), ('melon', 'crop_gourd_p'), ('ray', 's
         s = 110 / max(1, im.size[1])
         save(f'tame_{k}_p', im.resize((max(1, round(im.size[0] * s)), 110), Image.LANCZOS))
 
+print('pickaxe tiers and crafting materials...')
+# Nine well-separated items, so components beats a grid. tol stays LOW (20): the
+# sea glass is translucent and pale, and at 34 the flood fill walks in through its
+# soft edges and hollows every shard out into an outline.
+PICK_SHEET = defringe(key_bg(Image.open(os.path.join(ROOT, 'IMG_4543.jpeg')), tol=20),
+                      (148, 153, 172), tol=26, passes=1)
+# components() returns boxes in scan order: row 1 left-to-right, then row 2
+PICK_NAMES = ['pick_stone', 'pick_iron', 'pick_crystal', 'res_beam', 'res_ball',
+              'res_pot', 'res_glass', 'res_lens', 'res_sand']
+_pboxes = components(PICK_SHEET, min_area=900)
+for _i, _b in enumerate(_pboxes):
+    if _i >= len(PICK_NAMES):
+        break
+    _cell = trim(PICK_SHEET.crop(tuple(_b)))
+    if _cell.size[1] > 180:
+        _s = 180 / _cell.size[1]
+        _cell = _cell.resize((max(1, round(_cell.size[0] * _s)), 180), Image.LANCZOS)
+    save(PICK_NAMES[_i], despeckle(_cell))
+
 with open(os.path.join(OUT, 'manifest.json'), 'w') as f:
     json.dump(manifest, f)
 print(f'\n{len(manifest)} assets written to assets/')
