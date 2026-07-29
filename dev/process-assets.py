@@ -442,6 +442,102 @@ print('the crab punk (4x3)...')
 grid_slice('IMG_4504.jpeg', 4, 3, [f'crab_{i}' for i in range(12)],
            tol=26, target_h=340, solo=True, inset=6)
 
+# ============================================================================
+# The open ocean: side-scroll scenery, swim/hurt/tool animation, resource nodes,
+# crafting stations, tameable animals, NPC houses and the dolphin cast.
+# Navy sheets keep tol low (26) — Otto's fur and the outlines sit close to it.
+# ============================================================================
+
+print('side-scroll ocean scenery...')
+# The painted backdrop is a photo-like webp; it needs no keying, just resizing to
+# something the parallax can tile without a huge blit cost.
+sea = Image.open(os.path.join(ROOT, 'IMG_4522.webp')).convert('RGB')
+sea = sea.resize((1440, round(sea.size[1] * 1440 / sea.size[0])), Image.LANCZOS)
+sea = punch(sea.convert('RGBA'), 1.18, 1.0).convert('RGB')
+sea.save(os.path.join(OUT, 'sea_bg.jpg'), quality=88, optimize=True)
+manifest['sea_bg'] = {'w': sea.size[0], 'h': sea.size[1], 'ext': 'jpg'}
+print(f"  sea_bg: {sea.size[0]}x{sea.size[1]} ({os.path.getsize(os.path.join(OUT, 'sea_bg.jpg'))//1024}KB)")
+
+mid = Image.open(os.path.join(ROOT, 'IMG_4524.png')).convert('RGB')
+mid = punch(mid.convert('RGBA'), 1.16, 1.0).convert('RGB')
+mid.save(os.path.join(OUT, 'sea_mid.jpg'), quality=88, optimize=True)
+manifest['sea_mid'] = {'w': mid.size[0], 'h': mid.size[1], 'ext': 'jpg'}
+print(f'  sea_mid: {mid.size[0]}x{mid.size[1]}')
+
+print('Otto: swim / hurt / tools / combat / crack (navy sheets)...')
+grid_slice('9C058CDE-C7DA-4916-B905-8F1BAD1ED885.jpeg', 4, 4,
+           [f'oswim_{i}' for i in range(16)], tol=26, target_h=190, solo=True, inset=5)
+grid_slice('CF2B9BD3-03A3-40E1-AFFA-93C3CC359549.jpeg', 4, 4,
+           [f'ohurt_{i}' for i in range(16)], tol=26, target_h=190, solo=True, inset=5)
+grid_slice('IMG_4528.jpeg', 4, 1,
+           [f'opick_{i}' for i in range(4)], tol=26, target_h=260, solo=True, inset=6)
+grid_slice('472E83F4-1956-463F-81CD-0B11F7B10228.png', 4, 4,
+           [f'otool_{i}' for i in range(16)], tol=26, target_h=250, solo=True, inset=6)
+grid_slice('585411A1-F117-42B7-B968-B36954F55F9A.png', 4, 4,
+           [f'ofight_{i}' for i in range(16)], tol=26, target_h=250, solo=True, inset=6)
+grid_slice('BDA9CC36-27B3-48E2-ABD9-D4694E736D21.jpeg', 4, 2,
+           [f'ocrack_{i}' for i in range(8)], tol=26, target_h=230, solo=True, inset=6)
+
+print('the dolphin cast...')
+grid_slice('4494D865-36C4-409D-8081-AFFC9F4407E2.png', 4, 4,
+           [f'dking_{i}' for i in range(16)], tol=26, target_h=300, solo=True, inset=6)
+grid_slice('5BC26E90-9428-4352-87CB-DD55D2B3B3CA.png', 4, 4,
+           [f'dfarm_{i}' for i in range(16)], tol=26, target_h=300, solo=True, inset=6)
+
+print('seabed resource nodes and resource icons...')
+grid_slice('ECF92C7E-C2C6-419B-88F1-54677C25A7B6.png', 4, 2,
+           ['node_wood', 'node_stone', 'node_iron', 'node_gold',
+            'node_crystal', 'node_coal', 'node_scrap', 'node_wreck'],
+           tol=44, target_h=190, solo=True, defr=True, inset=6)
+grid_slice('B5914D75-909C-4C2D-8A1F-C1F66B237242.png', 4, 2,
+           ['res_driftwood', 'res_stone', 'res_ore', 'res_crystal',
+            'res_plank', 'res_nail', 'res_ingot', None],
+           tol=44, target_h=150, solo=True, defr=True, inset=6)
+
+print('crafting stations, weapons, farm tools...')
+grid_slice('B61CD705-62F4-492C-BF81-67C8CC7F703F.png', 2, 2,
+           ['tbl_anvil', 'tbl_bench', 'tbl_mill', 'tbl_forge'],
+           tol=44, target_h=240, solo=True, defr=True, inset=8)
+grid_slice('62451256-5BAA-4CD6-BD4C-EFD42333B1EC.png', 2, 2,
+           ['wpn_flint', 'wpn_cannon', 'wpn_cutlass', 'wpn_bomb'],
+           tol=44, target_h=200, solo=True, defr=True, inset=8)
+grid_slice('C00A1CE6-2BF7-4E2C-B253-F539283F9CE5.png', 4, 3,
+           [f'ftool_{i}' for i in range(12)],
+           tol=44, target_h=170, solo=True, defr=True, inset=6)
+
+print('NPC houses and the pirate ship...')
+grid_slice('BAB4BD72-E265-418D-9C0E-99B625B95BB5.png', 3, 1,
+           ['nhouse_light', 'nhouse_cottage', 'nhouse_shack'],
+           tol=44, target_h=520, solo=True, defr=True, inset=8)
+SHIP_BG = (151, 157, 172)
+shipim = defringe(key_bg(Image.open(os.path.join(ROOT, '44A4DA02-2501-46EC-BA19-F213DB2864B5.png')), tol=44),
+                  SHIP_BG, tol=44, passes=1)
+save('ship', despeckle(trim(shipim)))
+
+# ---- tameable animals: three sheets, each 3 species x [3 baby, 3 adult, product]
+TAME_SHEETS = [
+    ('468F084A-E29C-41A0-B479-615D13736757.png', ['bison', 'melon', 'ray'], 6),
+    ('70377945-52A4-45D7-B60B-49A836EFF0E6.png', ['pig', 'cow', 'clown'], 7),
+    ('F26797FE-CF5E-4AA0-83C2-B8099A58A731.png', ['whale', 'clam', 'narwhal'], 7),
+]
+for src, keys, cols in TAME_SHEETS:
+    names = []
+    for k in keys:
+        names += [f'tame_{k}_{i}' for i in range(6)]
+        if cols == 7:
+            names.append(f'tame_{k}_p')
+    print(f'tameables {"/".join(keys)}...')
+    grid_slice(src, cols, 3, names, tol=44, target_h=150, solo=True, defr=True, inset=5)
+
+# The bison/melon/ray sheet has no product column, so give them one from an adult
+# frame — the game needs a product icon for every tameable species.
+for k, alt in (('bison', 'res_driftwood'), ('melon', 'crop_gourd_p'), ('ray', 'shell_scallop')):
+    src_name = f'tame_{k}_4'
+    if src_name in manifest:
+        im = Image.open(os.path.join(OUT, src_name + '.png')).convert('RGBA')
+        s = 110 / max(1, im.size[1])
+        save(f'tame_{k}_p', im.resize((max(1, round(im.size[0] * s)), 110), Image.LANCZOS))
+
 with open(os.path.join(OUT, 'manifest.json'), 'w') as f:
     json.dump(manifest, f)
 print(f'\n{len(manifest)} assets written to assets/')

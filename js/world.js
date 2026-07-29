@@ -8,7 +8,11 @@ function nightness(clock) {
   return 0;
 }
 
-const PILING_X = [460, 640, 820];
+// The dock is deliberately SHORT now: everything worth walking to is inside 610
+// units instead of 900, so you are never trudging across empty planks. The three
+// clam pilings collapsed into one, right under the house — bridge upgrades buy
+// reach along the dock, not more pilings to choose between.
+const PILING_X = [30, 30, 30];
 const DECK_Y = 214;   // the dock sits low in frame, water filling the bottom
 
 // Every structure is anchored by its MEASURED deck-surface line (fraction of
@@ -42,7 +46,7 @@ const WorldScene = {
   _lampGlows: [],
 
   worldW() { return this.endX() + 80; },
-  endX() { return 300 + G.bridge * 200; },
+  endX() { return 340 + G.bridge * 90; },
   houseTop() { return DECK_Y - assetH('house_body', HOUSE_W); },
 
   enter(opts) {
@@ -60,7 +64,7 @@ const WorldScene = {
       Game.toast(TouchUI.enabled
         ? 'Welcome home, Otto!  Arrows: walk  •  Paw button: interact'
         : 'Welcome home, Otto!  A/D or arrows: walk  •  [E]: interact');
-      Game.toast('Walk right along the dock and dive at a piling.');
+      Game.toast('Dive at the piling for clams, or jump in to explore the open sea.');
     }
   },
 
@@ -70,11 +74,20 @@ const WorldScene = {
       { x: 232, label: 'ClamNet  (sell & shop)', act: () => { Shop.openUI(); } },
       { x: 300, label: 'Workbench  (crack & polish)', act: () => { Bench.openUI(); } },
     ];
-    for (let i = 0; i < G.bridge; i++) {
+    // ONE piling, under the house. Which bed you work is the deepest your bridge
+    // has been rated for, so an upgrade makes the same dive richer instead of
+    // adding another walk.
+    const deepest = clamp(G.bridge, 1, 3) - 1;
+    s.push({
+      x: PILING_X[0],
+      label: `Dive at the Piling — ${PILINGS[deepest].name}  (beds ~${Math.round(clamp(G.growth[deepest], 0, 1) * 100)}%)`,
+      act: () => Game.go(DiveScene, deepest),
+    });
+    // and straight off the planks into open water, from day one
+    if (typeof Ocean !== 'undefined') {
       s.push({
-        x: PILING_X[i],
-        label: `Dive — ${PILINGS[i].name}  (beds ~${Math.round(clamp(G.growth[i], 0, 1) * 100)}%)`,
-        act: () => Game.go(DiveScene, i),
+        x: 110, label: 'Jump In  (open ocean)',
+        act: () => Game.go(Ocean, { from: 'dock' }),
       });
     }
     return s;

@@ -15,7 +15,8 @@
   // These are declared with const at script scope, so they are NOT on window.
   // Resolve them through a try so a missing module is just undefined.
   const M = {};
-  for (const n of ['Farm', 'Hotbar', 'NPCs', 'Craft', 'Battle', 'Stock', 'DiveFX']) {
+  for (const n of ['Farm', 'Hotbar', 'NPCs', 'Craft', 'Battle', 'Stock', 'DiveFX',
+                 'Ocean', 'Mining', 'Inv', 'Skills', 'Tame', 'Hood']) {
     try { M[n] = eval(n); } catch (e) { M[n] = undefined; }
   }
 
@@ -24,14 +25,37 @@
   // things closer than that fight and the first one registered always wins. This
   // is the single place that owns who stands where, spaced so nothing collides:
   //
-  //   56 house door | 150 Sprout | 190 her stall | 232 ClamNet | 268 the professor
-  //   300 workbench | 348..775 farm beds (Farm.PLOT_DEF) | 640 Marlow, between beds
+  // The dock is now 610 long instead of 900, so the far content has to come in
+  // with it. Both Farm and Stock publish their layout tables, so this is the one
+  // place that decides where everything on the planks lives:
   //
+  //   30 piling dive | 56 house | 110 jump in | 150 Sprout | 190 stall
+  //   232 ClamNet | 268 the elder | 300 workbench | 340..490 farm beds
+  //   520,550 pens | endX = 340 + bridge*90
+  //
+  // Every pair is >= 22 apart, which is the radius the world's single [E] search
+  // uses — anything closer and two things fight over the same keypress.
   const STALL_X = 190;
   if (M.NPCs && M.NPCs.LIST) {
-    const at = { farmer: 150, prof: 268, angler: 640 };
+    const at = { farmer: 150, prof: 268, angler: 430 };
     for (const n of M.NPCs.LIST) if (at[n.key] !== undefined) n.x = at[n.key];
   }
+  if (M.Farm && M.Farm.PLOT_DEF) {
+    // three beds per bridge tier, all inside that tier's walk limit
+    const beds = [
+      { x: 340, b: 1 }, { x: 370, b: 1 }, { x: 400, b: 1 },
+      { x: 460, b: 2 }, { x: 490, b: 2 },
+    ];
+    M.Farm.PLOT_DEF.length = 0;
+    for (const b of beds) M.Farm.PLOT_DEF.push(b);
+  }
+  if (M.Stock && M.Stock.PEN_DEF) {
+    const pens = [{ x: 520, sx: 520, b: 3 }, { x: 578, sx: 578, b: 3 }];
+    M.Stock.PEN_DEF.length = 0;
+    for (const p of pens) M.Stock.PEN_DEF.push(p);
+    if (M.Stock.MAX_PENS > pens.length) M.Stock.MAX_PENS = pens.length;
+  }
+  if (M.Battle) M.Battle.CANNON_X = 268;   // the fight happens amidships now
 
   // ---- the deck's interaction list ---------------------------------------------
   // Every system that puts something on the dock contributes spots; the world
