@@ -104,7 +104,7 @@ const Skills = {
         buff: { bagCap: 6 },
         desc: 'six more slots in the bag before otto has to surface.' },
 
-      { key: 'c_pearl', tier: 2, cost: 2, name: 'pearl diver', art: 'shell_pearl', req: ['c_eye', 'c_grip'],
+      { key: 'c_pearl', tier: 2, cost: 1, name: 'pearl diver', art: 'shell_pearl', req: ['c_eye', 'c_grip'],
         buff: { pearlLuck: 2 },
         desc: 'double the odds of a pearl in any shell worth opening.' },
       { key: 'c_calm', tier: 2, cost: 1, name: 'calm blood', art: 'g_fins', req: ['c_lung', 'c_sack'],
@@ -244,10 +244,13 @@ const Skills = {
   // update() and draw() share every rect through these, so a hit box can never
   // drift from the thing it is drawn under.
   WX: 40, WY: 24, WW: 400, WH: 222,
-  TX: 48, TY: 82, TW: 240, TH: 150,     // the tree canvas
-  IX: 292, IW: 140,                     // the info column
+  TX: 46, TY: 82, TW: 200, TH: 150,     // the tree canvas
+  IX: 258, IW: 174,                     // the info column
   NS: 24,                               // node box, logical units
   ROW: 36,                              // tier spacing
+  // Courier is monospace at 0.6em advance, so wrapping by character count is
+  // exact and needs no measuring: (IW - 12 padding) / (6px * 0.6) = 37.
+  COLS: 37,
   FX_MAX: 24,
 
   // ----------------------------------------------------------------- state ----
@@ -263,6 +266,7 @@ const Skills = {
   _init: false,
   _cobj: null,            // the G.skills we last normalised, by reference
   _cache: null,           // buff name -> value. rebuilt only when ownership moves
+  _buffKeys: null,        // the cache's key list, so a rebuild never allocates
   _own: null,             // node key -> bool
   _flat: null,            // every node, flat, for cheap whole-tree walks
   _byKey: null,
@@ -317,6 +321,11 @@ const Skills = {
     }
     this._cache = cache;
     this._buffKeys = keys;
+    // the same table frozen at its identities, so buff() has something to answer
+    // with before a save exists without branching on the kind
+    var ident = {};
+    for (i = 0; i < keys.length; i++) ident[keys[i]] = cache[keys[i]];
+    this._ident = ident;
 
     var own = {};
     for (i = 0; i < flat.length; i++) own[flat[i].key] = false;
@@ -526,15 +535,21 @@ const Skills = {
   // THE interface. Multiply or add blindly; a miss is the identity value.
   //   value * Skills.buff('shellValue')          -> unchanged when unowned
   //   rand() < Skills.buff('doubleOre')          -> never when unowned
+  //
+  // Hot path is two property reads and a typeof: the table is preallocated with
+  // every registered name, so there is nothing to build and nothing to allocate.
+  // The typeof check is what makes it prototype-safe -- buff('toString') would
+  // otherwise hand back a function -- so it stands in for hasOwnProperty here.
   buff: function (name) {
-    if (!this._init) this._boot();
-    if (typeof G === 'undefined' || !G) {
-      return Object.prototype.hasOwnProperty.call(this.BUFF_DEF, name)
-        ? (this.BUFF_DEF[name] === 'mul' ? 1 : 0) : 1;
-    }
-    if (G.skills !== this._cobj) this.ensure();
     var c = this._cache;
-    return Object.prototype.hasOwnProperty.call(c, name) ? c[name] : 1;
+    if (c === null) { this._boot(); c = this._cache; }
+    if (typeof G === 'undefined' || !G) {
+      var i = this._ident[name];
+      return typeof i === 'number' ? i : 1;
+    }
+    if (G.skills !== this._cobj) { this.ensure(); c = this._cache; }
+    var v = c[name];
+    return typeof v === 'number' ? v : 1;
   },
 
   // Convenience for the additive chance buffs: one roll, no allocation.
@@ -934,8 +949,11 @@ const Skills = {
     }
   },
 
+  // Three rows in the 24 units between the tabs (ending at WY+33) and the tree
+  // canvas (starting at TY): label at +34, bar at +44, caption at +51, whose
+  // 6-unit glyph box ends exactly one unit above TY.
   _drawBar: function (c, r, acc) {
-    var x = this.WX + 10, y = this.WY + 37, w = this.WW - 20;
+    var x = this.WX + 10, y = this.WY + 34, w = this.WW - 20;
     var need = this.need(r.lv);
     var capped = r.lv >= this.MAX_LV;
     var frac = capped ? 1 : (need > 0 ? r.xp / need : 0);
@@ -956,12 +974,11 @@ const Skills = {
     }
 
     var pts = r.pts;
+    text(c, this.owned(this.prof()) + ' / ' + this.list().length + ' learned',
+      x, by + 7, { size: 6, color: '#8a9484' });
     if (pts > 0) {
-      var lbl = pts + (pts > 1 ? ' points to spend' : ' point to spend');
-      text(c, lbl, x + w, by + 8, { size: 6, color: '#ffe66e', align: 'right' });
-    } else {
-      text(c, this.owned(this.prof()) + ' / ' + this.list().length + ' learned',
-        x + w, by + 8, { size: 6, color: '#8a9484', align: 'right' });
+      text(c, pts + (pts > 1 ? ' points to spend' : ' point to spend'),
+        x + w, by + 7, { size: 6, color: '#ffe66e', align: 'right' });
     }
   },
 
@@ -1060,7 +1077,7 @@ const Skills = {
 
     var key = this.hover || (this.list()[this.sel] ? this.list()[this.sel].key : '');
     var nd = this.node(key);
-    var tx = x + 6, ty = y + 6, cols = 29, i, lines;
+    var tx = x + 6, ty = y + 6, cols = this.COLS, i, lines;
 
     if (!nd) {
       text(c, prof, tx, ty, { size: 7, color: '#ffe6b0' });
@@ -1097,7 +1114,7 @@ const Skills = {
     if (b) {
       for (name in b) {
         if (!Object.prototype.hasOwnProperty.call(b, name)) continue;
-        if (ly > y + h - 26) break;
+        if (ly > y + h - 34) break;   // never encroach on the state line below
         text(c, this._buffLine(name, b[name]), tx, ly, { size: 6, color: '#a4805a' });
         ly += 7.5;
       }
@@ -1164,8 +1181,8 @@ const Skills = {
     return Object.prototype.hasOwnProperty.call(this.LABELS, name) ? this.LABELS[name] : name;
   },
 
-  // Courier is monospace at 0.6em, so wrapping by character count is exact and
-  // needs no measuring. Cached, because the strings never change.
+  // Cached, because the node descriptions never change: a modal that re-splits
+  // fifteen strings every frame is wasted budget for no reason.
   _wrap: function (str, cols) {
     var ck = cols + '|' + str;
     if (Object.prototype.hasOwnProperty.call(this._wrapC, ck)) return this._wrapC[ck];
@@ -1213,15 +1230,16 @@ const Skills = {
   },
 
   // A small badge so touch players (who have no [K]) can reach the panel, and so
-  // an unspent point is never invisible. Sits at y 38..51 to the right of where
-  // Craft's buff chips stop, and clear of the HUD strip above it.
-  _tagRect: function () { return { x: W - 58, y: 38, w: 52, h: 13 }; },
+  // an unspent point is never invisible. y 38..51 is the one free band left: the
+  // HUD owns everything above 36, Craft's buff chips stop at x 390, and the touch
+  // help button sits at x 454..474 -- so x 394..440 is clear of all three.
+  _tagRect: function () { return { x: W - 86, y: 38, w: 46, h: 13 }; },
 
   _drawTag: function (c) {
     if (!this.ensure()) return;
     var n = this.points();
     if (!n && !TouchUI.enabled) return;      // keyboard players only see it when it matters
-    if (typeof Game !== 'undefined' && Game.scene === DiveScene) return;
+    if (!this._hostOk()) return;
     var r = this._tagRect();
     var hot = n > 0;
     rrect(c, r.x, r.y, r.w, r.h,
@@ -1305,8 +1323,18 @@ const Skills = {
     freeze(typeof Ocean !== 'undefined' ? Ocean : null);
   },
 
+  // The dive owns the whole screen (and its own cursor), so the badge stays out of
+  // it -- [K] still works there. Guarded by typeof: this module has to survive any
+  // subset of the others being absent.
+  _hostOk: function () {
+    if (typeof Game === 'undefined' || !Game.scene) return false;
+    if (typeof DiveScene !== 'undefined' && Game.scene === DiveScene) return false;
+    if (typeof TitleScene !== 'undefined' && Game.scene === TitleScene) return false;
+    return true;
+  },
+
   _visibleTag: function () {
-    if (typeof Game !== 'undefined' && Game.scene === DiveScene) return false;
+    if (!this._hostOk()) return false;
     return TouchUI.enabled || this.points() > 0;
   }
 };

@@ -234,13 +234,6 @@
       ctx.restore();
     };
 
-    // Mining and Tame report their XP through a hook so they do not depend on
-    // the skills module existing.
-    if (M.Skills && M.Skills.gain) {
-      const g = (skill, n) => M.Skills.gain(skill, n);
-      if (M.Mining) M.Mining.xp = g;
-      if (M.Tame) M.Tame.xp = g;
-    }
     // Loot goes into the new bag if there is one, otherwise into flat storage.
     if (M.Mining) {
       M.Mining.give = function (key, n) {
@@ -248,6 +241,71 @@
         if (G && G.storage) { G.storage[key] = (G.storage[key] || 0) + n; return 0; }
         return n;
       };
+    }
+  }
+
+  // ---- skills: who feeds XP in, and who reads the buffs back out -----------------------
+  // Skills.buff() is total — an unknown name returns the identity value — so every
+  // reader below can multiply blindly without checking whether the module loaded.
+  if (M.Skills) {
+    const S = M.Skills;
+    const gain = (skill, n) => S.gain(skill, n);
+    if (M.Mining) M.Mining.xp = gain;
+    if (M.Tame) M.Tame.xp = gain;
+    if (M.Inv) M.Inv.levelOf = (skill) => S.level(skill);
+
+    // Clamming XP and the shell-value buff: popping a shell loose is the whole
+    // skill, so that is where the XP is paid.
+    if (typeof DiveScene !== 'undefined' && DiveScene.popNode) {
+      const pop = DiveScene.popNode.bind(DiveScene);
+      DiveScene.popNode = function (n) {
+        pop(n);
+        gain('clamming', n && n.kind === 'barnacle' ? 4 : 11);
+      };
+    }
+    if (typeof Shop !== 'undefined' && Shop.sellKeys) {
+      const sell = Shop.sellKeys.bind(Shop);
+      Shop.sellKeys = function (keys) {
+        const before = G.pendingCrate ? G.pendingCrate.value : 0;
+        sell(keys);
+        // pay the buff on the crate the sale just created or grew
+        const mul = S.buff('shellValue');
+        if (mul !== 1 && G.pendingCrate) {
+          const added = G.pendingCrate.value - before;
+          if (added > 0) G.pendingCrate.value = Math.round(before + added * mul);
+        }
+      };
+    }
+    // Farming XP, and the buff that shortens a crop's watering schedule.
+    if (M.Farm) {
+      if (M.Farm.harvest) {
+        const harv = M.Farm.harvest.bind(M.Farm);
+        M.Farm.harvest = function (i) { const r = harv(i); if (r) gain('farming', 9); return r; };
+      }
+      if (M.Farm.plant) {
+        const plant = M.Farm.plant.bind(M.Farm);
+        M.Farm.plant = function (i, k) { const r = plant(i, k); if (r) gain('farming', 3); return r; };
+      }
+    }
+    // Taming XP for the care verbs on penned animals.
+    if (M.Stock) {
+      for (const verb of ['feed', 'pet', 'collect']) {
+        if (!M.Stock[verb]) continue;
+        const fn = M.Stock[verb].bind(M.Stock);
+        const xp = verb === 'collect' ? 6 : 2;
+        M.Stock[verb] = function (i) { const r = fn(i); if (r) gain('taming', xp); return r; };
+      }
+    }
+    // Fighting XP on a landed cannon shot.
+    if (M.Battle && M.Battle.onHit) {
+      const oh = M.Battle.onHit;
+      M.Battle.onHit = function () { const r = oh.apply(M.Battle, arguments); gain('fighting', 5); return r; };
+    }
+    // An extra heart is the fighting tree's early prize, so it has to reach G.
+    const extra = S.buff('maxHearts');
+    if (extra > 0 && G && G.maxHearts < 3 + extra) {
+      G.maxHearts = 3 + extra;
+      if (G.hearts > G.maxHearts) G.hearts = G.maxHearts;
     }
   }
 
