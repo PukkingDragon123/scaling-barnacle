@@ -1539,18 +1539,28 @@ const Ocean = {
     if (fade <= 0.02) return;
     const cv = this._rayStrip();
     if (!cv) return;
-    // 170 logical tall, not the full light band: this blit is ~1.3M device pixels
-    // of 'lighter' compositing and the shafts are strongest right under the
-    // surface anyway, so the height is where the budget gets spent or saved.
+    // 170 logical tall, not the full light band: the shafts are strongest right
+    // under the surface anyway, so the height is where the budget gets spent or
+    // saved. Measured by ablation (dev/prof-ocean.js): this one blit was 46 ms of
+    // a 114 ms surface frame before the two fixes below.
     const h = 170;
     const sy = -this.camY + 2;                   // pinned just under the surface
     if (sy > H) return;
     // 0.28 parallax and a slow drift: the shafts belong to the sun, not the diver
     const ox = -(((this.camX * 0.28 + t * 5) % W + W) % W);
     ctx.save();
+    // TWO separate costs, and they multiply. 'lighter' is priced per destination
+    // pixel; a SMOOTHED magnify is priced the same way again, because every
+    // destination pixel is a filter tap. The strip is soft blurred light with no
+    // detail finer than a shaft, so nearest-neighbour sampling of it is invisible
+    // and the saving is most of the pass. (Same finding as the backdrop upscale,
+    // which went 171 ms -> 17 ms on this single flag.)
+    const sm = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = 0.55 * fade;
     ctx.drawImage(cv, ox, sy, this._rayW, h);
+    ctx.imageSmoothingEnabled = sm;
     ctx.restore();
   },
 
@@ -1567,6 +1577,12 @@ const Ocean = {
     // the whole difference between 18fps and 60 at the surface. Over a dark blue
     // backdrop a plain source-over blit of the same bright strip reads almost
     // identically, so only the top band stays additive.
+    //
+    // And the magnify must not be filtered. Ablation put this pass at 50 ms of a
+    // 114 ms surface frame; a bilinear tap per destination pixel was most of it,
+    // on a source that is nothing but soft blurred bands.
+    const sm = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
     if (this.quality > 0) {
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 0.44 * fade;
@@ -1581,6 +1597,7 @@ const Ocean = {
       ctx.globalAlpha = 0.5 * fade;
       ctx.drawImage(ca.cv, ca.ax, top, ca.w, 100);
     }
+    ctx.imageSmoothingEnabled = sm;
     ctx.restore();
   },
 

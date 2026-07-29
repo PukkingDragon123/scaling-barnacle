@@ -633,8 +633,14 @@ function frame(now) {
     ctx.fillRect(0, 0, W, H);
     ctx.globalCompositeOperation = 'source-over';
     // corner vignette to seat the scene, baked once — evaluating a radial
-    // gradient over every device pixel each frame is far too expensive
+    // gradient over every device pixel each frame is far too expensive. The cache
+    // is already at device resolution so this maps 1:1, and saying so explicitly
+    // keeps it off the bilinear path: a filtered blit is priced per destination
+    // pixel whether or not the scale factor turns out to be 1.
+    const vsm = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
     ctx.drawImage(vignette(), 0, 0, W, H);
+    ctx.imageSmoothingEnabled = vsm;
     ctx.restore();
   }
   // the HUD goes under the modals — a full-screen panel would collide with it

@@ -158,17 +158,17 @@ const Forge = {
     {
       key: 'h_plank', name: 'Split Planks', station: 'hand', time: 0, xp: 2, lvl: 1,
       cost: { driftwood: 2 }, out: { key: 'plank', n: 1 }, art: 'res_plank',
-      desc: 'Knee, knife and patience. One board, and a splinter.',
+      desc: 'Knee, knife, patience. One board.',
     },
     {
       key: 'h_rope', name: 'Bark Rope', station: 'hand', time: 0, xp: 2, lvl: 1,
       cost: { driftwood: 2 }, out: { key: 'rope', n: 2 }, art: null,
-      desc: 'Strip the bark long, twist it damp, let it dry tight.',
+      desc: 'Strip bark long, twist it damp.',
     },
     {
       key: 'h_torch', name: 'Driftwood Torch', station: 'hand', time: 0, xp: 3, lvl: 1,
       cost: { driftwood: 1, rope: 1 }, out: { key: 'torch', n: 2 }, art: 'g_torch',
-      desc: 'Two of them, and the furnace has something to light it.',
+      desc: 'Two of them lights a furnace.',
     },
     {
       key: 'h_pick', name: 'Crude Stone Pick', station: 'hand', time: 0, xp: 8, lvl: 1,
@@ -186,12 +186,12 @@ const Forge = {
     {
       key: 'bench', art: 'tbl_bench', name: 'Crude Workbench', short: 'Workbench',
       w: 19, hand: true, need: null, cost: { plank: 4, driftwood: 2 }, xp: 10,
-      desc: 'Four boards on a trestle. Everything else starts here.',
+      desc: 'Four boards on a trestle. It all starts here.',
     },
     {
       key: 'mill', art: 'tbl_mill', name: 'Sawmill', short: 'Sawmill',
       w: 30, hand: false, need: 'bench', cost: { plank: 6, stone: 4, rope: 2 }, xp: 14,
-      desc: 'A rope drive and a stone wheel. Logs in, boards out.',
+      desc: 'Rope drive, stone wheel. Logs in, boards out.',
     },
     {
       key: 'forge', art: 'tbl_forge', name: 'Furnace', short: 'Furnace',
@@ -828,7 +828,16 @@ const Forge = {
   rowWhy: function (row) {
     if (!row) return 'nothing to make';
     if (row.kind === 'locked') return this.lockLine(row.key) || 'not yet';
-    if (row.kind === 'table') return this.buildWhy(row.t);
+    if (row.kind === 'table') {
+      // Already standing: the verb is MOVE, which costs nothing and so has no
+      // material reason to refuse. Reporting buildWhy here would grey the button
+      // out and say 'otto already has one' at the one moment it IS actionable.
+      if (this.countPlaced(row.t.key) >= this.MAX_PER) {
+        if (typeof WorldScene === 'undefined' || Game.scene !== WorldScene) return 'out on the planks only';
+        return null;
+      }
+      return this.buildWhy(row.t);
+    }
     return this.handWhy(row.r);
   },
 
@@ -900,10 +909,11 @@ const Forge = {
     }
 
     if (!this.open) {
-      // [C] from anywhere it is allowed. Read even while placing so the key can
-      // never be left pending for something else to pick up next frame.
-      var kc = Input.p('KeyC');
-      if (kc && !this.placing) this.toggle();
+      // [C] from anywhere it is allowed -- but do not even LOOK at it under a peer
+      // panel: stock.js reads KeyC for `collect` inside its own screen, and a
+      // stray blip under somebody else's panel is pure noise. Consumed while
+      // placing, so the menu cannot open on top of a ghost.
+      if (!this._peerOpen() && Input.p('KeyC') && !this.placing) this.toggle();
       this._wasDown = Input.mouse.down;
       return;
     }
@@ -1087,9 +1097,8 @@ const Forge = {
   _arrowRect: function (dir) {
     var x = this._listX() + this._listW() - 12;
     return dir < 0 ? { x: x, y: this.WY + 24, w: 12, h: 12 }
-                   : { x: x, y: this.WY + 40 + this.ROW_V() * this.ROW_H, w: 12, h: 12 };
+                   : { x: x, y: this.WY + 40 + this.ROW_VIS * this.ROW_H, w: 12, h: 12 };
   },
-  ROW_V: function () { return this.ROW_VIS; },
   // the placement hint bar lives just under the HUD strip (y 0..36 is Game's)
   _placeBar: function () { return { x: 92, y: 38, w: 296, h: 24 }; },
   _placeBtn: function (ok) {
@@ -1136,7 +1145,7 @@ const Forge = {
     var P = this.PAL, m = Input.mouse;
     var rows = this.rows(this.tab), row = this._row();
 
-    uiPanel(c, this.WX, this.WY, this.WW, this.WH, 0.95, false);
+    uiPanel(c, this.WX, this.WY, this.WW, this.WH, 0.97, false);
     // a warm inner rule, so the cosy panel does not read as a station screen
     c.strokeStyle = 'rgba(201,162,113,0.35)';
     c.lineWidth = PIX * 2;
@@ -1294,7 +1303,7 @@ const Forge = {
 
       var ok = this.rowOk(row);
       var built = row.kind === 'table' && this.countPlaced(row.t.key) >= this.MAX_PER;
-      text(c, this._clip(row.name, 14), r.x + 15, r.y + 3,
+      text(c, this._clip(row.name, 20), r.x + 15, r.y + 3,
         { size: 6.5, color: row.kind === 'locked' ? '#7a6a55' : (sel ? P.hi : P.ink) });
       // one pip of status per row: gold already standing, green ready, red short.
       // Drawn, not lettered -- a glyph the font lacks would be a tofu box.
@@ -1395,24 +1404,38 @@ const Forge = {
     // be miserable. One flat strip per free stretch, culled, no per-frame maths:
     // bands() is cached until the deck changes.
     var b = this.bands(), i, x0, x1;
-    c.fillStyle = 'rgba(160,242,180,0.3)';
+    c.fillStyle = 'rgba(160,242,180,0.42)';
     for (i = 0; i < b.length; i++) {
       x0 = b[i].a; x1 = b[i].b;
       if (x1 < camX - 20 || x0 > camX + W + 20) continue;
-      c.fillRect(Math.round(x0 * DPX) / DPX, deckY - 2, Math.max(PIX * 2, x1 - x0), PIX * 2);
+      x0 = Math.round(x0 * DPX) / DPX;
+      c.fillRect(x0, deckY - 3, Math.max(1, x1 - b[i].a), 2);
+      c.fillRect(x0, deckY - 6, PIX * 2, 5);                      // end caps, so a
+      c.fillRect(Math.round(x1 * DPX) / DPX, deckY - 6, PIX * 2, 5);   // stretch reads as a zone
     }
 
     if (p.x < camX - 60 || p.x > camX + W + 60) return;
     var ok = !p.why;
-    var pulse = 0.42 + 0.16 * Math.sin(this.time * 6);
-    var h = this._drawTable(c, t, p.x, deckY, pulse + 0.2);
+
+    // The table floats a little above the planks -- Otto is holding it. Without
+    // the lift and the shadow the ghost just muddles into whatever is behind it.
+    var pulse = 0.5 + 0.18 * Math.sin(this.time * 6);
+    var lift = 5;
+    c.globalAlpha = 0.3;
+    c.fillStyle = '#000';
+    c.beginPath();
+    c.ellipse(Math.round(p.x * DPX) / DPX, deckY - 1, t.w * 0.42, 2.2, 0, 0, TAU);
+    c.fill();
+    c.globalAlpha = 1;
+    this._drawTable(c, t, p.x, deckY - lift, pulse);
 
     // a footprint bracket on the planks: green where it will land, red where not
-    var w = t.w + 6, x0 = Math.round((p.x - w / 2) * DPX) / DPX;
-    c.fillStyle = ok ? 'rgba(160,242,180,0.5)' : 'rgba(255,90,74,0.5)';
-    c.fillRect(x0, deckY - 1, w, PIX * 2);
-    c.fillRect(x0, deckY - 5, PIX * 2, 4);
-    c.fillRect(x0 + w - PIX * 2, deckY - 5, PIX * 2, 4);
+    var w = t.w + 6;
+    x0 = Math.round((p.x - w / 2) * DPX) / DPX;
+    c.fillStyle = ok ? 'rgba(160,242,180,0.85)' : 'rgba(255,90,74,0.85)';
+    c.fillRect(x0, deckY - 2, w, PIX * 2);
+    c.fillRect(x0, deckY - 7, PIX * 2, 5);
+    c.fillRect(x0 + w - PIX * 2, deckY - 7, PIX * 2, 5);
   },
 
   // The placement bar rides in HUD space, under the day dial, so it never fights
@@ -1689,6 +1712,15 @@ const Forge = {
       { m: typeof Tame !== 'undefined' ? Tame : null, fns: ['openUI'], ret: undefined },
     ];
     for (i = 0; i < spec.length; i++) this._guard(spec[i].m, spec[i].fns, spec[i].ret);
+
+    // The hotbar claims Digit1..Digit0 and is ticked from js/integrate.js's
+    // globalUpdate, whose modalUp() list cannot know about this panel -- so it
+    // would swallow Digit1/Digit2 before they ever reach the tab strip. Adding
+    // Forge.open to modalUp() fixes it too, but this holds without the edit.
+    if (typeof Hotbar !== 'undefined' && Hotbar && typeof Hotbar.update === 'function') {
+      var hu = Hotbar.update.bind(Hotbar);
+      Hotbar.update = function (dt) { if (Forge.open) return; return hu(dt); };
+    }
   },
 
   _guard: function (mod, fns, ret) {

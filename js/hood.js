@@ -100,34 +100,56 @@ const Hood = {
   ],
 
   // ============================================================== the homes ====
-  // Authored geometry, never derived from art: deckY is the world y of the deck
-  // surface and the climb box hangs off climbDX, so a missing sprite changes how
-  // this looks and not how it plays. deckFrac is the only art-dependent number --
-  // how far down the sprite its own deck line sits -- and it is used for placing
-  // the sprite against the authored deck, not the other way round.
+  // Authored gameplay geometry, never derived from art: deckY is the world y of the
+  // deck surface and the climb box hangs off climbDX, so a missing sprite changes
+  // how this LOOKS and not how it PLAYS.
+  //
+  // The three art-dependent fractions were measured off the sprites themselves
+  // (alpha-profile scan down the central band, confirmed by eye), and they exist so
+  // the art can be positioned against the authored deck rather than the other way
+  // round:
+  //   deckFrac  how far down the sprite its own deck boards sit
+  //             nhouse_light 375-395/520, cottage 262-285/501, shack 258-280/503
+  //   doorFrac  where its painted door is across the sprite
+  //   climbDX   its own stairs/ladder, in world units from the sprite's centre.
+  //             The shack's art HAS a ladder (measured at x 0.337) and the other
+  //             two have stairs down their left side, so the climb is put where the
+  //             picture already says you would climb.
+  //   legF/legW/legCol
+  //             its posts: centre offsets as a fraction of width, their width, and
+  //             the colour sampled off the sprite's own timber at its base. The
+  //             posts this file continues below the waterline therefore land on the
+  //             painted ones instead of beside them.
   HOMES: [
     {
       key: 'lamp', who: 'prof', art: 'nhouse_light',
       name: 'The Lamp Rock', of: "Fintan's lighthouse",
-      x: -1480, w: 106, deckY: -30, deckFrac: 0.70,
-      climbDX: 40, plotDX: -34, doorDX: 16, propDX: 34,
+      x: -1480, w: 106, deckY: -30, deckFrac: 0.73, doorFrac: 0.50,
+      climbDX: -42, plotDX: 30,
+      legF: [-0.191, 0.089, 0.452], legW: 0.06, legCol: '#6d4a3e',
       fish: { x: -1180, y: 96 },
     },
     {
       key: 'cottage', who: 'farmer', art: 'nhouse_cottage',
       name: 'Kelprow Cottage', of: "Sprout's cottage",
-      x: 880, w: 114, deckY: -27, deckFrac: 0.62,
-      climbDX: -44, plotDX: 36, doorDX: -12, propDX: -30,
+      x: 880, w: 114, deckY: -27, deckFrac: 0.53, doorFrac: 0.51,
+      climbDX: -46, plotDX: 32,
+      legF: [-0.142, 0.081, 0.453], legW: 0.07, legCol: '#281e2a',
       fish: { x: 1240, y: 62 },
     },
     {
       key: 'shack', who: 'angler', art: 'nhouse_shack',
       name: 'The Lean-To', of: "Marlow's shack",
-      x: 2380, w: 100, deckY: -24, deckFrac: 0.63,
-      climbDX: 38, plotDX: -32, doorDX: 14, propDX: 30,
+      x: 2380, w: 100, deckY: -24, deckFrac: 0.52, doorFrac: 0.40,
+      climbDX: -16, plotDX: 34,
+      legF: [-0.441, -0.047, 0.429], legW: 0.084, legCol: '#33232e',
       fish: { x: 2760, y: 148 },
     },
   ],
+
+  // Every house presents the same body height on its own porch, so the deck scene
+  // is composed the same way whichever door you knocked on.
+  DECK_BODY_H: 128,
 
   // Public: the world-position list, so the ocean scene (or a map, or a compass)
   // can ask where the neighbourhood is without knowing anything else in here.
@@ -351,7 +373,7 @@ const Hood = {
   _talking: '',                    // resident whose delegated dialogue is open
   // deck scene
   px: 240, dir: -1, walkT: 0, idleT: 0, dtime: 0,
-  home: null, resident: null,
+  home: null,                      // the house whose deck we are standing on
   _ret: { x: 0, y: 20 },
   _resume: null,                   // bag/position stash for the swim back
   _carrySrc: null, _carryStamp: -1,
@@ -582,9 +604,11 @@ const Hood = {
       if (other) tgt = other;
     }
     if (where === 'plot') { out.x = tgt.x + tgt.plotDX; out.y = tgt.deckY; out.up = true; return out; }
-    // standing on somebody's deck: their side of it, so two residents visiting
-    // the same house do not occupy the same plank
-    out.x = tgt.x + (tgt === hm ? tgt.doorDX * 1.6 : -tgt.doorDX * 1.4);
+    // Standing on somebody's deck. The owner takes the side nearer their own door
+    // and a guest the other, so two residents on one deck never share a plank.
+    // Derived from the house's width alone -- there is no offset field to fall out
+    // of step with the layout.
+    out.x = tgt.x + (tgt === hm ? tgt.w * 0.17 : -tgt.w * 0.17);
     out.y = tgt.deckY;
     out.up = true;
     return out;
@@ -1022,7 +1046,6 @@ const Hood = {
     if (!this.ensure()) return;
     if (!home) home = this.HOMES[0];
     this.home = home;
-    this.resident = this.agentOf(home.who);
     this.dtime = 0;
     this.walkT = 0; this.idleT = 0;
     // he comes up the ladder at the exit end and turns to face the deck
@@ -1462,25 +1485,33 @@ const Hood = {
       ctx.fillStyle = '#2a6a8a'; ctx.fillRect(0, 0, W, H);
     }
 
-    // ---- the house, sat behind the deck with its stilts running off the bottom
-    var hw = 176;
-    var hh = assetH(home.art, hw);
-    var hx = 240 - hw / 2;
-    var hy = FLOOR + 34 - hh;
-    drawA(ctx, home.art, hx, hy, hw, hh);
-
-    // ---- the deck: pier segments, so a neighbour's planks match Otto's own
+    // ---- the deck FIRST: pier segments, so a neighbour's planks are the same
+    // planks Otto has at home, and so they run out past the house to the walk limits
     var segW = 88;
     var segH = assetH('dock_11', segW);
     var segTop = FLOOR - segH * 0.0352;          // deck top to deck top
     for (var x = this.DL - segW; x < this.DR + segW; x += segW - 1) {
       drawA(ctx, 'dock_11', x, segTop, segW, segH);
     }
-    // and a drawn lip, in case the art never loaded
+    // a drawn lip too, so the deck line survives the art never loading
     ctx.fillStyle = 'rgba(109,69,38,0.9)';
     ctx.fillRect(this.DL - 14, FLOOR, this.DR - this.DL + 28, 2);
 
-    this._drawDoor(ctx, FLOOR, nite);
+    // ---- the house on top of the planks. Scaled so every home presents the same
+    // body height, positioned so its own deck boards land exactly on FLOOR and its
+    // painted door lands on DOOR_X (which is where the knock spot is), and CLIPPED
+    // to the deck line so its own stilts do not hang down over the pier.
+    var hh = this.DECK_BODY_H / home.deckFrac;
+    var hw = hh * this._artAspect(home.art);
+    var hx = this.DOOR_X - home.doorFrac * hw;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W, FLOOR + 1);
+    ctx.clip();
+    drawA(ctx, home.art, hx, FLOOR - this.DECK_BODY_H, hw, hh);
+    ctx.restore();
+
+    this._drawDoorGlow(ctx, FLOOR, nite);
     this._drawDeckPlot(ctx, FLOOR, t);
     this._drawProps(ctx, FLOOR, t);
 
@@ -1522,57 +1553,52 @@ const Hood = {
     text(ctx, nm, W - nw / 2 - 8, 47, { size: 7, color: '#6a4420', align: 'center', shadow: false });
 
     if (nite > 0.05) {
-      ctx.fillStyle = 'rgba(10,12,34,' + (nite * 0.3).toFixed(3) + ')';
+      // one flat pass, alpha rather than a built colour string
+      ctx.globalAlpha = clamp(nite * 0.3, 0, 1);
+      ctx.fillStyle = '#0a0c22';
       ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
     }
     // the speech bubble sits over whoever is talking, on this deck too
     for (i = 0; i < here.length; i++) {
       if (here[i].sayT <= 0) continue;
-      this._drawBubble(ctx, this.postFor(here[i], i), FLOOR - here[i].cast.deckH - 12, here[i], 0, 0);
+      // clear of the [E] prompt capsule, which owns FLOOR-52..FLOOR-39
+      this._drawBubble(ctx, this.postFor(here[i], i), FLOOR - here[i].cast.deckH - 28, here[i], 0, 0);
     }
   },
 
-  // A drawn door rather than a hotspot on somebody else's art: it reads the same
-  // whichever house sprite is behind it, and it can be lit from the inside.
-  _drawDoor: function (ctx, FLOOR, nite) {
+  // The art supplies the door -- every one of the three sprites has one painted
+  // near its centre, and the house is positioned so that door lands on DOOR_X. So
+  // all this adds is the light behind it: four flat arcs, never a radial gradient.
+  _drawDoorGlow: function (ctx, FLOOR, nite) {
     var home = this.home;
-    var dx = Math.round(this.DOOR_X);
-    var dw = 17, dh = 27;
-    var dy = FLOOR - dh;
-    var here = this.presentAt(home).length > 0;
     var a = this.agentOf(home.who);
     var inside = !!(a && a.act === 'sleep' && a.arrived);
-
-    // the light coming out from under and around it -- four flat arcs, no gradient
-    if ((inside || here) && nite > 0.08) {
-      var glow = clamp(nite, 0, 1) * 0.5;
-      ctx.fillStyle = '#ffd27a';
-      for (var i = 4; i >= 1; i--) {
-        ctx.globalAlpha = glow * 0.09 * i / 4;
-        ctx.beginPath();
-        ctx.arc(dx, dy + dh * 0.6, 5 + i * 7, 0, TAU);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
+    var here = this.presentAt(home).length > 0;
+    if (!inside && !here) return;
+    if (nite <= 0.08) return;
+    var dx = this.DOOR_X, dy = FLOOR - 16;
+    var glow = clamp(nite, 0, 1) * 0.5;
+    ctx.fillStyle = '#ffd27a';
+    for (var i = 4; i >= 1; i--) {
+      ctx.globalAlpha = glow * 0.09 * i / 4;
+      ctx.beginPath();
+      ctx.arc(dx, dy, 5 + i * 8, 0, TAU);
+      ctx.fill();
     }
-    ctx.fillStyle = '#4a3020';
-    ctx.fillRect(dx - dw / 2 - 1.5, dy - 2, dw + 3, dh + 2);
-    ctx.fillStyle = inside ? '#8a6434' : '#6d4526';
-    ctx.fillRect(dx - dw / 2, dy, dw, dh);
-    // planks
-    ctx.fillStyle = 'rgba(40,24,10,0.35)';
-    ctx.fillRect(dx - dw / 2 + 5, dy + 1, PIX, dh - 2);
-    ctx.fillRect(dx - dw / 2 + 11, dy + 1, PIX, dh - 2);
-    // lintel and knob
-    ctx.fillStyle = '#a4805a';
-    ctx.fillRect(dx - dw / 2 - 2, dy - 4, dw + 4, 2.5);
-    ctx.fillStyle = '#ffe66e';
-    ctx.fillRect(dx + dw / 2 - 4, dy + dh * 0.5, 1.6, 1.6);
+    ctx.globalAlpha = 1;
     if (inside) {
-      // somebody is home and asleep: a warm slit under the door
-      ctx.fillStyle = 'rgba(255,206,120,0.5)';
-      ctx.fillRect(dx - dw / 2, FLOOR - 1.4, dw, 1.4);
+      // a warm slit under the door: somebody is in, and asleep
+      ctx.fillStyle = 'rgba(255,206,120,0.45)';
+      ctx.fillRect(dx - 9, FLOOR - 1.4, 18, 1.4);
     }
+  },
+
+  // Aspect of a sprite as width/height, 1 when the art is missing so the layout
+  // still lands somewhere sane.
+  _artAspect: function (name) {
+    var img = ASSETS[name];
+    return (img && img.width && img.height) ? img.width / img.height : 1;
   },
 
   _drawRail: function (ctx, FLOOR, x0, x1) {
@@ -1699,82 +1725,90 @@ const Hood = {
     var w = hm.w;
     if (hm.x + w < camX - 70 || hm.x - w > camX + W + 70) return;
     var hh = assetH(hm.art, w);
+    // the sprite is hung off the AUTHORED deck line: its own deck boards land on
+    // deckY, which puts its body above the water and its own posts below it
     var top = hm.deckY - hh * hm.deckFrac;
     var bottom = top + hh;
+    var nite = (typeof nightness === 'function') ? nightness(G.clock) : 0;
 
-    // ---- stilts, carried down past the sprite so the house always stands on
-    // something. There is no seabed out here, so they fade instead of landing.
-    var legs = [hm.x - w * 0.3, hm.x, hm.x + w * 0.3];
-    var legTop = hm.deckY + 2;
-    var legBot = legTop + 118;
-    ctx.fillStyle = '#3a2a18';
-    for (var l = 0; l < legs.length; l++) {
-      var lx = Math.round(legs[l] * DPX) / DPX;
-      // five bands of falling alpha instead of a gradient
-      for (var b = 0; b < 5; b++) {
+    // ---- The posts, continued DOWN from where the sprite's own stop. There is no
+    // seabed out here, so they fade into the dark rather than landing on anything.
+    // Nothing else about the understructure is drawn: the art already has its
+    // deck, its rail, its bracing and its stairs, and drawing a second set on top
+    // of a correctly placed sprite is what made this read as a floating shelf.
+    var legF = hm.legF, legW = Math.max(2, w * hm.legW);
+    var legTop = bottom - 3;              // overlap by a texel so there is no seam
+    var legBot = legTop + 96;
+    // Night has to reach these or they invert: timber colours sampled off a sprite
+    // in daylight are LIGHTER than the water at night, and three pale bars under a
+    // dark house read as scaffolding rather than posts.
+    var legDim = 1 - nite * 0.55;
+    ctx.fillStyle = hm.legCol;
+    for (var l = 0; l < legF.length; l++) {
+      var lx = Math.round((hm.x + w * legF[l]) * DPX) / DPX;
+      for (var b = 0; b < 5; b++) {          // five flat bands instead of a gradient
         var y0 = legTop + (legBot - legTop) * (b / 5);
         var y1 = legTop + (legBot - legTop) * ((b + 1) / 5);
-        ctx.globalAlpha = 0.85 * (1 - b / 5);
-        ctx.fillRect(lx - 2, y0, 4, y1 - y0 + 0.5);
+        ctx.globalAlpha = 0.8 * (1 - b / 5) * legDim;
+        ctx.fillRect(lx - legW / 2, y0, legW, y1 - y0 + 0.5);
       }
     }
     ctx.globalAlpha = 1;
-    // cross bracing, which is what makes it read as built and not as posts
-    ctx.strokeStyle = 'rgba(58,42,24,0.65)';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(legs[0], legTop + 16); ctx.lineTo(legs[1], legTop + 40);
-    ctx.moveTo(legs[1], legTop + 16); ctx.lineTo(legs[2], legTop + 40);
-    ctx.stroke();
 
-    // ---- the deck slab, then the house on top of it
-    var dW = w * 1.12;
-    ctx.fillStyle = '#6d4526';
-    ctx.fillRect(hm.x - dW / 2, hm.deckY, dW, 3.5);
-    ctx.fillStyle = '#8a6434';
-    ctx.fillRect(hm.x - dW / 2, hm.deckY, dW, 1.4);
+    // The house itself dims after dark, the same way ocean.js dims its own props --
+    // a building at full daylight brightness with dimmed coral either side of it is
+    // the thing that gives away a bolted-on layer. Kept mild (a solid wall must not
+    // go translucent), with the lit windows below doing the rest of the work.
+    if (nite > 0.02) ctx.globalAlpha = 1 - nite * 0.22;
     drawA(ctx, hm.art, hm.x - w / 2, top, w, hh);
+    ctx.globalAlpha = 1;
 
-    // ---- rail along the front of the deck
-    ctx.fillStyle = '#8a6434';
-    ctx.fillRect(hm.x - dW / 2, hm.deckY - 9, dW, 1.2);
-    ctx.fillStyle = '#6d4526';
-    for (var r = hm.x - dW / 2 + 4; r < hm.x + dW / 2; r += 22) {
-      ctx.fillRect(Math.round(r), hm.deckY - 9, 1.6, 9);
-    }
-
-    // ---- the ladder: the thing you climb, drawn where climbAt() says it is
+    // ---- The ladder. The art's own access only reaches its own base, so this
+    // carries it down through the waterline to the bottom of the climb box -- the
+    // affordance and the hit box are the same object, by construction.
     var cx = hm.x + hm.climbDX;
+    var lTop = hm.deckY - 2;
+    var lBot = this.CLIMB_BOT + 4;
+    // dimmed after dark like everything else, but the least of anything here: this
+    // is the affordance, and it has to stay findable in the dark
+    ctx.globalAlpha = 1 - nite * 0.3;
     ctx.fillStyle = '#a4805a';
-    ctx.fillRect(cx - 5, hm.deckY - 2, 1.6, 62);
-    ctx.fillRect(cx + 3.4, hm.deckY - 2, 1.6, 62);
+    ctx.fillRect(cx - 5, lTop, 1.6, lBot - lTop);
+    ctx.fillRect(cx + 3.4, lTop, 1.6, lBot - lTop);
     ctx.fillStyle = '#c9a271';
-    for (var s = 0; s < 9; s++) ctx.fillRect(cx - 5, hm.deckY + 4 + s * 6.5, 10, 1.4);
+    for (var ry = lTop + 5; ry < lBot; ry += 6.5) ctx.fillRect(cx - 5, ry, 10, 1.4);
+    ctx.globalAlpha = 1;
 
-    // ---- their planter, up on the deck
+    // ---- their planter, up on the deck. No box drawn around it: at this scale the
+    // crop alone reads as a plant in a pot, and every one of the three sprites
+    // already has real planters painted on its deck to sit alongside.
     var p = this.plotOf(hm.key);
     if (p) {
       var px = hm.x + hm.plotDX;
       ctx.fillStyle = '#5a4526';
-      ctx.fillRect(px - 11, hm.deckY - 7, 22, 7);
+      ctx.fillRect(px - 5, hm.deckY - 4, 10, 4);
       var art = 'crop_' + p.crop + '_' + p.stage;
       var img = ASSETS[art];
       if (img && img.width) {
-        var ch = 9 + p.stage * 5;
+        var ch = 8 + p.stage * 4;
         var cw = ch * img.width / img.height;
         ctx.save();
-        ctx.translate(Math.round(px * DPX) / DPX, hm.deckY - 6);
+        ctx.translate(Math.round(px * DPX) / DPX, hm.deckY - 3);
         ctx.rotate(Math.sin(t * 1.4 + hm.x) * 0.05);
         ctx.drawImage(img, -cw / 2, -ch, cw, ch);
         ctx.restore();
       }
+      if (p.dry > 0) {
+        ctx.globalAlpha = 0.5 + 0.4 * Math.sin(t * 3);
+        text(ctx, '!', px, hm.deckY - 20, { size: 6, color: '#ff5a4a', align: 'center' });
+        ctx.globalAlpha = 1;
+      }
     }
 
-    // ---- lamplight, and the sleeper's window
-    var nite = (typeof nightness === 'function') ? nightness(G.clock) : 0;
+    // ---- lamplight through the windows, and the sleeper
     var a = this.agentOf(hm.who);
     if (nite > 0.08) {
-      var win = top + hh * (hm.deckFrac * 0.45);
+      var win = hm.deckY - hh * hm.deckFrac * 0.45;
       ctx.fillStyle = '#ffd27a';
       for (var g = 4; g >= 1; g--) {
         ctx.globalAlpha = nite * 0.075 * g / 4;
@@ -1792,17 +1826,19 @@ const Hood = {
       ctx.globalAlpha = 1;
     }
 
-    // ---- and the wash of water over everything below the surface. This is what
-    // turns the whole thing into a silhouette you swim up to.
-    if (bottom > 0) {
+    // ---- and a wash of water over just the submerged part of the sprite, so it
+    // sinks into the colour of the depth it is standing in. Only the sliver below
+    // the surface, and only as wide as the art: a box over the open water either
+    // side of it reads as a grey shelf, which is exactly the bug this replaced.
+    if (bottom > 1 && nite < 0.9) {
       var wy0 = Math.max(0, top);
-      var bands = 4;
+      var wDim = 1 - nite;
       ctx.fillStyle = '#0c2e4e';
-      for (var k = 0; k < bands; k++) {
-        var b0 = wy0 + (bottom - wy0) * (k / bands);
-        var b1 = wy0 + (bottom - wy0) * ((k + 1) / bands);
-        ctx.globalAlpha = 0.14 + 0.1 * k;
-        ctx.fillRect(hm.x - dW / 2 - 6, b0, dW + 12, b1 - b0 + 0.5);
+      for (var k = 0; k < 3; k++) {
+        var q0 = wy0 + (bottom - wy0) * (k / 3);
+        var q1 = wy0 + (bottom - wy0) * ((k + 1) / 3);
+        ctx.globalAlpha = (0.06 + 0.05 * k) * wDim;
+        ctx.fillRect(hm.x - w / 2, q0, w, q1 - q0 + 0.5);
       }
       ctx.globalAlpha = 1;
     }
