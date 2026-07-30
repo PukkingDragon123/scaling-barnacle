@@ -166,6 +166,11 @@ const Farm = {
   // session, which are exactly the two moments the seabed is a different seabed.
   _floorAt(x) {
     if (typeof Ocean !== 'undefined' && Ocean && typeof Ocean.floorAt === 'function') {
+      // floorAt answers FLOOR_DEEP until Ocean.ensure() has built its column
+      // caches — and on a loaded save the seed is already its real value, so
+      // bedY would cache that 3000-deep fallback and never invalidate it.
+      // ensure() is Ocean's own top-of-every-entry-point idiom; run it first.
+      if (Ocean.ensure && !Ocean.ensure()) return this.FLOOR_Y;
       const y = Ocean.floorAt(x);
       if (typeof y === 'number' && isFinite(y)) return y;
     }
@@ -1022,9 +1027,11 @@ const Farm = {
 
     // Game.drawCursor hides the arrow after 3 idle seconds, only special-cases
     // Shop, and draws nothing at all in a customCursor scene like the ocean — so
-    // this pointer-driven panel draws its own.
+    // this pointer-driven panel draws its own, WHILE the mouse is live. (The
+    // condition was inverted: > 3 showed the arrow only once it had gone idle,
+    // which is exactly backwards.)
     const m = Input.mouse;
-    if (!TouchUI.enabled && m.idleT > 3) {
+    if (!TouchUI.enabled && m.idleT <= 3) {
       c.save();
       c.translate(Math.round(m.x), Math.round(m.y));
       c.fillStyle = '#101820';

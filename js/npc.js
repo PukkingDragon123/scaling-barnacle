@@ -267,14 +267,14 @@ const NPCs = {
     if (polishable > 0) return 'Polish that treasure at the workbench before you sell it. A dull pearl is half a pearl.';
     if (seeds.known && seeds.owned === 0) return 'You have a haul and no seeds. Buy seeds from Sprout and plant while the beds regrow.';
     if (crackable >= 5) return 'You have shells stacked up. Crack them at the bench, then sell the meat in one crate.';
-    if (G.gear.bag === 0 && G.money >= BAGS[1].price) return `Your pouch holds ${BAGS[0].cap}. Buy the ${BAGS[1].name} on ClamNet; you are leaving shells on the piling.`;
-    if (G.gear.tank === 0 && G.money >= TANKS[1].price) return `Air is time and you are short of both. ${TANKS[1].name}, GEAR tab, and do not argue.`;
+    if (G.gear.bag === 0) return `Your pouch holds ${BAGS[0].cap}. Craft the ${BAGS[1].name} at your workbench; you are leaving shells on the piling.`;
+    if (G.gear.tank === 0 && G.bridge >= 2) return `Air is time and you are short of both. Hammer out an ${TANKS[1].name} at the smithy, and do not argue.`;
     if (G.bridge < 3) {
       const b = G.bridge === 1 ? BUILDS.bridge2 : BUILDS.bridge3;
       if (G.money >= b.price) return `You can afford it: ${b.name}. Deeper water, richer beds, worse neighbours.`;
     }
-    if (G.bridge >= 3 && !G.gear.lamp && G.money >= GEAR_SINGLES.lamp.price) return 'The deep piling is dark as a drawer. Buy the headlamp before you go down there again.';
-    if (G.gear.gloves === false && G.money >= GEAR_SINGLES.gloves.price) return 'Urchins are all roe and grievance. Buy the pry gloves and take the roe safely.';
+    if (G.bridge >= 3 && !G.gear.lamp) return 'The deep piling is dark as a drawer. Craft the dive lamp at your workbench before you go down there again.';
+    if (G.gear.gloves === false && G.bridge >= 2) return 'Urchins are all roe and grievance. Make work gloves at the workbench and take the roe safely.';
     if (G.goal < GOALS.length) return `${GOALS[G.goal].name}. ${GOALS[G.goal].hint}.`;
     return 'You have done everything I set you. Astonishing. Now do it again, slower, and enjoy it.';
   },

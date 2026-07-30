@@ -156,14 +156,10 @@ const Craft = {
     { key: 'cannonball', name: 'Cannonballs', tab: 'craft',
       cost: { barnacle: 3, charcoal: 2 }, money: 0, out: { key: 'cannonball', n: 4 }, art: null,
       desc: 'Shell grit packed hard around coal. The crab punks hate these.' },
-    { key: 'scraperhead', name: 'Forge a Scraper Head', tab: 'craft',
-      cost: { iron: 2, driftwood: 1 }, money: 40, out: null, art: 'g_scraper', btn: 'FORGE',
-      done: (g) => typeof SCRAPERS !== 'undefined' && g.gear.scraper >= SCRAPERS.length - 1,
-      doneText: 'MAX',
-      apply() { G.gear.scraper = Math.min(SCRAPERS.length - 1, G.gear.scraper + 1); },
-      label: (g) => (typeof SCRAPERS !== 'undefined' && SCRAPERS[g.gear.scraper + 1])
-        ? 'Forge: ' + SCRAPERS[g.gear.scraper + 1].name : 'Forge a Scraper Head',
-      desc: 'Hammer iron onto a fresh handle — one scraper tier, no shop needed.' },
+    // Scraper tiers used to be forgeable here for iron + $40, which quietly
+    // bypassed the skill-gated gear recipes (Forge.GEAR g_scraper2/3) the moment
+    // those became the one path to tools. Gear lives there now; this bench keeps
+    // the consumables.
 
     // ---- COOK ------------------------------------------------------------
     { key: 'tea', name: 'Kelp Tea', tab: 'cook',

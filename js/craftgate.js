@@ -131,6 +131,20 @@ const Forge = {
     a_helm: 'c_lung',
     a_vest: 'f_guard',
     a_cannon: 'f_broad',
+
+    // -- shop gear, now crafted (js/shop.js sells valuables only) ------------
+    // Tier-1 pieces with a null node are still gated by needing their table
+    // built; the Mesh Bag stays node-free because it is a GOAL in js/data.js.
+    g_bag2: null,
+    g_bag3: 'c_sack',
+    g_suit2: 'f_heart',
+    g_suit3: 'f_guard',
+    g_scraper2: null,
+    g_scraper3: 'm_hone',
+    g_pry2: 'c_grip',
+    g_pry3: 'c_pearl',
+    g_tank2: 'c_lung',
+    g_tank3: 'c_calm',
   },
 
   // Which tree pays for a nodeless recipe. Planks and picks are quarry work.
@@ -176,6 +190,42 @@ const Forge = {
       desc: 'Lashed, not nailed. It still bites coal.',
     },
   ],
+
+  // ==== gear off the shop shelf =============================================
+  // ClamNet stopped stocking tools, so the tiered dive gear it used to SELL is
+  // crafted at the tables instead. Registered into Inv.RECIPES next to HAND in
+  // _wireInv, same shape as Inv's own b_gloves / b_lamp: out is null, apply()
+  // makes the exact G.gear.* bump the purchase made, done() is 'already owns
+  // that tier or better'. The `gear` tag {key, tier, prev} is read by the
+  // Inv.missing wrap so tier 2 cannot be crafted over tier 0 -- the shop only
+  // ever sold cur+1, and that contract survives the move.
+  // Names/descs come from the data.js catalogues so the two never drift.
+  GEAR: (function () {
+    function g(def, arr, gkey, tier) {
+      var it = arr[tier];
+      def.name = it.name;
+      def.desc = it.desc;
+      def.out = null;
+      def.lvl = 1;
+      def.gear = { key: gkey, tier: tier, prev: arr[tier - 1].name };
+      // max/>= not ++/==: a save that already bought gear must stay consistent
+      def.apply = function (gs) { if (gs.gear[gkey] < tier) gs.gear[gkey] = tier; };
+      def.done = function (gs) { return gs.gear[gkey] >= tier; };
+      return def;
+    }
+    return [
+      g({ key: 'g_bag2',     station: 'bench', cost: { rope: 2, driftwood: 3 },            time: 10, xp: 6,  art: 'g_netbag' },  BAGS, 'bag', 1),
+      g({ key: 'g_bag3',     station: 'bench', cost: { rope: 6, plank: 2, nail: 4 },       time: 18, xp: 14, art: 'g_netbag' },  BAGS, 'bag', 2),
+      g({ key: 'g_suit2',    station: 'bench', cost: { rope: 4, driftwood: 2, nail: 2 },   time: 14, xp: 8,  art: 'g_suit' },    SUITS, 'suit', 1),
+      g({ key: 'g_suit3',    station: 'anvil', cost: { ingot: 3, rope: 2, nail: 4 },       time: 28, xp: 20, art: 'g_suit' },    SUITS, 'suit', 2),
+      g({ key: 'g_scraper2', station: 'anvil', cost: { ingot: 1, plank: 1, nail: 2 },      time: 16, xp: 10, art: 'g_scraper' }, SCRAPERS, 'scraper', 1),
+      g({ key: 'g_scraper3', station: 'anvil', cost: { ingot: 2, crystal: 1, glass: 1 },   time: 30, xp: 22, art: 'g_scraper' }, SCRAPERS, 'scraper', 2),
+      g({ key: 'g_pry2',     station: 'anvil', cost: { ingot: 2, nail: 2 },                time: 16, xp: 10, art: 'g_crowbar' }, PRYBARS, 'pry', 1),
+      g({ key: 'g_pry3',     station: 'anvil', cost: { ingot: 3, beam: 1, glass: 1 },      time: 32, xp: 24, art: 'g_crowbar' }, PRYBARS, 'pry', 2),
+      g({ key: 'g_tank2',    station: 'anvil', cost: { ingot: 2, glass: 1, rope: 1 },      time: 20, xp: 12, art: 'g_tank' },    TANKS, 'tank', 1),
+      g({ key: 'g_tank3',    station: 'anvil', cost: { ingot: 4, glass: 2, beam: 1 },      time: 34, xp: 26, art: 'g_tank' },    TANKS, 'tank', 2),
+    ];
+  })(),
 
   // ==== the tables ==========================================================
   // `hand: true` puts it in the body menu; everything else needs `need` placed
@@ -1629,11 +1679,13 @@ const Forge = {
     // 2. the hand recipes. station 'hand' is not an Inv station, so _buildIndex
     //    files them in _byKey (craft/missing/recipe all work) and in NO station
     //    list -- they can never show up on a bench. _byKey is built lazily, so
-    //    dropping it is the sanctioned way to make it pick these up.
+    //    dropping it is the sanctioned way to make it pick these up. The GEAR
+    //    recipes ride along on real stations, so they DO land on the benches.
     if (I.RECIPES) {
-      for (var i = 0; i < this.HAND.length; i++) {
-        if (I.recipe && I._byKey && I.recipe(this.HAND[i].key)) continue;
-        I.RECIPES.push(this.HAND[i]);
+      var extra = this.HAND.concat(this.GEAR);
+      for (var i = 0; i < extra.length; i++) {
+        if (I.recipe && I._byKey && I.recipe(extra[i].key)) continue;
+        I.RECIPES.push(extra[i]);
       }
       I._byKey = null;
       I._byStation = null;
@@ -1656,6 +1708,13 @@ const Forge = {
       var key = r && typeof r === 'object' ? r.key : r;
       var line = Forge.lockLine(key);
       if (line) return line;
+      // Gear tiers go in order: the shop only ever sold cur+1, and Inv.craft
+      // asks THIS missing() before spending, so the check binds crafting too.
+      var rec = I.recipe ? I.recipe(key) : null;
+      if (rec && rec.gear && rec.gear.tier > 1 &&
+          typeof G !== 'undefined' && G && G.gear &&
+          G.gear[rec.gear.key] < rec.gear.tier - 1)
+        return 'craft the ' + String(rec.gear.prev).toLowerCase() + ' first';
       return iMissing(r);
     };
 

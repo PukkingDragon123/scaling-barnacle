@@ -104,7 +104,7 @@ const GOALS = [
   { name: 'Scrape together 5 shells',    hint: 'Dive at the North Piling' },
   { name: 'Send a crate to market',      hint: 'Sell on the laptop; the drone pays on pickup' },
   { name: 'Crack a shell at the workbench', hint: 'Tap when the marker is centered' },
-  { name: 'Buy the Mesh Bag',            hint: 'GEAR tab on the laptop' },
+  { name: 'Craft the Mesh Bag',          hint: 'Workbench — rope & driftwood ([C] to whittle)' },
   { name: 'Rate the piling for the Mid Bed', hint: 'BUILD tab — oysters live further down' },
   { name: 'Find a pearl',                hint: 'Crack oysters — clean cracks find more' },
   { name: 'Polish something precious',   hint: 'Pearls & abalone gleam at the workbench' },

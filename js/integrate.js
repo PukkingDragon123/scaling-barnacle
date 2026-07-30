@@ -32,9 +32,14 @@
   //
   //    30 piling dive |  56 house     |  82 Marlow    | 108 Sprout's stall
   //   134 Sprout      | 160 ClamNet   | 186 Fintan    | 212 workbench
-  //   238 craft bench | (290 LANE)    | 316,342 beds  | 368 bed
-  //   (420 LANE)      | 446 tide pool | 472,498 pens  | (550,576 LANE)
+  //   238 craft bench | (290 LANE)    | 316..368 open | (420 LANE)
+  //   446 tide pool   | 472,498 pens  | (550,576 LANE)
   //   628 jump in       [pier edge, endX() - 14]
+  //
+  // 316..368 used to be the farm beds. Farming happens on the SEABED now (farm.js
+  // owns that layout in OCEAN world x), so that stretch of deck is simply empty —
+  // it is NOT a Forge lane, and nothing else may move into it without re-checking
+  // the 22-unit [E] radius against both neighbours.
   //
   // Every pair is >= 26 apart — the [E] search radius is 22, so 26 leaves four
   // units of slack rather than sitting on the boundary. The bracketed lanes are
@@ -46,14 +51,10 @@
     const at = { angler: 82, farmer: 134, prof: 186 };
     for (const n of M.NPCs.LIST) if (at[n.key] !== undefined) n.x = at[n.key];
   }
-  if (M.Farm && M.Farm.PLOT_DEF) {
-    // Three beds, not five. The dock beds are on their way out entirely — the
-    // planting is moving into the ocean — and five of them plus the stations left
-    // no lane wide enough to place a crafted table in.
-    const beds = [{ x: 316, b: 1 }, { x: 342, b: 1 }, { x: 368, b: 2 }];
-    M.Farm.PLOT_DEF.length = 0;
-    for (const b of beds) M.Farm.PLOT_DEF.push(b);
-  }
+  // The farm beds are gone from the deck for good: PLOT_DEF is OCEAN world x now
+  // and farm.js owns it (52-unit spacing against its swim REACH, gated on
+  // G.bridge). Overriding it here with deck-grid numbers put beds 26 apart in the
+  // water — two inside one reach — so the integrator keeps its hands off it.
   if (M.Stock && M.Stock.PEN_DEF) {
     const pens = [{ x: 472, sx: 472, b: 3 }, { x: 498, sx: 498, b: 3 }];
     M.Stock.PEN_DEF.length = 0;
@@ -125,11 +126,18 @@
   const modalUp = () => (M.Craft && M.Craft.open) || (M.NPCs && M.NPCs.open) ||
                         (M.Stock && M.Stock.open) || (M.Battle && M.Battle.active) ||
                         (M.Inv && M.Inv.open) || (M.Skills && M.Skills.open) ||
-                        (M.Tame && M.Tame.open);
+                        (M.Tame && M.Tame.open) || (M.Farm && M.Farm.open);
 
   const gUpdate = Game.globalUpdate.bind(Game);
   Game.globalUpdate = function (dt) {
     gUpdate(dt);
+    // Farm's own wraps (ocean [E] probe, prompt, touch pad, bed drawing) install
+    // lazily on its first ensure() — which nothing reaches on a boot that never
+    // opens the stall. This call is that first reach, on the first frame: late
+    // enough that Ocean's DOMContentLoaded touch wrap is already in (Farm's must
+    // sit OUTSIDE it, Ocean returns its pads without chaining), and safe to keep
+    // per-frame because Farm.update dedupes by Game.time once its hook is live.
+    if (M.Farm && M.Farm.update) M.Farm.update(dt);
     if (M.Hotbar && M.Hotbar.update && !modalUp()) M.Hotbar.update(dt);
     if (M.Craft && M.Craft.update) M.Craft.update(dt);
     if (M.Stock && M.Stock.update) M.Stock.update(dt);

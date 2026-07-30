@@ -109,29 +109,23 @@ const Shop = {
       }
       if (!F && !S) push({ info: 'The stall is shuttered.' });
     } else if (this.tab === 2) {
-      // GEAR
-      const tier = (arr, cur, applyKey, gart) => {
-        if (cur + 1 < arr.length) {
-          const nx = arr[cur + 1];
-          push({
-            gart, label: nx.name, sub: `${nx.desc}  (now: ${arr[cur].name})`,
-            btn: `$${nx.price}`, price: nx.price,
-            act: () => this.buy(nx.price, () => { G.gear[applyKey]++; }, nx.name),
-          });
-        } else {
-          push({ gart, label: arr[cur].name, sub: 'Top of the line.', btn: 'MAX' });
-        }
+      // GEAR -- read-only since ClamNet went sell-and-valuables-only: tools are
+      // crafted at the Forge tables now. NO row here may carry act/price/btn;
+      // dev/smoke-net.js asserts that stays true.
+      push({ info: 'ClamNet no longer ships tools. Otto crafts his own — [C] on the dock.' });
+      const at = (arr, cur, gart, where) => {
+        if (cur + 1 < arr.length) push({ gart, label: arr[cur + 1].name, sub: `craft at the ${where}  (now: ${arr[cur].name})` });
+        else push({ gart, label: arr[cur].name, sub: 'Top of the line.' });
       };
-      tier(SCRAPERS, G.gear.scraper, 'scraper', 'g_scraper');
-      tier(PRYBARS, G.gear.pry, 'pry', 'g_crowbar');
-      tier(TANKS, G.gear.tank, 'tank', 'g_tank');
-      tier(SUITS, G.gear.suit, 'suit', 'g_suit');
-      tier(BAGS, G.gear.bag, 'bag', 'g_netbag');
+      at(BAGS, G.gear.bag, 'g_netbag', 'workbench');
+      at(SUITS, G.gear.suit, 'g_suit', G.gear.suit ? 'smithy' : 'workbench');
+      at(SCRAPERS, G.gear.scraper, 'g_scraper', 'smithy');
+      at(PRYBARS, G.gear.pry, 'g_crowbar', 'smithy');
+      at(TANKS, G.gear.tank, 'g_tank', 'smithy');
       const singleArt = { lamp: 'g_torch', gloves: 'g_plier' };
       for (const key of ['lamp', 'gloves']) {
         const it = GEAR_SINGLES[key];
-        if (G.gear[key]) push({ gart: singleArt[key], label: it.name, sub: it.desc, btn: 'OWNED' });
-        else push({ gart: singleArt[key], label: it.name, sub: it.desc, btn: `$${it.price}`, price: it.price, act: () => this.buy(it.price, () => { G.gear[key] = true; }, it.name) });
+        push({ gart: singleArt[key], label: it.name, sub: G.gear[key] ? 'Owned.' : 'craft at the workbench' });
       }
     } else if (this.tab === 3) {
       // BUILD
