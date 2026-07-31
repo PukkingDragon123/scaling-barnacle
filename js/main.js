@@ -567,7 +567,7 @@ const TitleScene = {
     }
     if (Game.hasSave())
       text(c, '[N] new game', W / 2, 255, { size: 7, color: '#c8b49a', align: 'center' });
-    text(c, '[M] mute', 8, H - 12, { size: 6, color: '#a89478' });
+    text(c, '[M] map   [N] mute', 8, H - 12, { size: 6, color: '#a89478' });
   },
 };
 
@@ -588,7 +588,8 @@ function frame(now) {
   TouchUI.buttons = TouchUI.layout();
 
   // global keys
-  if (Input.p('KeyM')) {
+  // [M] belongs to the sea chart now; mute moved to the key next door.
+  if (Input.p('KeyN')) {
     const muted = SND.toggleMute();
     Game.toast(muted ? 'Sound muted.' : 'Sound on.');
   }

@@ -197,15 +197,28 @@ const fails = [];
   console.log('surfaced by swimming =', surfaced);
   if (!surfaced) fails.push('swim-up surfacing failed');
 
-  // 4) workbench: crack one clam (storage should have one from the pry)
-  // Ask the scene where the workbench IS rather than hardcoding it. The deck has
-  // been re-laid out twice now, and a literal 300 in here quietly walked Otto to
-  // an empty plank and reported the crack minigame as broken.
+  // 4) workbench: crack one clam (storage should have one from the pry).
+  // The deck no longer SHIPS a workbench: the shell bench is a Forge table the
+  // player hand-crafts and places. So this leg now exercises that whole path --
+  // seed the two materials the recipe wants (mining them is smoke-seafarm /
+  // ocean territory), build via the real Forge API at a legal x, and only then
+  // walk over and crack. If placement or the spot wiring breaks, this fails
+  // before the minigame is ever reached.
+  const placed = await page.evaluate(() => {
+    if (typeof Forge === 'undefined') return 'no Forge';
+    Inv.add('driftwood', 2); Inv.add('stone', 1);
+    WorldScene.px = 238;
+    if (!Forge.beginPlace('crack', -1)) return 'beginPlace refused: ' + (Forge.note || '');
+    if (!Forge.confirmPlace()) return 'confirmPlace refused: ' + JSON.stringify(Forge.placing && Forge.placing.why);
+    const s = WorldScene.spots().find(v => v.label.indexOf('Shell Bench') >= 0);
+    return s ? null : 'placed but no Shell Bench spot appeared';
+  });
+  if (placed) fails.push('craft-and-place the shell bench: ' + placed);
   const benchX = await page.evaluate(() => {
-    const s = WorldScene.spots().find(v => v.label.indexOf('Workbench') >= 0);
+    const s = WorldScene.spots().find(v => v.label.indexOf('Shell Bench') >= 0);
     return s ? s.x : null;
   });
-  if (benchX === null) fails.push('no Workbench spot on the deck');
+  if (benchX === null) fails.push('no Shell Bench spot on the deck');
   const benchDir = await page.evaluate((bx) => (WorldScene.px > bx ? 'KeyA' : 'KeyD'), benchX);
   await page.keyboard.down(benchDir);
   await page.waitForFunction((bx) => Math.abs(WorldScene.px - bx) < 10, benchX, { timeout: 12000 });

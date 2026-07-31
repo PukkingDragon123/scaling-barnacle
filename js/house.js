@@ -10,6 +10,9 @@ const HUT_X = Math.round((W - HUT_W) / 2), HUT_Y = 22;
 const BOARD_TOP = HUT_Y + HUT_H * 0.507;        // where the dock's deck must line up
 const PORCH_L = HUT_X + HUT_W * 0.30, PORCH_R = HUT_X + HUT_W * 0.945;
 const BED_X = Math.round(PORCH_L + 40), TABLE_X = Math.round(PORCH_R - 40);
+// the desk sits between them, >= 22 from each so the house's own [E] search
+// (the same nearest-within-22 the deck uses) never has two answers
+const DESK_X = Math.round((BED_X + TABLE_X) / 2);
 
 const HouseScene = {
   customCursor: false,
@@ -36,6 +39,9 @@ const HouseScene = {
   spots() {
     const s = [
       { x: BED_X, label: 'Sleep  (next day, beds regrow)', act: () => this.sleep() },
+      // The ClamNet terminal lives in here now: selling, seeds, builds and decor
+      // all happen at Otto's own desk instead of on a laptop nailed to the pier.
+      { x: DESK_X, label: 'ClamNet Terminal  (sell & shop)', act: () => { Shop.openUI(); } },
       { x: Math.round(PORCH_R - 12), label: 'Go Outside', act: () => Game.go(WorldScene, { fromHouse: true }) },
     ];
     if (G.decor.gramophone) {
@@ -133,6 +139,24 @@ const HouseScene = {
     ctx.restore();
 
     stand('furn_0', BED_X, 54);          // the bed
+
+    // ---- the ClamNet desk: table, terminal, and its cold glow ------------------
+    const dskH = assetH('furn_2', 36);
+    stand('furn_2', DESK_X, 36);
+    const dTop = FLOOR - dskH + 1;
+    ctx.fillStyle = '#2a3038';
+    ctx.fillRect(DESK_X - 9, dTop - 13, 18, 13);
+    ctx.fillStyle = nite > 0.3 ? '#9fe8ff' : '#5ad2f0';
+    ctx.fillRect(DESK_X - 8, dTop - 12, 16, 10);
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.fillRect(DESK_X - 7, dTop - 11, 6, 1.2);
+    ctx.fillRect(DESK_X - 7, dTop - 8.6, 10, 1.2);
+    ctx.fillRect(DESK_X - 7, dTop - 6.2, 8, 1.2);
+    if (nite > 0.2) {
+      ctx.fillStyle = 'rgba(120,220,255,0.12)';
+      ctx.beginPath(); ctx.arc(DESK_X, dTop - 7, 16, 0, TAU); ctx.fill();
+    }
+
     const tblH = assetH('furn_2', 40);
     stand('furn_2', TABLE_X, 40);        // the table
     const lampY = FLOOR - tblH - 5;

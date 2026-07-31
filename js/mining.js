@@ -28,13 +28,13 @@ const Mining = {
   CHUNK_W: 480,          // one screen wide; the scene's chunk grid must match
   CHUNK_H: 280,
   DEEP_MAX: 2400,        // world y that counts as depth-fraction 1.0
-  MIN_SEP: 40,           // no two nodes in a chunk closer than this
+  MIN_SEP: 58,           // no two nodes in a chunk closer than this (scaled with node width)
   MAX_NODES: 96,         // hard cap; the furthest-from-camera nodes are dropped
   MARGIN: 34,            // keep placements off the chunk seams
 
   SWING_T: 0.44,         // seconds per full opick_0..3 swing
   HIT_AT: 0.55,          // fraction of the swing where frame 2 (the strike) lands
-  REACH: 34,             // how far in front of Otto a node can be mined
+  REACH: 42,             // how far in front of Otto a node can be mined (nodes grew, so did this)
   CURSOR_R: 20,          // click slop when aiming with the pointer
   NOTE_GAP: 1.4,         // rate limit on the "too soft" complaint
 
@@ -108,7 +108,7 @@ const Mining = {
   // snd       : 'scrape' | 'clink' | 'thump'   the swing ping
   NODES: {
     wood: {
-      key: 'wood', name: 'sunken timber', art: 'node_wood', w: 31,
+      key: 'wood', name: 'sunken timber', art: 'node_wood', w: 46,
       hardness: 3, tier: 0, band: [0.00, 0.60], weight: 10, skill: 'foraging', xp: 3,
       chips: [0, 1], snd: 'thump',
       loot: [
@@ -118,7 +118,7 @@ const Mining = {
       ]
     },
     stone: {
-      key: 'stone', name: 'stone outcrop', art: 'node_stone', w: 31,
+      key: 'stone', name: 'stone outcrop', art: 'node_stone', w: 46,
       hardness: 4, tier: 0, band: [0.00, 0.85], weight: 12, skill: 'mining', xp: 4,
       chips: [2, 3], snd: 'scrape',
       loot: [
@@ -127,7 +127,7 @@ const Mining = {
       ]
     },
     scrap: {
-      key: 'scrap', name: 'scrap pile', art: 'node_scrap', w: 31,
+      key: 'scrap', name: 'scrap pile', art: 'node_scrap', w: 46,
       hardness: 6, tier: 1, band: [0.10, 0.80], weight: 5, skill: 'salvage', xp: 6,
       chips: [2, 7], snd: 'clink',
       loot: [
@@ -137,7 +137,7 @@ const Mining = {
       ]
     },
     coal: {
-      key: 'coal', name: 'coal seam', art: 'node_coal', w: 31,
+      key: 'coal', name: 'coal seam', art: 'node_coal', w: 46,
       hardness: 6, tier: 1, band: [0.18, 0.95], weight: 7, skill: 'mining', xp: 6,
       chips: [6, 2], snd: 'scrape',
       loot: [
@@ -146,7 +146,7 @@ const Mining = {
       ]
     },
     iron: {
-      key: 'iron', name: 'iron vein', art: 'node_iron', w: 31,
+      key: 'iron', name: 'iron vein', art: 'node_iron', w: 46,
       hardness: 8, tier: 1, band: [0.30, 1.00], weight: 6, skill: 'mining', xp: 9,
       chips: [2, 3], snd: 'clink',
       loot: [
@@ -156,7 +156,7 @@ const Mining = {
       ]
     },
     wreck: {
-      key: 'wreck', name: 'wreck timber', art: 'node_wreck', w: 34,
+      key: 'wreck', name: 'wreck timber', art: 'node_wreck', w: 52,
       hardness: 10, tier: 2, band: [0.35, 1.00], weight: 3, skill: 'salvage', xp: 12,
       chips: [7, 1], snd: 'thump',
       loot: [
@@ -166,7 +166,7 @@ const Mining = {
       ]
     },
     gold: {
-      key: 'gold', name: 'gold seam', art: 'node_gold', w: 31,
+      key: 'gold', name: 'gold seam', art: 'node_gold', w: 46,
       hardness: 12, tier: 2, band: [0.62, 1.00], weight: 3, skill: 'mining', xp: 16,
       chips: [4, 2], snd: 'clink',
       loot: [
@@ -176,7 +176,7 @@ const Mining = {
       ]
     },
     crystal: {
-      key: 'crystal', name: 'crystal cluster', art: 'node_crystal', w: 31,
+      key: 'crystal', name: 'crystal cluster', art: 'node_crystal', w: 46,
       hardness: 14, tier: 3, band: [0.78, 1.00], weight: 2, skill: 'mining', xp: 22,
       chips: [5, 3], snd: 'clink',
       loot: [

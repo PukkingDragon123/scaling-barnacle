@@ -8,21 +8,18 @@ function nightness(clock) {
   return 0;
 }
 
-// The dock is deliberately SHORT now: everything worth walking to is inside 642
-// units instead of 900, so you are never trudging across empty planks. The three
-// clam pilings collapsed into one, right under the house — bridge upgrades buy
-// DEPTH at that one piling (and unlock the far stations), not more pilings to
-// choose between and not more planks.
+// The pier is SMALL: Otto's front porch, not a high street. The piling, the
+// house, the pens and tide pool, a visitor post, and open planks for whatever
+// tables he crafts and places. Everything commercial moved into the house (the
+// ClamNet terminal on the desk) or out to sea (the neighbours, the farm), so the
+// deck ships with nothing to sell at and nothing to work at.
 //
 // PIER_END IS A CONSTANT, and that is load-bearing. The jump-in spot lives at the
-// end of the planks, and the deck's single [E] is a nearest-within-22 search — so
-// while the pier grew with G.bridge that one spot swept across the far half of the
-// deck and landed on top of a different station at every tier (a farm bed at
-// bridge 1, the tide pool at 2, a pen at 3). No spacing of the stations survives
-// all three positions. With the length fixed there is exactly one pier edge, the
-// stations are laid out once, and the gaps left between them stay free for the
-// tables the player crafts and places.
-const PIER_END = 642;
+// one pier edge and the deck's single [E] is a nearest-within-22 search — while
+// the pier grew with G.bridge that spot swept across the deck and landed on a
+// different station at every tier. Bridge upgrades buy DEPTH at the one piling,
+// not planks.
+const PIER_END = 300;
 const PILING_X = [30, 30, 30];
 const DECK_Y = 214;   // the dock sits low in frame, water filling the bottom
 
@@ -82,8 +79,9 @@ const WorldScene = {
   spots() {
     const s = [
       { x: 56, label: 'Enter House', act: () => Game.go(HouseScene, {}) },
-      { x: 160, label: 'ClamNet  (sell & shop)', act: () => { Shop.openUI(); } },
-      { x: 212, label: 'Workbench  (crack & polish)', act: () => { Bench.openUI(); } },
+      // ClamNet lives INSIDE the house now (the terminal on the desk), and the
+      // crack-and-polish workbench is something Otto crafts and places himself --
+      // the deck ships with nothing to sell at and nothing to work at.
     ];
     // ONE piling, under the house. Which bed you work is the deepest your bridge
     // has been rated for, so an upgrade makes the same dive richer instead of
@@ -215,31 +213,14 @@ const WorldScene = {
     }
 
     // ---- lamp posts standing on the deck -------------------------------------------
-    for (let x = 348; x < pierEnd; x += SEG_W * 3) {
+    for (let x = 120; x < pierEnd - 10; x += SEG_W * 1.6) {
       const lh = drawStanding(ctx, 'dock_15', x, 15, 5);
       this._lampGlows.push({ x, y: DECK_Y - lh + 6 });
     }
 
-    // ---- ClamNet: a table on the deck with the laptop on it -------------------------
-    const tblH = drawStanding(ctx, 'furn_2', 232, 32, 1);
-    const topY = DECK_Y - tblH + 1;
-    ctx.fillStyle = '#2a3038';
-    ctx.fillRect(225, topY - 10, 15, 10);
-    ctx.fillStyle = nite > 0.3 ? '#9fe8ff' : '#5ad2f0';
-    ctx.fillRect(226, topY - 9, 13, 8);
-    ctx.fillStyle = 'rgba(255,255,255,0.65)';
-    ctx.fillRect(227, topY - 8, 5, 1);
-    ctx.fillRect(227, topY - 6, 8, 1);
-    if (nite > 0.3) {
-      ctx.fillStyle = 'rgba(120,220,255,0.13)';
-      ctx.beginPath(); ctx.arc(232, topY - 5, 14, 0, TAU); ctx.fill();
-    }
-
-    // ---- Workbench: the uploaded bench, standing on the deck ---------------------
-    const bH = drawStanding(ctx, 'workbench', 300, 40, 2);
-    const bTop = DECK_Y - bH + 2;
-    drawAC(ctx, 'shell_clam', 292, bTop + 3, 9);
-    drawAC(ctx, 'shell_scallop', 306, bTop + 3, 8);
+    // (The ClamNet laptop moved indoors -- HouseScene draws the terminal -- and
+    // the workbench is a Forge table now, drawn by Forge.drawPlaced wherever the
+    // player put it.)
 
     // drone landing pad
     ctx.fillStyle = 'rgba(60,68,72,0.9)';

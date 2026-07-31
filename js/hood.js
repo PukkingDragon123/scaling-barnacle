@@ -140,7 +140,10 @@ const Hood = {
     {
       key: 'shack', who: 'angler', art: 'nhouse_shack',
       name: 'The Lean-To', of: "Marlow's shack",
-      x: 2380, w: 100, deckY: -24, deckFrac: 0.52, doorFrac: 0.40,
+      // Marlow's place RIDES THE WATER -- deck barely above the swell, so you swim
+      // straight onto it instead of climbing. One of the three being low is what
+      // keeps "stilt house" from being the only idea out here.
+      x: 2380, w: 100, deckY: -6, deckFrac: 0.52, doorFrac: 0.40,
       climbDX: -16, plotDX: 34,
       legF: [-0.441, -0.047, 0.429], legW: 0.084, legCol: '#33232e',
       fish: { x: 2760, y: 148 },
@@ -1015,6 +1018,20 @@ const Hood = {
       Game.save();
     }
 
+    // THE SPIN-UP LANDING. A roll-launch that carries Otto over a deck lands him
+    // ON it: airborne, falling, inside the house's span, at deck height -- no key,
+    // the arc IS the intent. This is the fun way up to an elevated home, and the
+    // reason the ladders stopped being mandatory.
+    if (py < -4 && Ocean.vy > 15) {
+      for (var li = 0; li < this.HOMES.length; li++) {
+        var lh = this.HOMES[li];
+        if (Math.abs(px - lh.x) > lh.w * 0.42) continue;
+        if (py < lh.deckY - 18 || py > lh.deckY + 6) continue;
+        if (Game.fadeDir === 0 && !this._peerOpen()) this.climb(lh);
+        return;
+      }
+    }
+
     var hmn = this.climbAt(px, py);
     var agn = this.agentAt(px, py);
     if (hmn && agn) {
@@ -1762,6 +1779,18 @@ const Hood = {
     if (nite > 0.02) ctx.globalAlpha = 1 - nite * 0.22;
     drawA(ctx, hm.art, hm.x - w / 2, top, w, hh);
     ctx.globalAlpha = 1;
+
+    // ---- Its light on the water: a broken band of pale dashes riding the swell
+    // under the house. One fillStyle, eight rects -- and it is the single thing
+    // that makes the building sit IN the sea instead of in front of a backdrop.
+    if (-camY > -6) {                       // only when the waterline is in frame
+      ctx.fillStyle = nite > 0.3 ? 'rgba(255,214,110,0.16)' : 'rgba(234,249,255,0.2)';
+      for (var sh = 0; sh < 8; sh++) {
+        var shx = hm.x - w * 0.34 + (w * 0.68) * (sh / 7) + Math.sin(t * 0.9 + sh * 2.1) * 3;
+        var shw = 5 + Math.sin(t * 1.3 + sh) * 2.5;
+        ctx.fillRect(shx - shw / 2, 1.5 + (sh % 3), shw, 1.1);
+      }
+    }
 
     // ---- The ladder. The art's own access only reaches its own base, so this
     // carries it down through the waterline to the bottom of the climb box -- the

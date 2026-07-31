@@ -94,12 +94,38 @@ const Ocean = {
   PX_PER_M: 12,           // matches the dive's depth readout
 
   // ---- the seabed -------------------------------------------------------------
-  // The shelf: shallow sand right off the pilings, falling away to a dark plain.
-  // FLOOR_TOP is deliberately shallow enough that the sand is in frame from the
-  // moment he drops in -- a first screen of empty blue is the whole complaint.
-  FLOOR_TOP: 230,         // world y of the sand nearest the dock
-  FLOOR_DEEP: 3000,       // world y the shelf bottoms out at
-  FLOOR_SHELF: 5200,      // how far out (world x) that fall takes
+  // The coast is ZONED. Each zone is a stretch of x with its own depth range,
+  // relief, sand palette and species mix, so swimming out is a journey through
+  // places rather than a gradient getting darker. RELIEF is the second column:
+  // how hard the noise is allowed to push the base line around, which is what
+  // separates a lagoon's dunes from the ridge's seamounts.
+  //
+  // The base line itself comes from SPINE: control points (x, depth) smoothstepped
+  // in between. It is authored, not derived — the trench is where the trench is.
+  ZONES: [
+    { x0: -99999, x1: -2400, key: 'deepwest', name: 'The Dark Shoulder', relief: 60,
+      sand: [96, 104, 120], mix: [['thicket', 1], ['ridge', 1.6], ['sparse', 3]] },
+    { x0: -2400, x1: -700, key: 'kelp', name: 'Kelp Shelf', relief: 44,
+      sand: [148, 158, 128], mix: [['thicket', 4], ['garden', 1], ['sparse', 1]] },
+    { x0: -700, x1: 700, key: 'lagoon', name: 'Otter Lagoon', relief: 20,
+      sand: [226, 206, 160], mix: [['garden', 2.4], ['sparse', 1.4], ['rubble', 0.8]] },
+    { x0: 700, x1: 2500, key: 'gardens', name: 'Coral Gardens', relief: 46,
+      sand: [214, 178, 158], mix: [['garden', 4], ['thicket', 1.4], ['rubble', 1]] },
+    { x0: 2500, x1: 4600, key: 'ridge', name: 'Dragonback Ridge', relief: 150,
+      sand: [104, 96, 104], mix: [['ridge', 3.4], ['rubble', 1.6], ['sparse', 1]] },
+    { x0: 4600, x1: 6200, key: 'trench', name: 'The Trench', relief: 90,
+      sand: [64, 72, 96], mix: [['ridge', 1.4], ['sparse', 3.4]] },
+    { x0: 6200, x1: 99999, key: 'abyss', name: 'Abyssal Plain', relief: 30,
+      sand: [140, 138, 148], mix: [['sparse', 4], ['rubble', 1], ['ridge', 0.6]] },
+  ],
+  SPINE: [
+    [-9000, 640], [-4200, 560], [-2400, 470], [-1500, 360], [-700, 285],
+    [-250, 235], [0, 228], [250, 238], [700, 330], [1500, 440], [2500, 640],
+    [3300, 900], [4100, 1180], [4600, 1500], [5000, 2450], [5400, 2950],
+    [6200, 2760], [7400, 2900], [9999, 3000],
+  ],
+  FLOOR_TOP: 230,         // shallowest sand, right off the pilings (lagoon floor)
+  FLOOR_DEEP: 3000,       // the trench bottom; depthFrac and fog max out here
   FLOOR_STEP: 8,          // world units between cached profile samples
   FLOOR_CLEAR: 9,         // how close Otto's centre may get to the sand
   FLOOR_SAND: 13,         // thickness of the pale sand band under the lip
@@ -592,18 +618,40 @@ const Ocean = {
 
   // The raw profile. PRIVATE: everything else goes through floorAt so the cache is
   // never bypassed.
+  // Which zone owns this x. Linear scan of seven entries; only ever runs while a
+  // column is baked or a ridge line is traced, never per pixel.
+  zoneAt(x) {
+    const Z = this.ZONES;
+    for (let i = 0; i < Z.length; i++) if (x < Z[i].x1) return Z[i];
+    return Z[Z.length - 1];
+  },
+
   _profile(x) {
-    // The shelf. smoothstep so there is a flat sandy lagoon by the pilings, a real
-    // slope out of it, and a plain at the bottom instead of a funnel.
-    const s = clamp(Math.abs(x) / this.FLOOR_SHELF, 0, 1);
-    const base = this.FLOOR_TOP + (this.FLOOR_DEEP - this.FLOOR_TOP) * (s * s * (3 - 2 * s));
-    // Relief scales with depth: gentle dunes in the shallows, real trenches and
-    // banks out on the plain. The three octaves sum to at most +-1.
-    const amp = 26 + base * 0.14;
+    // The authored base line: smoothstep between SPINE control points, so the
+    // lagoon is flat where it should be flat and the trench wall is a wall.
+    const P = this.SPINE;
+    let i = 1;
+    while (i < P.length - 1 && x > P[i][0]) i++;
+    const a = P[i - 1], b = P[i];
+    const t = clamp((x - a[0]) / (b[0] - a[0]), 0, 1);
+    const base = a[1] + (b[1] - a[1]) * (t * t * (3 - 2 * t));
+
+    // Relief on top, scaled by the zone: a lagoon ripples, the ridge heaves.
+    const z = this.zoneAt(x);
     const n = (this._vn(x / 1700) - 0.5) * 1.24
             + (this._vn(x / 520 + 11.3) - 0.5) * 0.56
             + (this._vn(x / 165 + 41.7) - 0.5) * 0.2;
-    return base + n * amp;
+    let y = base + n * z.relief;
+
+    // The ridge zone gets SEAMOUNTS: broad humps that rise hundreds of units off
+    // the base, so the skyline out there is towers and saddles instead of a
+    // slope. One low-frequency term, thresholded so most of the zone is base and
+    // the peaks are events. Clamped so no peak ever nears the surface.
+    if (z.key === 'ridge') {
+      const m = this._vn(x / 640 + 77.7);
+      if (m > 0.56) y -= (m - 0.56) * 2100;
+    }
+    return Math.max(150, y);
   },
 
   // One chunk column's worth of seabed: the sampled profile plus every piece of
@@ -631,16 +679,11 @@ const Ocean = {
     const band = clamp(mid / 2600, 0, 1);
 
     const rng = mulberry32((Math.imul(this._fs, 2654435761) ^ Math.imul(key, 1597334677)) | 0);
-    // The MIX is per column: coral gardens, weed thickets, bare rock ridges, shell
-    // rubble and the odd empty run of sand. This is what stops a scrolled seabed
-    // from reading as wallpaper.
-    const kind = weightedPick([
-      ['garden', 3.0 - band * 2.2],
-      ['thicket', 2.2 - band * 1.2],
-      ['ridge', 1.3 + band * 0.8],
-      ['rubble', 1.0 + band * 1.0],
-      ['sparse', 0.7 + band * 3.0],
-    ], rng());
+    // The MIX belongs to the ZONE now — the Kelp Shelf is thickets, the Gardens
+    // are gardens — with the column rng picking within it, so a zone has an
+    // identity and still is not wallpaper.
+    const zone = this.zoneAt(x0 + this.CW / 2);
+    const kind = weightedPick(zone.mix, rng());
     const rocky = kind === 'ridge' || kind === 'rubble';
 
     // Ripples in the sand: short dashes lying along the line. `o` is how far below
@@ -717,9 +760,31 @@ const Ocean = {
       }
     }
 
+    // The FOREGROUND: a handful of oversized, dark, translucent fronds rooted on
+    // this column's own sand, drawn in front of Otto. They are the near plane of
+    // the three (far ridges / the playfield / these), and they are rooted rather
+    // than parallaxed for the same reason everything else is -- a frond sliding
+    // across the sand it grows from is floating scenery, and size and blur read
+    // as "close" without the lie. Kelp and garden columns only; the ridge stays
+    // bare so its skyline shows.
+    const fg = [];
+    if (kind === 'thicket' || kind === 'garden') {
+      const nf = kind === 'thicket' ? 3 + ((rng() * 3) | 0) : 1 + ((rng() * 2) | 0);
+      for (let i = 0; i < nf; i++) {
+        fg.push({
+          x: x0 + rng() * this.CW,
+          h: 90 + rng() * 130,
+          w: 4 + rng() * 5,
+          ph: rng() * TAU,
+          lean: (rng() - 0.5) * 0.7,
+          leaf: 2 + ((rng() * 3) | 0),
+        });
+      }
+    }
+
     const c = {
-      ci: key, x0, step, n, y: ys, lo, hi, mid, band, kind,
-      ripples, pebbles, boulders, mark, ext: {},
+      ci: key, x0, step, n, y: ys, lo, hi, mid, band, kind, zone,
+      ripples, pebbles, boulders, mark, fg, ext: {},
     };
     this._cols.set(key, c);
     this._colOrder.push(key);
@@ -1111,21 +1176,30 @@ const Ocean = {
     if (this.rollT > 0) {
       this.rollT -= dt;
       const k = clamp(this.rollT / this.ROLL_T, 0, 1);
-      // fast at the start, still carrying speed when it ends: the roll should
-      // launch you somewhere, not park you
-      const sp = lerp(this.ROLL_END, this.ROLL_SPEED, k * k) * spMul;
-      if (this.inMag > 0) {
-        // steerable, but only a little -- it is a committed move
-        const s = clamp(dt * 3.4, 0, 1);
-        this.rdx = lerp(this.rdx, this.nx, s);
-        this.rdy = lerp(this.rdy, this.ny, s);
-        const m = Math.sqrt(this.rdx * this.rdx + this.rdy * this.rdy) || 1;
-        this.rdx /= m; this.rdy /= m;
+      if (this.py < -5) {
+        // An AIRBORNE roll keeps its spin but hands the arc to gravity: the pin
+        // to rdx/rdy below would hold him at roll speed forever above the water,
+        // and it is exactly this hand-off that turns a surface roll into a leap.
+        this.vy += this.GRAV_AIR * dt;
+        this.vx *= Math.pow(0.75, dt);
+        this.spin = 1 - k;
+      } else {
+        // fast at the start, still carrying speed when it ends: the roll should
+        // launch you somewhere, not park you
+        const sp = lerp(this.ROLL_END, this.ROLL_SPEED, k * k) * spMul;
+        if (this.inMag > 0) {
+          // steerable, but only a little -- it is a committed move
+          const s = clamp(dt * 3.4, 0, 1);
+          this.rdx = lerp(this.rdx, this.nx, s);
+          this.rdy = lerp(this.rdy, this.ny, s);
+          const m = Math.sqrt(this.rdx * this.rdx + this.rdy * this.rdy) || 1;
+          this.rdx /= m; this.rdy /= m;
+        }
+        this.vx = this.rdx * sp;
+        this.vy = this.rdy * sp;
+        this.spin = 1 - k;
+        if (Math.random() < dt * 45) this._puff(this.px - this.rdx * 8, this.py - this.rdy * 8, 1, 40);
       }
-      this.vx = this.rdx * sp;
-      this.vy = this.rdy * sp;
-      this.spin = 1 - k;
-      if (Math.random() < dt * 45) this._puff(this.px - this.rdx * 8, this.py - this.rdy * 8, 1, 40);
       if (this.rollT <= 0) { this.rollT = 0; this.spin = 0; }
     } else if (this.py < -5) {
       // properly airborne after a hard ascent: no purchase on anything, just an
@@ -1179,7 +1253,9 @@ const Ocean = {
     const wasAbove = this.py < 0;
     this.px += this.vx * dt;
     this.py += this.vy * dt;
-    if (this.py < -46) { this.py = -46; if (this.vy < 0) this.vy = 0; }
+    // High enough that a roll-launch has a real arc in it; the sky camera opens
+    // up to follow, so the ceiling is about physics, not about the frame.
+    if (this.py < -150) { this.py = -150; if (this.vy < 0) this.vy = 0; }
 
     // ---- the sand is solid ------------------------------------------------------
     // A soft stop, not a wall: he beds into it, keeps his sideways momentum (sand
@@ -1201,6 +1277,16 @@ const Ocean = {
 
     // breaking the surface, in either direction
     if (wasAbove !== (this.py < 0) && Math.abs(this.vy) > 45) {
+      // THE LAUNCH. A spin roll carried through the surface keeps its energy and
+      // gets more: the roll becomes a leap. This is the one place speed is added
+      // rather than bled, and it is gated on the roll so an ordinary ascent still
+      // breaches like a swimmer and not like a missile.
+      if (!wasAbove && this.rollT > 0 && this.vy < 0) {
+        this.vy = -clamp(Math.abs(this.vy) * 1.5, 200, 300);
+        this.rollT = Math.max(this.rollT, 0.45);   // keep spinning through the arc
+        this._drip(this.px, -2, 10, 160);
+        this._ring(this.px, 0, 4, 260);
+      }
       this.splashT = 0.45;
       this._puff(this.px, 0, 9, 70);
       this._ring(this.px, 0, 3, 200);
@@ -1308,6 +1394,7 @@ const Ocean = {
   },
 
   _particles(dt) {
+    this._bokehTick(dt);
     // bubbles rise, wobble and expire
     for (let i = 0; i < this.bubbles.length; i++) {
       const b = this.bubbles[i];
@@ -1415,9 +1502,13 @@ const Ocean = {
     // clear of the sea it opens to nearly two thirds of the frame, so a breach
     // shows real sky instead of a blue ceiling. `_sky` is lerped and the camera
     // itself eases, so the two treatments cross over continuously: there is no cut.
-    const airK = clamp(-this.py / 26, 0, 1);
+    // The sky share starts opening BEFORE he leaves the water: swimming along the
+    // top at py~0 already gives about a third of the frame to the sky, so the
+    // surface is a place you can look around from, not a ceiling you hug. A full
+    // launch still opens it to nearly two thirds.
+    const airK = clamp((10 - this.py) / 44, 0, 1);
     this._sky = lerp(this._sky, airK, clamp(dt * 3.2, 0, 1));
-    const lift = lerp(H * 0.24, H * 0.62, this._sky);
+    const lift = lerp(H * 0.24, H * 0.66, this._sky);
     const k = 1 - Math.pow(0.0025, dt);
     this.camX += (tx - this.camX) * k;
     this.camY += (Math.max(ty, -lift) - this.camY) * k;
@@ -1549,6 +1640,17 @@ const Ocean = {
     const c = cv.getContext('2d');
     c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
     c.drawImage(img, 0, 0, pw, ph);
+    // sea_mid is a JPEG: no alpha, its own flat water behind the reef. Drawn
+    // as-is the tile's top edge is a razor line of the WRONG blue -- the slab
+    // artifact. Fade the top half out (baked once, so the gradient is allowed)
+    // and the silhouettes rise out of open water instead.
+    const g = c.createLinearGradient(0, 0, 0, ph);
+    g.addColorStop(0, 'rgba(0,0,0,1)');
+    g.addColorStop(0.55, 'rgba(0,0,0,0)');
+    c.globalCompositeOperation = 'destination-out';
+    c.fillStyle = g;
+    c.fillRect(0, 0, pw, ph);
+    c.globalCompositeOperation = 'source-over';
     this._midCv = cv;
     this._midW = lw;
     return cv;
@@ -1737,6 +1839,7 @@ const Ocean = {
     }
     this._drawSurfaceLine(ctx, t);
     this._drawRays(ctx, t);
+    this._drawSunGlow(ctx, t);
     // The seabed is the one crisp thing in the distance, so it lands on the main
     // context rather than in the half-res backdrop -- and it goes down AFTER the
     // rays, because light shafts stop at the sand.
@@ -1748,10 +1851,12 @@ const Ocean = {
     this._drawSpills(ctx);
     this._drawOtto(ctx, t);
     this._drawProps(ctx, t, true);
+    this._drawForeground(ctx, t);
     this._drawCaustics(ctx, t);
     this._drawRings(ctx);
     this._drawSurfaceFoam(ctx, t);
     this._drawDeepTint(ctx);
+    this._drawBokeh(ctx, t);
 
     ctx.restore();
 
@@ -2450,13 +2555,15 @@ const Ocean = {
   // makes a lit lip, a pale sand band and a dark mass out of three fill calls
   // instead of a clip or a gradient.
 
-  // The colour of sand at depth y. Warm shell sand in the lagoon, cold grey silt
-  // out on the plain, and then fogged toward the water's own colour -- because
-  // sand that keeps its contrast at 2000 units down reads as a painted backdrop,
-  // and the fog is the only thing that puts air (water) between you and it.
-  _sandAt(y) {
+  // The colour of sand HERE: the zone's own palette (shell-warm lagoon, green-grey
+  // kelp shelf, basalt ridge, bone-pale abyss), pulled toward grey with depth and
+  // then fogged toward the water's own colour -- because sand that keeps its
+  // contrast at 2000 units down reads as a painted backdrop, and the fog is the
+  // only thing that puts water between you and it.
+  _sandAt(x, y) {
+    const z = this.zoneAt(x);
     const d = clamp(y / this.DEEP, 0, 1);
-    const warm = rgbLerp([224, 206, 163], [94, 102, 114], d * d * (3 - 2 * d));
+    const warm = rgbLerp(z.sand, [94, 102, 114], d * d * (3 - 2 * d) * 0.7);
     let c = rgbLerp(warm, this._tintAt(y), 0.20 + d * 0.42);
     const nf = this._nightF();
     if (nf > 0) c = rgbLerp(c, [8, 16, 36], nf * 0.5);
@@ -2532,8 +2639,9 @@ const Ocean = {
 
     // One depth drives the whole palette for this frame: sampling per-pixel would
     // mean a gradient, and the frame cannot afford one.
-    const fy = this.floorAt(this.camX + W * 0.5);
-    const sand = this._sandAt(fy);
+    const fx = this.camX + W * 0.5;
+    const fy = this.floorAt(fx);
+    const sand = this._sandAt(fx, fy);
     // how much surface light still reaches this sand -- the lip is only bright
     // while there is something up there to light it
     const light = clamp(1 - Math.max(0, fy) / (this.LIGHT_END * 2.4), 0, 1) * (1 - this._nightF());
@@ -2701,6 +2809,143 @@ const Ocean = {
     ctx.restore();
   },
 
+  // ---- the near plane -----------------------------------------------------------
+  // Oversized dark fronds rooted on the sand, drawn IN FRONT of Otto: the third
+  // plane of the composition (far ridges / playfield / these). Stroked, not
+  // blitted -- a stroke per strand with a leaf or two is a dozen path ops per
+  // column and reads as an out-of-focus plant precisely because it has no texture.
+  _drawForeground(ctx, t) {
+    if (this.quality <= 0) return;
+    const tint = this._tintAt(this.camY + H * 0.7);
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = cssRGB(rgbLerp([12, 30, 30], tint, 0.42));
+    this._eachFloorCol((c) => {
+      if (!c.fg || !c.fg.length) return;
+      for (let i = 0; i < c.fg.length; i++) {
+        const f = c.fg[i];
+        const bx = f.x - this.camX;
+        if (bx < -60 || bx > W + 60) continue;
+        const by = this.floorAt(f.x) - this.camY + 3;
+        if (by < -20 || by - f.h > H + 20) continue;
+        const sway = Math.sin(t * 0.55 + f.ph) * 16 + f.lean * 30;
+        ctx.globalAlpha = 0.34;
+        ctx.lineWidth = f.w;
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.quadraticCurveTo(bx + sway * 0.3, by - f.h * 0.55, bx + sway, by - f.h);
+        ctx.stroke();
+        // a couple of side leaves off the stem, thinner and shorter
+        ctx.lineWidth = f.w * 0.55;
+        ctx.globalAlpha = 0.26;
+        for (let l = 0; l < f.leaf; l++) {
+          const u = 0.3 + l * (0.5 / f.leaf);
+          const lx = bx + sway * u * 0.55, ly = by - f.h * u;
+          const dir = (l & 1) ? 1 : -1;
+          ctx.beginPath();
+          ctx.moveTo(lx, ly);
+          ctx.quadraticCurveTo(lx + dir * 10, ly - 8, lx + dir * 15 + sway * 0.2, ly - 17);
+          ctx.stroke();
+        }
+      }
+    });
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  },
+
+  // ---- the sun, underwater --------------------------------------------------------
+  // A soft ball of light hanging at the water line where the sky's sun is, fading
+  // with depth and daylight. The gradient is baked ONCE; per frame it is a single
+  // small additive blit.
+  _sunGlowCv() {
+    if (this._glowCv) return this._glowCv;
+    const q = DPX / 2, R = 70;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = Math.round(R * 2 * q);
+    const c = cv.getContext('2d');
+    const g = c.createRadialGradient(R * q, R * q, 2, R * q, R * q, R * q);
+    g.addColorStop(0, 'rgba(255,244,200,0.55)');
+    g.addColorStop(0.35, 'rgba(255,238,180,0.22)');
+    g.addColorStop(1, 'rgba(255,238,180,0)');
+    c.fillStyle = g;
+    c.fillRect(0, 0, cv.width, cv.height);
+    this._glowCv = cv;
+    return cv;
+  },
+
+  _drawSunGlow(ctx, t) {
+    if (typeof G === 'undefined' || !G) return;
+    const clock = G.clock;
+    const isDay = clock > 0.09 && clock < 0.72;
+    if (!isDay) return;
+    const fade = clamp(1 - Math.max(0, this.camY) / (this.LIGHT_END * 0.9), 0, 1)
+               * (1 - this._nightF());
+    if (fade <= 0.03) return;
+    const cv = this._sunGlowCv();
+    // the same arc _drawSky puts the sun on, so the glow hangs under the sun
+    const tt = (clock - 0.09) / 0.63;
+    const bx = 44 + tt * (W - 88);
+    const by = -this.camY + 8;
+    const R = 70;
+    ctx.save();
+    const sm = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.7 * fade * (0.85 + 0.15 * Math.sin(t * 0.7));
+    ctx.drawImage(cv, bx - R, by - R * 0.6, R * 2, R * 2);
+    ctx.imageSmoothingEnabled = sm;
+    ctx.restore();
+  },
+
+  // ---- lens bokeh -------------------------------------------------------------------
+  // A few large, faint discs of light drifting over the frame: the "underwater
+  // blur". They live on the lens, not in the world -- screen space, slow drift,
+  // wrapping at the edges -- and each one is a blit of the one baked soft circle.
+  _bokehInit() {
+    const rng = mulberry32(0xB0CE);
+    this._bok = [];
+    for (let i = 0; i < 9; i++) {
+      this._bok.push({
+        x: rng() * W, y: rng() * H,
+        r: 14 + rng() * 30,
+        vx: (rng() - 0.5) * 3.4, vy: -1 - rng() * 2.2,
+        ph: rng() * TAU,
+      });
+    }
+  },
+
+  _drawBokeh(ctx, t) {
+    if (this.quality <= 0) return;
+    const d = this.depthFrac();
+    // strongest in the sunlit band, still present (dimmer, slower-reading) deep
+    const base = (0.05 + 0.05 * (1 - d)) * (1 - this._nightF() * 0.7);
+    if (base <= 0.015) return;
+    if (!this._bok) this._bokehInit();
+    const cv = this._sunGlowCv();          // the same soft disc works for both
+    ctx.save();
+    const sm = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < this._bok.length; i++) {
+      const b = this._bok[i];
+      ctx.globalAlpha = base * (0.6 + 0.4 * Math.sin(t * 0.4 + b.ph));
+      ctx.drawImage(cv, b.x - b.r, b.y - b.r, b.r * 2, b.r * 2);
+    }
+    ctx.imageSmoothingEnabled = sm;
+    ctx.restore();
+  },
+
+  _bokehTick(dt) {
+    if (!this._bok) return;
+    for (let i = 0; i < this._bok.length; i++) {
+      const b = this._bok[i];
+      b.x += (b.vx - this.vx * 0.012) * dt;
+      b.y += (b.vy - this.vy * 0.012) * dt;
+      if (b.x < -b.r) b.x = W + b.r; else if (b.x > W + b.r) b.x = -b.r;
+      if (b.y < -b.r) b.y = H + b.r; else if (b.y > H + b.r) b.y = -b.r;
+    }
+  },
+
   // Water thrown off a breach, and silt kicked off the bottom. Two buckets, two
   // fillStyle writes: the tone is baked in at spawn precisely so this loop never
   // has to decide anything.
@@ -2720,7 +2965,7 @@ const Ocean = {
       ctx.fillRect(sx - d.r / 2, sy - d.r, d.r, d.r * 2.2);
     }
 
-    ctx.fillStyle = cssRGB(rgbLerp(this._sandAt(this.floorAt(this.px)), [255, 255, 255], 0.2));
+    ctx.fillStyle = cssRGB(rgbLerp(this._sandAt(this.px, this.floorAt(this.px)), [255, 255, 255], 0.2));
     for (let i = 0; i < this.drops.length; i++) {
       const d = this.drops[i];
       if (d.t <= 0 || d.tone !== 1) continue;

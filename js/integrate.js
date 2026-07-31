@@ -16,7 +16,7 @@
   // Resolve them through a try so a missing module is just undefined.
   const M = {};
   for (const n of ['Farm', 'Hotbar', 'NPCs', 'Craft', 'Battle', 'Stock', 'DiveFX',
-                 'Ocean', 'Mining', 'Inv', 'Skills', 'Tame', 'Hood']) {
+                 'Ocean', 'Mining', 'Inv', 'Skills', 'Tame', 'Hood', 'MapChart']) {
     try { M[n] = eval(n); } catch (e) { M[n] = undefined; }
   }
 
@@ -25,47 +25,66 @@
   // things closer than that fight and the first one registered always wins. This
   // is the single place that owns who stands where, spaced so nothing collides:
   //
-  // The pier is a fixed 642 units (world.js PIER_END) and the jump-in sits at its
-  // one edge, so the whole deck is laid out ONCE, on a 26-unit grid, with three
-  // 52-unit LANES deliberately left empty. Every module that puts something on the
-  // planks publishes its position, so this is the single place that decides:
+  // The pier is a fixed 300 units now (world.js PIER_END) — Otto's porch, not a
+  // high street — laid out ONCE on a 26-unit grid:
   //
-  //    30 piling dive |  56 house     |  82 Marlow    | 108 Sprout's stall
-  //   134 Sprout      | 160 ClamNet   | 186 Fintan    | 212 workbench
-  //   238 craft bench | (290 LANE)    | 316..368 open | (420 LANE)
-  //   446 tide pool   | 472,498 pens  | (550,576 LANE)
-  //   628 jump in       [pier edge, endX() - 14]
+  //    30 piling dive |  56 house | 82 VISITOR POST | 108 tide pool
+  //   134,160 pens    | 186 cannon | (212..262 LANE) | 286 jump in [pier edge]
   //
-  // 316..368 used to be the farm beds. Farming happens on the SEABED now (farm.js
-  // owns that layout in OCEAN world x), so that stretch of deck is simply empty —
-  // it is NOT a Forge lane, and nothing else may move into it without re-checking
-  // the 22-unit [E] radius against both neighbours.
+  // Every pair is >= 26 apart (the [E] radius is 22). The 212..262 stretch and
+  // the visitor post when empty are where crafted tables can be put down
+  // (Forge.MIN_GAP is 24, and tables cluster at TABLE_GAP among themselves, so
+  // the whole workshop fits in the one lane). ClamNet moved into the house;
+  // the workbench and crafting bench are Forge tables now; the stall's stock is
+  // the STALL tab of the same shop; the farm is on the seabed.
   //
-  // Every pair is >= 26 apart — the [E] search radius is 22, so 26 leaves four
-  // units of slack rather than sitting on the boundary. The bracketed lanes are
-  // >= 24 from both neighbours, which is Forge.MIN_GAP: they are where a crafted
-  // workbench / sawmill / furnace / smithy can legally be put down. Without them
-  // the "craft a table and place it" feature has nowhere on the deck to go.
-  const STALL_X = 108;
-  if (M.NPCs && M.NPCs.LIST) {
-    const at = { angler: 82, farmer: 134, prof: 186 };
-    for (const n of M.NPCs.LIST) if (at[n.key] !== undefined) n.x = at[n.key];
+  // THE VISITOR POST (82). The neighbours do not live on Otto's dock — they live
+  // at their own homes out at sea (js/hood.js). One of them drops by some
+  // mornings and stands at the post; the rest of the time the deck is yours.
+  // Fintan plays guide and holds the post for the first two days.
+  const visitorNow = () => {
+    if (typeof G === 'undefined' || !G) return null;
+    if (G.day <= 2) return 'prof';
+    if (G.clock < 0.16 || G.clock > 0.55) return null;   // home by dusk
+    const rota = ['farmer', 'angler', null, 'prof', null];  // gaps: some days nobody comes
+    return rota[G.day % rota.length];
+  };
+  if (M.NPCs && M.NPCs.LIST && M.NPCs.spots && M.NPCs.drawWorld) {
+    const all = M.NPCs.LIST.slice();
+    const pick = () => {
+      const v = visitorNow();
+      for (const n of all) if (n.key === v) { n.x = 82; return [n]; }
+      return [];
+    };
+    const nspots = M.NPCs.spots.bind(M.NPCs);
+    M.NPCs.spots = function () {
+      const keep = this.LIST; this.LIST = pick();
+      const r = nspots(); this.LIST = keep; return r;
+    };
+    const ndraw = M.NPCs.drawWorld.bind(M.NPCs);
+    M.NPCs.drawWorld = function (c, camX) {
+      const keep = this.LIST; this.LIST = pick();
+      const r = ndraw(c, camX); this.LIST = keep; return r;
+    };
   }
   // The farm beds are gone from the deck for good: PLOT_DEF is OCEAN world x now
   // and farm.js owns it (52-unit spacing against its swim REACH, gated on
   // G.bridge). Overriding it here with deck-grid numbers put beds 26 apart in the
   // water — two inside one reach — so the integrator keeps its hands off it.
   if (M.Stock && M.Stock.PEN_DEF) {
-    const pens = [{ x: 472, sx: 472, b: 3 }, { x: 498, sx: 498, b: 3 }];
+    const pens = [{ x: 134, sx: 134, b: 3 }, { x: 160, sx: 160, b: 3 }];
     M.Stock.PEN_DEF.length = 0;
     for (const p of pens) M.Stock.PEN_DEF.push(p);
     if (M.Stock.MAX_PENS > pens.length) M.Stock.MAX_PENS = pens.length;
   }
-  if (M.Battle) M.Battle.CANNON_X = 186;   // the fight happens amidships, by Fintan
-  if (M.Craft && M.Craft.SITES && M.Craft.SITES.bench) M.Craft.SITES.bench.x = 238;
-  // Tame publishes its tide pool as a single SITE; it lands between the last bed
-  // and the first pen, which is the only place a rock pool makes sense anyway.
-  if (M.Tame && M.Tame.SITE) M.Tame.SITE.x = 446;
+  if (M.Battle) M.Battle.CANNON_X = 186;
+  // Craft's bench is a Forge table now ('cook'), crafted and placed by the
+  // player. Parking every one of Craft's decor SITES off-board keeps its dock
+  // draw from painting fixtures past the new pier end.
+  if (M.Craft && M.Craft.SITES) {
+    for (const k in M.Craft.SITES) M.Craft.SITES[k].x = -1;
+  }
+  if (M.Tame && M.Tame.SITE) M.Tame.SITE.x = 108;
 
   // ---- the deck's interaction list ---------------------------------------------
   // Every system that puts something on the dock contributes spots; the world
@@ -77,7 +96,7 @@
     let s = worldSpots();
     if (M.NPCs && M.NPCs.spots) s = s.concat(M.NPCs.spots());
     if (M.Stock && M.Stock.spots) s = s.concat(M.Stock.spots());
-    if (M.Craft && M.Craft.spots) s = s.concat(M.Craft.spots());
+    if (M.Craft && M.Craft.spots) s = s.concat(M.Craft.spots().filter(v => v.x > 0));
     if (M.Battle && M.Battle.spots) s = s.concat(M.Battle.spots());
     if (M.Farm && M.Farm.spots) s = s.concat(M.Farm.spots());
     return s;
@@ -126,7 +145,8 @@
   const modalUp = () => (M.Craft && M.Craft.open) || (M.NPCs && M.NPCs.open) ||
                         (M.Stock && M.Stock.open) || (M.Battle && M.Battle.active) ||
                         (M.Inv && M.Inv.open) || (M.Skills && M.Skills.open) ||
-                        (M.Tame && M.Tame.open) || (M.Farm && M.Farm.open);
+                        (M.Tame && M.Tame.open) || (M.Farm && M.Farm.open) ||
+                        (M.MapChart && M.MapChart.open);
 
   const gUpdate = Game.globalUpdate.bind(Game);
   Game.globalUpdate = function (dt) {
@@ -164,21 +184,9 @@
     return gGo(scene, arg);
   };
 
-  // ---- the seed and stock stall ------------------------------------------------------
-  // ClamNet sells what you have caught; Sprout's stall is where you BUY the things
-  // that start a production chain — seeds, and the animals themselves.
-  if (M.Farm || M.Stock) {
-    WorldScene.spots = (function (prev) {
-      return function () {
-        const s = prev.call(this);
-        s.push({
-          x: STALL_X, label: "Sprout's Stall  (seeds & stock)",
-          act: () => { if (typeof Shop !== 'undefined') { Shop.openUI(); Shop.tab = Shop.STALL_TAB || 1; } },
-        });
-        return s;
-      };
-    })(WorldScene.spots);
-  }
+  // (Sprout's stall no longer stands on the deck: its stock IS the STALL tab of
+  // the shop, and the shop is the ClamNet terminal inside the house now. One
+  // storefront, indoors, instead of a laptop and a cart nailed to the planks.)
 
   // ---- what you start the game holding --------------------------------------------------
   // Once per save, not per boot: the flag lives in G so a player who rearranges or

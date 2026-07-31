@@ -253,6 +253,23 @@ const Forge = {
       w: 23, hand: false, need: 'bench', cost: { ingot: 4, beam: 1, stone: 6 }, xp: 24,
       desc: 'Anvil and tongs, out of iron the furnace made.',
     },
+    // These two are not Inv stations: `opens` names the module whose UI a placed
+    // one hosts (see use()). They used to ship free on the deck; now the shell
+    // bench is the FIRST thing a new game builds -- hand-craftable, cheap, no
+    // skill node -- because cracking shells is the money loop and day one has to
+    // reach it with two pieces of driftwood and a stone.
+    {
+      key: 'crack', art: 'workbench', name: 'Shell Workbench', short: 'Shell Bench',
+      w: 26, hand: true, need: null, cost: { driftwood: 2, stone: 1 }, xp: 8,
+      opens: 'Bench', verb: 'crack & polish',
+      desc: 'Crack and polish the day\'s haul. The farm starts and ends here.',
+    },
+    {
+      key: 'cook', art: 'furn_2', name: 'Galley Bench', short: 'Galley',
+      w: 24, hand: true, need: null, cost: { driftwood: 3, rope: 1 }, xp: 10,
+      opens: 'Craft', verb: 'make & cook',
+      desc: 'A flat top, a tool rack, and room for a pot. Dinner happens here.',
+    },
   ],
 
   // ==== state ===============================================================
@@ -752,7 +769,7 @@ const Forge = {
       // `forge` marks it as ours, so placeWhy can tell "another table" (small gap)
       // from "somebody else's spot" (full gap) without string-matching labels.
       forge: true,
-      label: t.short + '  (' + (st ? st.verb : 'use') + ')',
+      label: t.short + '  (' + (t.verb || (st ? st.verb : 'use')) + ')',
       act: function () { self.use(t.key, idx); },
     };
   },
@@ -761,6 +778,12 @@ const Forge = {
   // hands straight over to Inv; with no Inv there is still the build menu.
   use: function (key, idx) {
     if (!this.ensure()) return false;
+    // A table that hosts another module's UI rather than an Inv station: the
+    // shell workbench opens Bench, the galley opens Craft. Placed is placed --
+    // the deck fixture and the panel it opens are the same object either way.
+    var t = this.table(key);
+    if (t && t.opens === 'Bench' && typeof Bench !== 'undefined') { Bench.openUI(); return true; }
+    if (t && t.opens === 'Craft' && typeof Craft !== 'undefined') { Craft.openUI(); return true; }
     var I = this._I();
     if (I && I.station) {
       if (I.station(key)) return true;
