@@ -478,7 +478,15 @@ const Mining = {
   },
 
   // ---------------------------------------------------------- generation ------
-  depthFrac: function (y) {
+  // Where a node sits in the tier ladder, 0..1. With a flat shallow seabed under
+  // the scene, y stopped sorting anything -- everything is within 430 units of the
+  // surface -- so the ranking is DISTANCE FROM HOME when the scene publishes one.
+  // Gold and crystal are a long swim out rather than a deep dive down, which is
+  // also what the named zones already promise.
+  depthFrac: function (y, x) {
+    if (x !== undefined && typeof Ocean !== 'undefined' && Ocean && Ocean.remoteFrac) {
+      return Ocean.remoteFrac(x);
+    }
     var f = y / this.DEEP_MAX;
     return f < 0 ? 0 : (f > 1 ? 1 : f);
   },
@@ -514,7 +522,7 @@ const Mining = {
     if (chunkY < 0) return out;                 // nothing to mine above the surface
     var rng = mulberry32(this._hash(chunkX, chunkY, seed === undefined ? this.seed : seed));
     var baseY = chunkY * this.CHUNK_H, baseX = chunkX * this.CHUNK_W;
-    var df0 = this.depthFrac(baseY);
+    var df0 = this.depthFrac(baseY, baseX + this.CHUNK_W * 0.5);
     // Deeper water is a little denser; the surface layer stays sparse so the
     // first screen never reads as a quarry.
     var count = 2 + Math.floor(rng() * (df0 > 0.25 ? 3 : 2));
@@ -549,7 +557,7 @@ const Mining = {
         y = fy;
       }
 
-      df = this.depthFrac(y);
+      df = this.depthFrac(y, x);
       pairs = [];
       for (j = 0; j < this.KINDS.length; j++) {
         k = this.KINDS[j];

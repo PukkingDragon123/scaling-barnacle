@@ -1,10 +1,12 @@
 // ---- surface world: painted sea, modular dock, Otto's stilt house -------------
 'use strict';
 
+// DAY/NIGHT IS OFF. Every scene, prop, house and creature dims itself by this one
+// number, and the dark half of the cycle was draining the colour out of art that
+// is meant to be bright. Returning a constant 0 pins the whole world at noon in a
+// single place -- no call site had to be touched, and turning the cycle back on
+// later is restoring this function body.
 function nightness(clock) {
-  if (clock > 0.74 || clock < 0.02) return 1;
-  if (clock >= 0.62 && clock <= 0.74) return (clock - 0.62) / 0.12;
-  if (clock >= 0.02 && clock <= 0.14) return 1 - (clock - 0.02) / 0.12;
   return 0;
 }
 

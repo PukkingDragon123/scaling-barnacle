@@ -79,8 +79,10 @@ const Ocean = {
   // ---- world tuning -----------------------------------------------------------
   CW: 512, CH: 320,       // chunk size in world units
   CHUNK_CAP: 96,          // cached chunks; eviction is free, they regenerate
-  DEEP: 2400,             // world y where the palette bottoms out
-  LIGHT_END: 520,         // world y where surface light (rays, caustics) is gone
+  // The sea is a shallow flat shelf now, so both of these come in with it or the
+  // palette never leaves its first stop and the light never fades at all.
+  DEEP: 520,              // world y where the palette bottoms out
+  LIGHT_END: 420,         // world y where surface light (rays, caustics) is gone
   FAR_W: 648,             // on-screen width of one far-layer copy (1.35 screens)
   MID_H: 60, MID_GAP: 560,
   // The layer speeds, and the whole depth read: far 0.16, mid 0.55, the props
@@ -103,28 +105,30 @@ const Ocean = {
   // The base line itself comes from SPINE: control points (x, depth) smoothstepped
   // in between. It is authored, not derived — the trench is where the trench is.
   ZONES: [
-    { x0: -99999, x1: -2400, key: 'deepwest', name: 'The Dark Shoulder', relief: 60,
+    { x0: -99999, x1: -2400, key: 'deepwest', name: 'The Dark Shoulder', relief: 7,
       sand: [96, 104, 120], mix: [['thicket', 1], ['ridge', 1.6], ['sparse', 3]] },
-    { x0: -2400, x1: -700, key: 'kelp', name: 'Kelp Shelf', relief: 44,
+    { x0: -2400, x1: -700, key: 'kelp', name: 'Kelp Shelf', relief: 7,
       sand: [148, 158, 128], mix: [['thicket', 4], ['garden', 1], ['sparse', 1]] },
-    { x0: -700, x1: 700, key: 'lagoon', name: 'Otter Lagoon', relief: 20,
+    { x0: -700, x1: 700, key: 'lagoon', name: 'Otter Lagoon', relief: 7,
       sand: [226, 206, 160], mix: [['garden', 2.4], ['sparse', 1.4], ['rubble', 0.8]] },
-    { x0: 700, x1: 2500, key: 'gardens', name: 'Coral Gardens', relief: 46,
+    { x0: 700, x1: 2500, key: 'gardens', name: 'Coral Gardens', relief: 7,
       sand: [214, 178, 158], mix: [['garden', 4], ['thicket', 1.4], ['rubble', 1]] },
-    { x0: 2500, x1: 4600, key: 'ridge', name: 'Dragonback Ridge', relief: 150,
+    { x0: 2500, x1: 4600, key: 'ridge', name: 'Dragonback Ridge', relief: 7,
       sand: [104, 96, 104], mix: [['ridge', 3.4], ['rubble', 1.6], ['sparse', 1]] },
-    { x0: 4600, x1: 6200, key: 'trench', name: 'The Trench', relief: 90,
+    { x0: 4600, x1: 6200, key: 'trench', name: 'The Trench', relief: 7,
       sand: [64, 72, 96], mix: [['ridge', 1.4], ['sparse', 3.4]] },
-    { x0: 6200, x1: 99999, key: 'abyss', name: 'Abyssal Plain', relief: 30,
+    { x0: 6200, x1: 99999, key: 'abyss', name: 'Abyssal Plain', relief: 7,
       sand: [140, 138, 148], mix: [['sparse', 4], ['rubble', 1], ['ridge', 0.6]] },
   ],
+  // FLAT. The seabed is a gentle shelf and nothing more: it drops away from the
+  // pilings and then runs level. The hills, trenches and seamounts read as noise
+  // rather than as terrain at this scale, and a floor that heaves under a
+  // side-scroller mostly gets in the way of swimming. Relief is a couple of units
+  // of drift so the line is not a ruler.
   SPINE: [
-    [-9000, 640], [-4200, 560], [-2400, 470], [-1500, 360], [-700, 285],
-    [-250, 235], [0, 228], [250, 238], [700, 330], [1500, 440], [2500, 640],
-    [3300, 900], [4100, 1180], [4600, 1500], [5000, 2450], [5400, 2950],
-    [6200, 2760], [7400, 2900], [9999, 3000],
-  ],
-  FLOOR_TOP: 230,         // shallowest sand, right off the pilings (lagoon floor)
+    [-9000, 430], [-2400, 400], [-900, 360], [-300, 330], [0, 320],
+    [300, 330], [900, 360], [2400, 400], [9999, 430],
+  ],  FLOOR_TOP: 230,         // shallowest sand, right off the pilings (lagoon floor)
   FLOOR_DEEP: 3000,       // the trench bottom; depthFrac and fog max out here
   FLOOR_STEP: 8,          // world units between cached profile samples
   FLOOR_CLEAR: 9,         // how close Otto's centre may get to the sand
@@ -643,14 +647,6 @@ const Ocean = {
             + (this._vn(x / 165 + 41.7) - 0.5) * 0.2;
     let y = base + n * z.relief;
 
-    // The ridge zone gets SEAMOUNTS: broad humps that rise hundreds of units off
-    // the base, so the skyline out there is towers and saddles instead of a
-    // slope. One low-frequency term, thresholded so most of the zone is base and
-    // the peaks are events. Clamped so no peak ever nears the surface.
-    if (z.key === 'ridge') {
-      const m = this._vn(x / 640 + 77.7);
-      if (m > 0.56) y -= (m - 0.56) * 2100;
-    }
     return Math.max(150, y);
   },
 
@@ -686,79 +682,11 @@ const Ocean = {
     const kind = weightedPick(zone.mix, rng());
     const rocky = kind === 'ridge' || kind === 'rubble';
 
-    // Ripples in the sand: short dashes lying along the line. `o` is how far below
-    // the lip they sit, so they read as surface texture and not as debris.
-    const ripples = [];
-    const nr = 7 + ((rng() * 11) | 0);
-    for (let i = 0; i < nr; i++) {
-      ripples.push({
-        x: x0 + rng() * this.CW,
-        w: 5 + rng() * 15,
-        o: 1.4 + rng() * (this.FLOOR_SAND - 2),
-        a: 0.05 + rng() * 0.1,
-      });
-    }
-    // Pebbles: two tones, so the whole field is two fillStyle writes.
-    const pebbles = [];
-    const np = (rocky ? 20 : 9) + ((rng() * 18) | 0);
-    for (let i = 0; i < np; i++) {
-      pebbles.push({
-        x: x0 + rng() * this.CW,
-        r: 0.7 + rng() * (rocky ? 2.3 : 1.4),
-        o: rng() * 4.5,
-        tone: rng() < 0.38 ? 1 : 0,
-      });
-    }
-    // Boulders: half-domes bedded into the sand. Procedural rather than art, so
-    // they are always exactly the sand's own colour at this depth.
-    const boulders = [];
-    const nb = rocky ? 2 + ((rng() * 4) | 0) : ((rng() * 2.4) | 0);
-    for (let i = 0; i < nb; i++) {
-      const w = 11 + rng() * 26;
-      boulders.push({ x: x0 + rng() * this.CW, w, h: w * (0.3 + rng() * 0.32), flip: rng() < 0.5 });
-    }
-
-    // A landmark every few columns: something big enough to navigate by. Height is
-    // capped against the local depth so an arch never pokes through the surface.
-    let mark = null;
-    if (rng() < 0.36) {
-      const type = weightedPick([['arch', 1.1], ['kelp', 1.5 - band], ['rib', 0.7 + band * 0.6]], rng());
-      const room = Math.max(40, mid * 0.62);
-      const mx = x0 + 40 + rng() * (this.CW - 80);
-      if (type === 'kelp') {
-        // A forest, not a plant: enough strands to occlude, few enough to stroke.
-        const h = Math.min(150, room);
-        const strands = [];
-        const ns = 8 + ((rng() * 7) | 0);
-        for (let i = 0; i < ns; i++) {
-          strands.push({
-            dx: (rng() - 0.5) * 78,
-            h: h * (0.5 + rng() * 0.5),
-            ph: rng() * TAU,
-            lean: (rng() - 0.5) * 0.5,
-            w: 1.4 + rng() * 1.6,
-          });
-        }
-        mark = { type, x: mx, strands };
-      } else if (type === 'arch') {
-        const h = Math.min(128, room);
-        mark = {
-          type, x: mx, h,
-          w: h * (0.7 + rng() * 0.5),
-          lw: 7 + rng() * 7,
-          thick: 8 + rng() * 7,
-          flip: rng() < 0.5,
-        };
-      } else {
-        const h = Math.min(74, room * 0.6);
-        const ribs = [];
-        const nrib = 4 + ((rng() * 4) | 0);
-        for (let i = 0; i < nrib; i++) {
-          ribs.push({ dx: (i - (nrib - 1) / 2) * (9 + rng() * 5), h: h * (0.45 + rng() * 0.55), bend: (rng() - 0.5) * 0.9 });
-        }
-        mark = { type, x: mx, h, span: nrib * 12, ribs, flip: rng() < 0.5 };
-      }
-    }
+    // NO CODED SCENERY. The ripples, pebbles, boulders, rock arches, kelp forests
+    // and whale ribs that used to be generated here are gone. Every one of them
+    // was drawn with paths rather than art, and against the uploaded sprites they
+    // read exactly as what they were -- procedural filler. The sand is a clean
+    // line now, and everything standing on it is a sprite the player drew.
 
     // The FOREGROUND: a handful of oversized, dark, translucent fronds rooted on
     // this column's own sand, drawn in front of Otto. They are the near plane of
@@ -782,10 +710,7 @@ const Ocean = {
       }
     }
 
-    const c = {
-      ci: key, x0, step, n, y: ys, lo, hi, mid, band, kind, zone,
-      ripples, pebbles, boulders, mark, fg, ext: {},
-    };
+    const c = { ci: key, x0, step, n, y: ys, lo, hi, mid, band, kind, zone, fg, ext: {} };
     this._cols.set(key, c);
     this._colOrder.push(key);
     while (this._colOrder.length > this.COL_CAP) {
@@ -812,6 +737,17 @@ const Ocean = {
 
   // how far Otto is off the bottom, in world units (negative means he is in it)
   altitude() { return this.floorAt(this.px) - this.py; },
+
+  // DISTANCE IS THE NEW DEPTH. The seabed is flat and shallow, so "how deep am I"
+  // no longer sorts the world -- how far from home does. Every system that used
+  // to rank its content by y (ore bands, species bands) reads this instead, and
+  // the zones in ZONES are the same axis expressed as names. 0 at the pilings,
+  // 1 out past the abyssal plain.
+  REMOTE_RUN: 6800,
+  remoteFrac(x) {
+    const v = Math.abs(x === undefined ? this.px : x) / this.REMOTE_RUN;
+    return v < 0 ? 0 : (v > 1 ? 1 : v);
+  },
 
   // =============================================================================
   // CHUNKS -- the endless world
@@ -896,7 +832,11 @@ const Ocean = {
         stiff: shell ? 1 : soft ? 0.16 + rng() * 0.22 : 0.7 + rng() * 0.26,
         ph: rng() * TAU,
         flip: rng() < 0.5,
-        dim: (front ? 0.9 + rng() * 0.1 : 0.52 + rng() * 0.3) * (1 - band * 0.34),
+        // BRIGHT. These used to be multiplied down by depth and again by night,
+        // and the two together drained the colour out of art that is already
+        // painted with its own shading. The back row stays a little softer than
+        // the near row -- that is depth -- but nothing is washed out any more.
+        dim: front ? 1 : 0.82 + rng() * 0.18,
         wreck: false,
         rot: 0,
       });
@@ -923,7 +863,7 @@ const Ocean = {
         stiff: 1,
         ph: rng() * TAU,
         flip: rng() < 0.5,
-        dim: (0.7 + rng() * 0.25) * (1 - band * 0.45),
+        dim: 0.9 + rng() * 0.1,
         wreck: false,
         rot: (rng() - 0.5) * 1.2,                 // its own resting angle
       });
@@ -939,7 +879,7 @@ const Ocean = {
           art: 'ship', x, y: fy,
           s: 190 + rng() * 90, front: false, base: true, sink: 10 + rng() * 16,
           stiff: 1, ph: rng() * TAU, flip: rng() < 0.5,
-          dim: 0.5 + rng() * 0.22, wreck: true, rot: 0,
+          dim: 0.72 + rng() * 0.18, wreck: true, rot: 0,
         });
       }
     }
@@ -1639,7 +1579,10 @@ const Ocean = {
     cv.width = pw; cv.height = ph;
     const c = cv.getContext('2d');
     c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+    // baked soft, like the far layer: distance underwater IS blur
+    if (typeof c.filter === 'string') c.filter = 'blur(1.1px)';
     c.drawImage(img, 0, 0, pw, ph);
+    if (typeof c.filter === 'string') c.filter = 'none';
     // sea_mid is a JPEG: no alpha, its own flat water behind the reef. Drawn
     // as-is the tile's top edge is a razor line of the WRONG blue -- the slab
     // artifact. Fade the top half out (baked once, so the gradient is allowed)
@@ -1823,9 +1766,17 @@ const Ocean = {
       this._drawMid(b, t);
       this._drawFloorFar(b);
       this._drawHaze(b);
-      // A FILTERED 2x magnify of 960x540 costs as much as the fill it saved, so
-      // the upscale is nearest-neighbour. On a blurred, hazed backdrop the
-      // difference is invisible; the cost difference is most of the frame.
+      // THE UNDERWATER BLUR. Everything behind the playfield is genuinely blurred,
+      // and it is affordable because it happens at HALF device resolution: the
+      // filter runs over 960x540, a quarter of the pixels a full-screen blur would
+      // touch. (The upscale itself must still be nearest -- a filtered 2x magnify
+      // over 2M destination pixels was measured at ~46ms, which is the whole
+      // frame. Blur the small thing, then blit it hard.)
+      if (this.quality > 0 && typeof b.filter === 'string') {
+        b.filter = 'blur(1.3px)';
+        b.drawImage(bd, 0, 0, W, H);
+        b.filter = 'none';
+      }
       const sm = ctx.imageSmoothingEnabled;
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(bd, 0, 0, W, H);
@@ -2202,250 +2153,68 @@ const Ocean = {
   // held a fixed distance above the near bed. It is what gives the bottom a middle
   // distance instead of one hard edge. Lives in the half-res backdrop, so it comes
   // out soft and hazed for free.
+  // ---- the sand ------------------------------------------------------------------
+  // A clean, bright, near-flat bank. Three stacked fills of the same traced line:
+  // a lit lip, the sand body, and the dark mass under it. Nothing procedural is
+  // scattered on top -- the ripples, pebbles, boulders and rock arches that used
+  // to live here were drawn with paths, and next to the uploaded sprites they
+  // read as exactly what they were. What stands on the sand now is art.
   _drawFloorFar(ctx) {
-    if (typeof G === 'undefined' || !G || !this._cols) return;
-    const STEP = 16;
-    const n = Math.min(this._gy.length - 1, Math.ceil(W / STEP) + 2);
-    const gy = this._gy;
-    // HORIZONTAL parallax only. A vertical one would slide this ridge into (or out
-    // of) the near bed as the camera rose, and that drift is exactly what reads as
-    // floating -- so the vertical offset is a flat "further away and higher".
-    const ox = this.camX * this.PAR_BACK;
+    const water = this._tintAt(this.camY + H * 0.62);
+    const step = 48;
+    const par = 0.72, lift = 40;
+    const cx = this.camX * par, cy = this.camY * par;
+    const n = Math.ceil((W + step * 3) / step);
+    const gx0 = Math.floor((cx - step) / step) * step;
     let top = 1e9;
-    for (let i = 0; i < n; i++) {
-      const sy = this.floorAt(ox + i * STEP) - this.camY - 58;
-      gy[i] = sy;
-      if (sy < top) top = sy;
+    for (let i = 0; i <= n; i += 2) {
+      const y = this._profile(gx0 + i * step) - lift - cy;
+      if (y < top) top = y;
     }
-    if (top > H + 2) return;
-    let c = rgbLerp([112, 98, 78], this._tintAt(Math.max(0, this.camY + H * 0.6)), 0.66);
-    const nf = this._nightF();
-    if (nf > 0) c = rgbLerp(c, [6, 14, 34], nf * 0.5);
-    ctx.save();
-    ctx.globalAlpha = 0.8;
-    ctx.fillStyle = cssRGB(c);
+    if (top > H + 4) return;
+    ctx.fillStyle = cssRGB(rgbLerp(water, [120, 140, 130], 0.2));
     ctx.beginPath();
-    ctx.moveTo(-2, gy[0]);
-    for (let i = 1; i < n; i++) ctx.lineTo(i * STEP, gy[i]);
-    ctx.lineTo((n - 1) * STEP, H + 2);
-    ctx.lineTo(-2, H + 2);
+    ctx.moveTo(-6, H + 6);
+    for (let i = 0; i <= n; i++) {
+      const wx = gx0 + i * step;
+      ctx.lineTo(wx - cx, this._profile(wx) - lift - cy);
+    }
+    ctx.lineTo(W + 6, H + 6);
     ctx.closePath();
     ctx.fill();
-    ctx.restore();
   },
 
-  // The bank itself: a solid silted body, a pale sand band, a lit lip, then the
-  // dressing that makes it a place -- ripples, pebbles, boulders and one landmark
-  // per few columns. Four filled paths and a few dozen rects; no gradients, no
-  // per-frame canvas, and every colour string comes from the cached palette above.
   _drawFloor(ctx, t) {
     if (typeof G === 'undefined' || !G || !this._cols) return;
     const STEP = this.FLOOR_STEP;
     const n = Math.min(this._fy.length - 1, Math.ceil(W / STEP) + 2);
     const fy = this._fy;
-    const camX = this.camX, camY = this.camY;
     let top = 1e9;
     for (let i = 0; i < n; i++) {
-      const sy = this.floorAt(camX + i * STEP) - camY;
+      const sy = this.floorAt(this.camX + i * STEP) - this.camY;
       fy[i] = sy;
       if (sy < top) top = sy;
     }
-    if (top > H + 2) return;                    // the bed is below the frame
-    const pal = this._bedPal(this.floorAt(camX + W * 0.5));
+    if (top > H + 2) return;
+    const pal = this._bedPal(this.floorAt(this.camX + W * 0.5));
     const right = (n - 1) * STEP;
 
-    // screen y of the sand at an arbitrary screen x, off the row we just sampled
-    const atX = (sx) => {
-      const u = clamp(sx / STEP, 0, n - 1.001);
-      const i = u | 0;
-      return fy[i] + (fy[i + 1] - fy[i]) * (u - i);
-    };
-    // one band of the bank, following the profile out and back
-    const band = (o0, o1) => {
+    const fill = (off, col) => {
+      ctx.fillStyle = col;
       ctx.beginPath();
-      ctx.moveTo(-2, fy[0] + o0);
-      for (let i = 1; i < n; i++) ctx.lineTo(i * STEP, fy[i] + o0);
-      ctx.lineTo(right, fy[n - 1] + o1);
-      for (let i = n - 2; i >= 0; i--) ctx.lineTo(i * STEP, fy[i] + o1);
-      ctx.lineTo(-2, fy[0] + o1);
+      ctx.moveTo(-2, fy[0] + off);
+      for (let i = 1; i < n; i++) ctx.lineTo(i * STEP, fy[i] + off);
+      ctx.lineTo(right, H + 2);
+      ctx.lineTo(-2, H + 2);
       ctx.closePath();
       ctx.fill();
     };
-
-    // Landmarks go down FIRST, so the sand buries their footings and they read as
-    // rising out of the bottom rather than resting on it.
-    const ci0 = Math.floor((camX - 160) / this.CW), ci1 = Math.floor((camX + W + 160) / this.CW);
-    for (let ci = ci0; ci <= ci1; ci++) {
-      const c = this._col(ci);
-      if (c.mark) this._drawMark(ctx, c.mark, pal, t);
-    }
-
-    // the body, all the way to the bottom of the frame
-    const SS = this.FLOOR_SAND + this.FLOOR_SILT - 1;
-    ctx.fillStyle = pal.dark;
-    ctx.beginPath();
-    ctx.moveTo(-2, fy[0] + SS);
-    for (let i = 1; i < n; i++) ctx.lineTo(i * STEP, fy[i] + SS);
-    ctx.lineTo(right, H + 2);
-    ctx.lineTo(-2, H + 2);
-    ctx.closePath();
-    ctx.fill();
-    // silt, sand, then the lit lip -- each band overlaps the next so there is no
-    // hairline seam when the profile is steep
-    ctx.fillStyle = pal.silt;
-    band(this.FLOOR_SAND - 1, SS + 1);
-    ctx.fillStyle = pal.sand;
-    band(-0.5, this.FLOOR_SAND + 1);
-    ctx.fillStyle = pal.lip;
-    band(-0.6, 2);
-
-    // ---- dressing -------------------------------------------------------------
-    // Ripples: dashes lying in the sand. One fillStyle, alpha per dash.
-    ctx.fillStyle = pal.rip;
-    for (let ci = ci0; ci <= ci1; ci++) {
-      const c = this._col(ci);
-      for (let i = 0; i < c.ripples.length; i++) {
-        const r = c.ripples[i];
-        const sx = r.x - camX;
-        if (sx < -20 || sx > W + 2) continue;
-        ctx.globalAlpha = r.a;
-        ctx.fillRect(sx, atX(sx) + r.o, r.w, 0.8);
-      }
-    }
-    ctx.globalAlpha = 1;
-    // Pebbles: two tones, two passes, two fillStyle writes for the whole field.
-    for (let pass = 0; pass < 2; pass++) {
-      ctx.fillStyle = pass ? pal.peb1 : pal.peb0;
-      for (let ci = ci0; ci <= ci1; ci++) {
-        const c = this._col(ci);
-        for (let i = 0; i < c.pebbles.length; i++) {
-          const p = c.pebbles[i];
-          if ((p.tone === 1 ? 1 : 0) !== pass) continue;
-          const sx = p.x - camX;
-          if (sx < -6 || sx > W + 6) continue;
-          ctx.fillRect(sx, atX(sx) + p.o, p.r, p.r * 0.8);
-        }
-      }
-    }
-    // Boulders: half-domes bedded into the bank. Procedural, so they are always
-    // exactly this depth's sand colour.
-    for (let ci = ci0; ci <= ci1; ci++) {
-      const c = this._col(ci);
-      for (let i = 0; i < c.boulders.length; i++) {
-        const b = c.boulders[i];
-        const sx = b.x - camX;
-        if (sx < -b.w || sx > W + b.w) continue;
-        const sy = atX(sx) + 2;
-        if (sy < -20 || sy > H + 20) continue;
-        const r = b.w * 0.5;
-        ctx.save();
-        ctx.translate(Math.round(sx * DPX) / DPX, sy);
-        ctx.scale(b.flip ? -1 : 1, b.h / r);
-        ctx.fillStyle = pal.silt;
-        ctx.beginPath();
-        ctx.arc(0, 0, r, Math.PI, TAU);
-        ctx.closePath();
-        ctx.fill();
-        // a lit crown, so it is a rock and not a hole
-        ctx.fillStyle = pal.sand;
-        ctx.beginPath();
-        ctx.arc(-r * 0.18, -r * 0.12, r * 0.62, Math.PI, TAU);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      }
-    }
-    ctx.globalAlpha = 1;
+    fill(0, pal.lip);
+    fill(2.5, pal.sand);
+    fill(this.FLOOR_SAND, pal.silt);
+    fill(this.FLOOR_SAND + this.FLOOR_SILT, pal.dark);
   },
 
-  // ---- landmarks --------------------------------------------------------------
-  // Three shapes, all drawn as flat silhouettes in the bank's own dark tone: a rock
-  // arch, a kelp forest and the ribs of something that did not make it. They exist
-  // so the seabed has things you can navigate by instead of uniform scatter.
-  _drawMark(ctx, m, pal, t) {
-    const sx = m.x - this.camX;
-    if (sx < -300 || sx > W + 300) return;
-    const sy = this.floorAt(m.x) - this.camY;
-    if (sy < -340 || sy > H + 40) return;
-    ctx.save();
-    ctx.translate(Math.round(sx * DPX) / DPX, sy);
-    if (m.type === 'kelp') {
-      // Constant-width strokes, one colour: a ribbon per strand would be four times
-      // the path ops for a difference nothing at this contrast can see. Each strand
-      // sways from its ROOT, with the amplitude growing up the stipe.
-      ctx.strokeStyle = pal.mark;
-      ctx.globalAlpha = 0.7;
-      ctx.lineCap = 'round';
-      for (let i = 0; i < m.strands.length; i++) {
-        const s = m.strands[i];
-        ctx.lineWidth = s.w;
-        ctx.beginPath();
-        ctx.moveTo(s.dx, 6);
-        for (let k = 1; k <= 5; k++) {
-          const f = k / 5;
-          ctx.lineTo(
-            s.dx + Math.sin(t * 0.7 + s.ph + f * 1.7) * 8 * f * f + s.lean * s.h * f * f,
-            6 - s.h * f
-          );
-        }
-        ctx.stroke();
-      }
-      ctx.lineCap = 'butt';
-      ctx.lineWidth = 1;
-    } else if (m.type === 'arch') {
-      if (m.flip) ctx.scale(-1, 1);
-      ctx.fillStyle = pal.mark;
-      ctx.globalAlpha = 0.82;
-      // R is the opening; the springing line sits R below the crown, so a squat
-      // arch stays an arch instead of turning inside out
-      const R = Math.min(m.w * 0.5, m.h * 0.62);
-      const cy = -(m.h - R);
-      const lw = m.lw;
-      // the span: one closed half-ring, outer arc out and inner arc back
-      ctx.beginPath();
-      ctx.arc(0, cy, R + lw, Math.PI, TAU);
-      ctx.lineTo(R, cy);
-      ctx.arc(0, cy, R, TAU, Math.PI, true);
-      ctx.closePath();
-      ctx.fill();
-      // two splayed legs down into the sand
-      for (let s = -1; s <= 1; s += 2) {
-        ctx.beginPath();
-        ctx.moveTo(s * R, cy);
-        ctx.lineTo(s * (R + lw), cy);
-        ctx.lineTo(s * (R + lw * 1.5), 10);
-        ctx.lineTo(s * (R - lw * 0.15), 10);
-        ctx.closePath();
-        ctx.fill();
-      }
-    } else {
-      if (m.flip) ctx.scale(-1, 1);
-      ctx.strokeStyle = pal.mark;
-      ctx.globalAlpha = 0.72;
-      ctx.lineWidth = 2.6;
-      ctx.lineCap = 'round';
-      // the keel, mostly buried
-      ctx.beginPath();
-      ctx.moveTo(-m.span * 0.5, 3);
-      ctx.quadraticCurveTo(0, -7, m.span * 0.5, 3);
-      ctx.stroke();
-      for (let i = 0; i < m.ribs.length; i++) {
-        const r = m.ribs[i];
-        ctx.beginPath();
-        ctx.moveTo(r.dx, 4);
-        ctx.quadraticCurveTo(r.dx + r.bend * r.h * 0.5, -r.h * 0.6, r.dx + r.bend * r.h, -r.h);
-        ctx.stroke();
-      }
-      ctx.lineCap = 'butt';
-      ctx.lineWidth = 1;
-    }
-    ctx.restore();
-    ctx.globalAlpha = 1;
-  },
-
-  // ---- aerial perspective -----------------------------------------------------
-  // The haze goes over the background layers and UNDER Otto, which is what keeps
-  // him readable while the distance drowns in water colour.
   _drawHaze(ctx) {
     const wy0 = this._waterTop();
     if (wy0 >= H) return;                     // nothing but sky in frame
@@ -2465,7 +2234,8 @@ const Ocean = {
   _drawDeepTint(ctx) {
     const d = this.depthFrac();
     const nf = this._nightF();
-    const a = d * 0.34 + nf * 0.22;
+    // half what it was: this is meant to read as water, not as a lights-out
+    const a = d * 0.17;
     if (a <= 0.01) return;
     const wy0 = this._waterTop();
     if (wy0 >= H) return;                     // the sky is not the deep
@@ -2560,267 +2330,17 @@ const Ocean = {
   // then fogged toward the water's own colour -- because sand that keeps its
   // contrast at 2000 units down reads as a painted backdrop, and the fog is the
   // only thing that puts water between you and it.
-  _sandAt(x, y) {
-    const z = this.zoneAt(x);
-    const d = clamp(y / this.DEEP, 0, 1);
-    const warm = rgbLerp(z.sand, [94, 102, 114], d * d * (3 - 2 * d) * 0.7);
-    let c = rgbLerp(warm, this._tintAt(y), 0.20 + d * 0.42);
-    const nf = this._nightF();
-    if (nf > 0) c = rgbLerp(c, [8, 16, 36], nf * 0.5);
-    return c;
-  },
-
-  // The columns whose sand can be on screen. Only ever two or three of them.
-  _eachFloorCol(cb, pad) {
-    const p = pad === undefined ? 48 : pad;
-    const c0 = Math.floor((this.camX - p) / this.CW);
-    const c1 = Math.floor((this.camX + W + p) / this.CW);
-    for (let ci = c0; ci <= c1; ci++) cb(this._col(ci));
-  },
-
-  // Trace the sand line across the frame and close the path down to the bottom
-  // edge, `dy` below the true line. Reused for each of the stacked bands.
-  _floorPath(ctx, dy) {
-    const step = this.FLOOR_STEP;
-    const gx0 = Math.floor((this.camX - step) / step) * step;
-    const n = Math.ceil((W + step * 3) / step);
-    ctx.beginPath();
-    ctx.moveTo(-6, H + 6);
-    for (let i = 0; i <= n; i++) {
-      const wx = gx0 + i * step;
-      ctx.lineTo(wx - this.camX, this.floorAt(wx) - this.camY + dy);
-    }
-    ctx.lineTo(W + 6, H + 6);
-    ctx.closePath();
-  },
-
-  // The distant ridges: the same profile read through a parallax, lifted up the
-  // frame and drained of contrast. This is what stops the real sand from being the
-  // only thing between the mid band and the bottom of the screen -- one line of
-  // ground reads as a cutout, three read as a seabed going away from you.
-  // Composited into the half-res backdrop, so it costs a quarter of what it looks
-  // like it should.
-  _drawFloorFar(ctx) {
-    const water = this._tintAt(this.camY + H * 0.62);
-    for (let k = 0; k < 2; k++) {
-      const par = k === 0 ? 0.55 : 0.78;
-      const lift = k === 0 ? 104 : 46;
-      const cx = this.camX * par, cy = this.camY * par;
-      const step = 32;
-      const gx0 = Math.floor((cx - step) / step) * step;
-      const n = Math.ceil((W + step * 3) / step);
-      // Every sample of this ridge is off the bottom of the frame most of the
-      // time, and a fill that covers nothing still costs a path: check first.
-      let top = 1e9;
-      for (let i = 0; i <= n; i += 2) {
-        const y = this._profile(gx0 + i * step) - lift - cy;
-        if (y < top) top = y;
-      }
-      if (top > H + 4) continue;
-      ctx.fillStyle = cssRGB(rgbLerp(water, [9, 18, 33], 0.16 + k * 0.14));
-      ctx.beginPath();
-      ctx.moveTo(-6, H + 6);
-      for (let i = 0; i <= n; i++) {
-        const wx = gx0 + i * step;
-        ctx.lineTo(wx - cx, this._profile(wx) - lift - cy);
-      }
-      ctx.lineTo(W + 6, H + 6);
-      ctx.closePath();
-      ctx.fill();
-    }
-  },
-
-  _drawFloor(ctx, t) {
-    // In open water the sand is off the bottom of the frame, which is the common
-    // case, so the cheapest possible rejection comes first.
-    let lo = 1e9;
-    this._eachFloorCol((c) => { if (c.lo < lo) lo = c.lo; });
-    if (lo - this.camY > H + 4) return;
-
-    // One depth drives the whole palette for this frame: sampling per-pixel would
-    // mean a gradient, and the frame cannot afford one.
-    const fx = this.camX + W * 0.5;
-    const fy = this.floorAt(fx);
-    const sand = this._sandAt(fx, fy);
-    // how much surface light still reaches this sand -- the lip is only bright
-    // while there is something up there to light it
-    const light = clamp(1 - Math.max(0, fy) / (this.LIGHT_END * 2.4), 0, 1) * (1 - this._nightF());
-    const lit = rgbLerp(sand, [255, 250, 230], 0.14 + 0.26 * light);
-    const body = rgbLerp(sand, [0, 0, 0], 0.24);
-    const deep = rgbLerp(sand, [0, 0, 0], 0.5);
-
-    // Light to dark, each offset further down the same line: what is left visible
-    // of each fill is the band above the next one.
-    ctx.fillStyle = cssRGB(lit);
-    this._floorPath(ctx, 0); ctx.fill();
-    ctx.fillStyle = cssRGB(sand);
-    this._floorPath(ctx, 2.5); ctx.fill();
-    ctx.fillStyle = cssRGB(body);
-    this._floorPath(ctx, this.FLOOR_SAND); ctx.fill();
-    ctx.fillStyle = cssRGB(deep);
-    this._floorPath(ctx, this.FLOOR_SAND + this.FLOOR_SILT); ctx.fill();
-
-    // ---- texture on the sand -------------------------------------------------
-    const rippleCol = cssRGB(rgbLerp(sand, [0, 0, 0], 0.16));
-    const peb0 = cssRGB(rgbLerp(sand, [0, 0, 0], 0.3));
-    const peb1 = cssRGB(rgbLerp(sand, [255, 250, 230], 0.24));
-    const boulder = cssRGB(rgbLerp(sand, [0, 0, 0], 0.2));
-    const boulderLit = cssRGB(rgbLerp(sand, [255, 250, 230], 0.16 + 0.2 * light));
-
-    this._eachFloorCol((c) => {
-      let i, o, sx, gy;
-      // ripples: short dashes lying along the line, so they read as the surface
-      // of the sand rather than as things on it
-      ctx.fillStyle = rippleCol;
-      for (i = 0; i < c.ripples.length; i++) {
-        o = c.ripples[i];
-        sx = o.x - this.camX;
-        if (sx + o.w < 0 || sx > W) continue;
-        gy = this.floorAt(o.x) - this.camY + o.o;
-        if (gy < -2 || gy > H + 2) continue;
-        ctx.globalAlpha = o.a;
-        ctx.fillRect(sx, gy, o.w, 0.9);
-      }
-      ctx.globalAlpha = 1;
-      // pebbles: two tones, two fillStyle writes for the whole field
-      for (let tone = 0; tone < 2; tone++) {
-        ctx.fillStyle = tone ? peb1 : peb0;
-        for (i = 0; i < c.pebbles.length; i++) {
-          o = c.pebbles[i];
-          if (o.tone !== tone) continue;
-          sx = o.x - this.camX;
-          if (sx < -4 || sx > W + 4) continue;
-          gy = this.floorAt(o.x) - this.camY + 1.2 + o.o;
-          if (gy < -4 || gy > H + 4) continue;
-          ctx.fillRect(sx - o.r / 2, gy - o.r / 2, o.r, o.r);
-        }
-      }
-      // boulders: half-domes bedded into the line. Procedural, so they are always
-      // exactly the sand's own colour at this depth and can never clash with it.
-      for (i = 0; i < c.boulders.length; i++) {
-        o = c.boulders[i];
-        sx = o.x - this.camX;
-        if (sx + o.w < -8 || sx - o.w > W + 8) continue;
-        gy = this.floorAt(o.x) - this.camY + 2;
-        if (gy < -o.h - 8 || gy > H + 8) continue;
-        ctx.fillStyle = boulder;
-        ctx.beginPath();
-        ctx.ellipse(sx, gy, o.w / 2, o.h, 0, Math.PI, TAU);
-        ctx.closePath();
-        ctx.fill();
-        // one lit arc along the top -- the whole read of "solid" comes from this
-        ctx.strokeStyle = boulderLit;
-        ctx.lineWidth = PIX * 2;
-        ctx.beginPath();
-        ctx.ellipse(sx, gy, o.w / 2 - PIX, o.h - PIX, 0, Math.PI * 1.12, Math.PI * 1.78);
-        ctx.stroke();
-      }
-      if (c.mark) this._drawMark(ctx, c, t, light, sand);
-    });
-  },
-
-  // The one thing in a column big enough to navigate by. All three are drawn
-  // rather than blitted: an arch or a whale rib in exactly the local sand colour
-  // seats itself, where a sprite would sit on top of the scene.
-  _drawMark(ctx, c, t, light, sand) {
-    const m = c.mark;
-    const sx = m.x - this.camX;
-    if (sx < -160 || sx > W + 160) return;
-    const gy = this.floorAt(m.x) - this.camY;
-    if (gy < -220 || gy > H + 40) return;
-
-    if (m.type === 'kelp') {
-      // A forest: stroked strands, one colour, swaying from the root. Kelp is the
-      // one landmark that occludes, which is what makes it feel like a place.
-      ctx.strokeStyle = cssRGB(rgbLerp(rgbLerp(sand, [46, 92, 54], 0.62),
-                                       this._tintAt(this.camY + H * 0.5), 0.3));
-      ctx.lineCap = 'round';
-      for (let i = 0; i < m.strands.length; i++) {
-        const s = m.strands[i];
-        const bx = sx + s.dx;
-        if (bx < -20 || bx > W + 20) continue;
-        const by = this.floorAt(m.x + s.dx) - this.camY;
-        const sway = Math.sin(t * 0.6 + s.ph) * 13 + s.lean * 26;
-        ctx.lineWidth = s.w;
-        ctx.globalAlpha = 0.5 + (i % 3) * 0.14;
-        ctx.beginPath();
-        ctx.moveTo(bx, by);
-        ctx.quadraticCurveTo(bx + sway * 0.35, by - s.h * 0.55, bx + sway, by - s.h);
-        ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
-      return;
-    }
-
-    if (m.type === 'arch') {
-      // Two legs and a span, as one path, so the inside of the arch is a real hole
-      // you can see the water through.
-      const w = m.w, h = m.h, lw = m.lw, th = m.thick;
-      ctx.save();
-      ctx.translate(sx, gy);
-      if (m.flip) ctx.scale(-1, 1);
-      ctx.fillStyle = cssRGB(rgbLerp(sand, [0, 0, 0], 0.26));
-      ctx.beginPath();
-      ctx.moveTo(-w / 2 - lw / 2, 2);
-      ctx.lineTo(-w / 2 - lw / 2, -h + th);
-      ctx.quadraticCurveTo(0, -h - th * 0.5, w / 2 + lw / 2, -h + th);
-      ctx.lineTo(w / 2 + lw / 2, 2);
-      ctx.lineTo(w / 2 - lw / 2, 2);
-      ctx.lineTo(w / 2 - lw / 2, -h + th * 0.6);
-      ctx.quadraticCurveTo(0, -h + th * 1.6, -w / 2 + lw / 2, -h + th * 0.6);
-      ctx.lineTo(-w / 2 + lw / 2, 2);
-      ctx.closePath();
-      ctx.fill();
-      // a lit rim on the top of the span, so it does not read as a flat cutout
-      ctx.strokeStyle = cssRGB(rgbLerp(sand, [255, 250, 230], 0.1 + 0.24 * light));
-      ctx.lineWidth = PIX * 2;
-      ctx.beginPath();
-      ctx.moveTo(-w / 2 - lw / 2 + PIX, -h + th);
-      ctx.quadraticCurveTo(0, -h - th * 0.5, w / 2 + lw / 2 - PIX, -h + th);
-      ctx.stroke();
-      ctx.restore();
-      return;
-    }
-
-    // ribs: something died out here. Bone keeps its own colour -- it is the one
-    // pale thing on the plain, and that is exactly why it works as a landmark.
-    ctx.save();
-    ctx.translate(sx, gy);
-    if (m.flip) ctx.scale(-1, 1);
-    ctx.strokeStyle = cssRGB(rgbLerp([226, 220, 200], this._tintAt(this.camY + H * 0.5), 0.42));
-    ctx.lineCap = 'round';
-    for (let i = 0; i < m.ribs.length; i++) {
-      const r = m.ribs[i];
-      ctx.lineWidth = 1.6 + PIX;
-      ctx.globalAlpha = 0.72;
-      ctx.beginPath();
-      ctx.moveTo(r.dx, 1);
-      ctx.quadraticCurveTo(r.dx + r.bend * r.h * 0.7, -r.h * 0.6, r.dx + r.bend * r.h * 0.35, -r.h);
-      ctx.stroke();
-    }
-    // the spine they hang off
-    ctx.lineWidth = 2 + PIX;
-    ctx.globalAlpha = 0.5;
-    ctx.beginPath();
-    ctx.moveTo(-m.span / 2, -m.h * 0.1);
-    ctx.quadraticCurveTo(0, -m.h * 0.3, m.span / 2, -m.h * 0.06);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    ctx.restore();
-  },
-
-  // ---- the near plane -----------------------------------------------------------
-  // Oversized dark fronds rooted on the sand, drawn IN FRONT of Otto: the third
-  // plane of the composition (far ridges / playfield / these). Stroked, not
-  // blitted -- a stroke per strand with a leaf or two is a dozen path ops per
-  // column and reads as an out-of-focus plant precisely because it has no texture.
   _drawForeground(ctx, t) {
     if (this.quality <= 0) return;
     const tint = this._tintAt(this.camY + H * 0.7);
     ctx.save();
     ctx.lineCap = 'round';
     ctx.strokeStyle = cssRGB(rgbLerp([12, 30, 30], tint, 0.42));
-    this._eachFloorCol((c) => {
+    // the two or three columns whose fronds can be on screen
+    const c0 = Math.floor((this.camX - 48) / this.CW);
+    const c1 = Math.floor((this.camX + W + 48) / this.CW);
+    for (let ci = c0; ci <= c1; ci++) {
+      const c = this._col(ci);
       if (!c.fg || !c.fg.length) return;
       for (let i = 0; i < c.fg.length; i++) {
         const f = c.fg[i];
@@ -2848,7 +2368,7 @@ const Ocean = {
           ctx.stroke();
         }
       }
-    });
+    }
     ctx.globalAlpha = 1;
     ctx.restore();
   },
@@ -2965,7 +2485,7 @@ const Ocean = {
       ctx.fillRect(sx - d.r / 2, sy - d.r, d.r, d.r * 2.2);
     }
 
-    ctx.fillStyle = cssRGB(rgbLerp(this._sandAt(this.px, this.floorAt(this.px)), [255, 255, 255], 0.2));
+    ctx.fillStyle = this._bedPal(this.floorAt(this.px)).sand;
     for (let i = 0; i < this.drops.length; i++) {
       const d = this.drops[i];
       if (d.t <= 0 || d.tone !== 1) continue;
@@ -3044,7 +2564,7 @@ const Ocean = {
         const w = wide ? p.s : p.s * img.width / img.height;
         const h = wide ? p.s * img.height / img.width : p.s;
         ctx.save();
-        ctx.globalAlpha = clamp(p.dim, 0.1, 1) * (1 - nf * 0.45);
+        ctx.globalAlpha = clamp(p.dim, 0.1, 1);
         if (planted) {
           // Pin the BASE, bedded in by p.sink, and pivot the sway there: a plant
           // bends from its root and a shell does not move at all.

@@ -569,7 +569,7 @@ const Tame = {
     if (chunkY < 0) return out;                 // nothing swims above the surface
     var cw = this.CHUNK_W, ch = this.CHUNK_H;
     var y0 = chunkY * ch;
-    var df = this._df(y0 + ch * 0.5);
+    var df = this._df(y0 + ch * 0.5, chunkX * cw + cw * 0.5);
     var rng = mulberry32((Math.imul(chunkX, 73856093) ^ Math.imul(chunkY, 19349663) ^
       Math.imul((seed | 0) || 1, 83492791)) | 0);
 
@@ -600,7 +600,16 @@ const Tame = {
     return out;
   },
 
-  _df: function (y) { return clamp(y / this.DEEP_MAX, 0, 1); },
+  // Where this patch of sea sits in the species ladder, 0..1. The seabed is a
+  // flat shallow shelf now, so depth stopped sorting anything and DISTANCE FROM
+  // HOME does the job instead -- narwhals live a long swim out, not a deep dive
+  // down. Falls back to depth if the scene publishes no such axis.
+  _df: function (y, x) {
+    if (x !== undefined && typeof Ocean !== 'undefined' && Ocean && Ocean.remoteFrac) {
+      return Ocean.remoteFrac(x);
+    }
+    return clamp(y / this.DEEP_MAX, 0, 1);
+  },
 
   // Weighted by frequency AND by how central the depth is inside the species'
   // band, so an animal thins out towards the edges of where it lives instead of
@@ -1015,7 +1024,7 @@ const Tame = {
     res.tier = tier;
     var rec = G.tame.wild[m.id];
     if (!rec) rec = G.tame.wild[m.id] = { t: m.trust, f: 0, d: G.day, k: 0 };
-    if (rec.d !== G.day) { rec.d = G.day; rec.f = 0; }
+    if (rec.d !== G.day) { rec.d = G.day; rec.f = 0; rec.p = 0; }
 
     // Wariness, how settled it is, and how much it has already had today. The
     // day cap is what makes taming take several ENCOUNTERS instead of one hover.
@@ -1066,6 +1075,131 @@ const Tame = {
     }
     this._save();
     return res;
+  },
+
+  // ---- PETTING ------------------------------------------------------------------
+  // Swim up to anything and pet it. No food, no inventory, no menu: get close,
+  // press the verb, and it warms to you. Food still exists and is still faster
+  // (and a favourite much faster), but nothing in the sea is gated behind
+  // carrying the right item any more -- petting alone will tame anything, it just
+  // takes more visits.
+  //
+  // The day cap is what keeps it a courtship rather than a hold-to-win: after
+  // PETS_DAY the animal has had enough of you until tomorrow.
+  PET_GAIN: 4,
+  PETS_DAY: 6,
+
+  canPet: function (m) {
+    if (!m || !m.live) return false;
+    if (m.state === 2) return false;                        // bolting
+    if (this._lpx === null) return false;
+    var dx = this._lpx - m.x, dy = this._lpy - m.y;
+    return dx * dx + dy * dy <= this.OFFER_R * this.OFFER_R;
+  },
+
+  pet: function (animal) {
+    var res = { ok: false, react: '', delta: 0, trust: 0, tamed: false };
+    if (!this.ensure()) return res;
+    var m = this._resolve(animal);
+    if (!m) return res;
+    if (!this.canPet(m)) {
+      res.react = m.state === 2 ? this._who(m) + ' will not let you close.' : 'get closer, and slower.';
+      this._snd('blip'); this._say(res.react);
+      return res;
+    }
+    var sp = m.spr;
+    res.trust = m.trust;
+
+    // An already-tamed companion just enjoys it: hearts, no trust to gain.
+    if (m.kind === 1) {
+      m.state = 3; m.stateT = this.FEED_T;
+      m.vx *= 0.3; m.vy *= 0.3;
+      this._hearts(m, 3);
+      this._snd('chime', 1.15);
+      res.ok = true;
+      res.react = this._who(m) + ' leans into your paw.';
+      this._say(res.react);
+      return res;
+    }
+
+    // Same per-animal, per-day record the feeding path keeps; `p` is the pet
+    // counter and rides along with `f`, both cleared on the day roll below.
+    var rec = G.tame.wild[m.id];
+    if (!rec) rec = G.tame.wild[m.id] = { t: m.trust, f: 0, d: G.day, k: 0, p: 0 };
+    if (rec.d !== G.day) { rec.d = G.day; rec.f = 0; rec.p = 0; }
+    if (typeof rec.p !== 'number') rec.p = 0;
+    if (rec.p >= this.PETS_DAY) {
+      res.react = this._who(m) + ' has had enough fuss for one day.';
+      this._snd('blip'); this._say(res.react);
+      return res;
+    }
+
+    var settle = 0.45 + 0.55 * clamp(m.ease, 0, 1);
+    var delta = Math.round(this.PET_GAIN * (1 - sp.wary * 0.5) * settle *
+                           this._buff('tameChance', 1) * 10) / 10;
+    m.trust = clamp(m.trust + delta, 0, this.TRUST_MAX);
+    m.ease = clamp(m.ease + 0.34, 0, 1);
+    rec.p++;
+    rec.t = m.trust;
+    m.state = 3; m.stateT = this.FEED_T;
+    m.vx *= 0.3; m.vy *= 0.3;
+
+    this._hearts(m, 2);
+    this._fly(m.x, m.y - sp.box * 0.5, '+' + delta + ' trust', 0);
+    this._snd('pop', 1.05);
+    this._buzz(10);
+    this._xp('taming', 2);
+    res.ok = true;
+    res.delta = delta;
+    res.trust = m.trust;
+    res.react = this._who(m) + ' likes that.';
+    this._say(res.react);
+
+    if (m.trust >= this.TRUST_MAX) {
+      var adopted = this._adopt(m);
+      res.tamed = adopted;
+      if (!adopted) {
+        m.trust = this.TRUST_MAX - 6;
+        rec.t = m.trust;
+        res.react = 'the tide pool is full -- ' + this._who(m) + ' cannot come home with you.';
+        this._say(res.react);
+      }
+    }
+    this._save();
+    return res;
+  },
+
+  // little hearts off the animal, reusing the puff pool's flyer channel
+  _hearts: function (m, n) {
+    for (var i = 0; i < n; i++) {
+      this._fly(m.x + rand(-8, 8), m.y - (m.spr.box * 0.4) - i * 6, '<3', 1);
+    }
+  },
+
+  // Is there anything in the bag this animal would actually take? Petting is the
+  // fallback precisely when this is false.
+  _hasAnyFoodFor: function (m) {
+    if (!m || !m.spr) return false;
+    if (this._have(m.spr.fav) > 0) return true;
+    for (var k in this.FOOD) {
+      if (!Object.prototype.hasOwnProperty.call(this.FOOD, k)) continue;
+      if (this._have(k) > 0) return true;
+    }
+    return false;
+  },
+
+  // The nearest animal close enough to pet, ignoring whether it would eat.
+  // Petting has no food gate, so this window is wider than _offerable's.
+  pettable: function () {
+    if (this._lpx === null) return null;
+    var best = null, bd = this.OFFER_R * this.OFFER_R;
+    for (var i = 0; i < this.MAX_MOBS; i++) {
+      var m = this.mobs[i];
+      if (!m.live || m.state === 2) continue;
+      var dx = this._lpx - m.x, dy = this._lpy - m.y, d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = m; }
+    }
+    return best;
   },
 
   // Offer whatever is sensible from what the player is carrying: the selected
@@ -1608,8 +1742,8 @@ const Tame = {
         if (typeof G !== 'undefined' && G && G.flags && !G.flags.seenTame) {
           G.flags.seenTame = 1;
           this._toast('something is curious about you. move slowly -- speed spooks them.');
-          this._toast(this._touch() ? 'tap it to offer food from your bag.'
-            : 'press [T] near it to offer food from your bag.');
+          this._toast(this._touch() ? 'swim up and tap it to pet it -- food is faster, but not needed.'
+            : 'swim up and press [T] to pet it -- food is faster, but not needed.');
           this._save();
         }
       }
@@ -1735,15 +1869,26 @@ const Tame = {
     if (typeof Input === 'undefined' || !Input) return;
     if (typeof Game !== 'undefined' && (Game.helpOpen || Game.fadeDir !== 0)) return;
     if (this.open) return;
-    if (Input.p('KeyT')) { this.offerSelected(this._offerable); return; }
+    // [T] is one verb with a preference order: hand food over if you are carrying
+    // something it wants and it is willing, otherwise just pet it. That way the
+    // key never does nothing when an animal is right in front of you, which is
+    // what made taming feel gated on inventory.
+    if (Input.p('KeyT')) {
+      if (this._offerable && this._hasAnyFoodFor(this._offerable)) this.offerSelected(this._offerable);
+      else this.pet(this.pettable());
+      return;
+    }
     if (!this._touch() || !Input.mouse || !Input.mouse.clicked) return;
     // touch only: a tap on the animal's body. Kept tight so it does not fight the
     // pointer verbs the ocean's other systems own.
-    var m = this._offerable;
+    var m = this._offerable || this.pettable();
     if (!m) return;
     var sx = m.x - this._camX, sy = m.y - this._camY;
     var box = (m.adult ? m.spr.box : m.spr.baby) * 0.6;
-    if (Math.abs(Input.mouse.x - sx) < box && Math.abs(Input.mouse.y - sy) < box) this.offerSelected(m);
+    if (Math.abs(Input.mouse.x - sx) < box && Math.abs(Input.mouse.y - sy) < box) {
+      if (this._offerable === m && this._hasAnyFoodFor(m)) this.offerSelected(m);
+      else this.pet(m);
+    }
   },
 
   _touch: function () { return typeof TouchUI !== 'undefined' && TouchUI && TouchUI.enabled; },
@@ -1825,14 +1970,8 @@ const Tame = {
     var box = m.adult ? sp.box : sp.baby;
     var bob = Math.sin(this.time * sp.bob + m.ph) * sp.bobA;
 
-    // babies first, so the parent overlaps them
-    for (var b = 0; b < m.babies && b < this.MAX_BABIES; b++) {
-      var gap = box * 0.5 + 8 + b * (sp.baby * 0.7);
-      var bx = m.x - m.dir * gap;
-      var by = m.y + 4 + Math.sin(this.time * sp.bob * 1.25 + m.bph[b]) * (sp.bobA + 1.4);
-      this._blit(ctx, frames === sp.frA ? sp.frB[(fi + 1) % 4] : frames[fi], bx, by,
-        sp.baby, m.dir, m.bank * 0.7, m.alpha * 0.95);
-    }
+    // No trailing babies: a lone animal you can swim up to and pet is the whole
+    // interaction now, and a shoal of half-size copies behind it read as clutter.
     this._blit(ctx, frames[fi], m.x, m.y + bob, box, m.dir, m.bank, m.alpha);
   },
 
@@ -1844,10 +1983,13 @@ const Tame = {
     var h = wide ? box * img.height / img.width : box;
     ctx.save();
     ctx.translate(Math.round(x * DPX) / DPX, Math.round(y * DPX) / DPX);
-    // The sheets face right. Rotation is applied BEFORE the mirror, so a
-    // left-facing animal needs the opposite sign to still tilt nose-down.
-    if (bank) ctx.rotate(dir < 0 ? -bank : bank);
-    if (dir < 0) ctx.scale(-1, 1);
+    // THE SHEETS FACE LEFT. Every uploaded creature sheet is drawn nose-left, so
+    // the unflipped sprite is the LEFT-facing one and it is dir > 0 that needs the
+    // mirror. This was inverted, which is why every animal in the sea swam
+    // backwards. Rotation is applied before the mirror, so the bank sign flips
+    // with it to keep the nose tilting into the direction of travel.
+    if (bank) ctx.rotate(dir > 0 ? -bank : bank);
+    if (dir > 0) ctx.scale(-1, 1);
     if (alpha < 1) ctx.globalAlpha = clamp(alpha, 0, 1);
     ctx.drawImage(img, -w / 2, -h / 2, w, h);
     ctx.restore();
@@ -1913,11 +2055,15 @@ const Tame = {
     }
     ctx.globalAlpha = 1;
 
-    // and the offer prompt, over the one animal that would take something
-    var o = this._offerable;
+    // The prompt over whatever is in reach. Petting needs nothing, so the fallback
+    // target is the merely-close animal, not only the one that would eat.
+    var o = this._offerable || this.pettable();
     if (o && o.live && !this.open) {
       var oy = o.y - (o.adult ? o.spr.box : o.spr.baby) * 0.5 - 22;
-      var label = this._touch() ? 'tap to offer food' : '[T] offer food';
+      var canFeed = this._offerable === o && this._hasAnyFoodFor(o);
+      var label = this._touch()
+        ? (canFeed ? 'tap to offer food' : 'tap to pet')
+        : (canFeed ? '[T] offer food' : '[T] pet');
       var tw = textWidth(ctx, label, 7) + 10;
       uiPanel(ctx, o.x - tw / 2, oy - 2, tw, 12, 0.86);
       text(ctx, label, o.x, oy + 1, { size: 7, color: '#ffe6b0', align: 'center' });
