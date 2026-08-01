@@ -127,7 +127,15 @@ const WorldScene = {
     }
     for (const d of this.dust) { d.t -= dt; d.y -= 3 * dt; d.x -= (this.dir || 1) * 2 * dt; }
     this.dust = this.dust.filter(d => d.t > 0);
-    this.camX = clamp(this.px - W / 2, 0, this.worldW() - W);
+    // THE UPPER BOUND MUST NEVER GO NEGATIVE. The pier is 300 units and the screen
+    // is 480, so worldW() - W is -160 -- and clamp(v, 0, -160) returns -160, not 0,
+    // because it tests the low bound first and the high bound second. That scrolled
+    // the camera 160 units LEFT of the world origin the moment you walked right:
+    // the whole dock slid across the frame and the house went off the edge. With
+    // the world narrower than the screen there is nothing to scroll, so the camera
+    // pins at 0 and the open sea past the pier end fills the rest of the frame --
+    // which is what you should see, having just walked to the edge of it.
+    this.camX = clamp(this.px - W / 2, 0, Math.max(0, this.worldW() - W));
 
     if (Input.p('KeyE') || Input.p('Space')) {
       let best = null, bd = 22;

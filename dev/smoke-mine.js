@@ -17,7 +17,11 @@ const fails=[];
   await page.waitForFunction(() => typeof G !== 'undefined' && G && ASSETS.dock_11 && ASSETS.dock_11.width, null, {timeout:60000});
   await page.waitForFunction(() => Game.fadeDir === 0 && Game.fade === 0, null, {timeout:30000});
   await page.evaluate(() => Game.go(Ocean));
-  await page.waitForTimeout(1500);
+  // Wait for chunk generation rather than a fixed sleep: nodes are spawned as the
+  // camera reaches new chunks, so a timeout raced it and reported NO NODES.
+  await page.waitForFunction(
+    () => typeof Mining !== 'undefined' && Mining.nodes && Mining.nodes.some(n => !n.dead),
+    null, { timeout: 25000 });
   // find a node and park Otto on it
   const info = await page.evaluate(() => {
     const n = Mining.nodes.find(v => !v.dead);

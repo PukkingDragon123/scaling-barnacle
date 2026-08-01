@@ -1770,36 +1770,23 @@ const Ocean = {
     // resolution into a reused canvas and upscaled in one blit: a quarter of the
     // fill for a difference the haze hides anyway. The surface line stays on the
     // main context — it is the one crisp thing up there.
-    const bd = this._backdrop();
-    if (bd) {
-      const b = this._bdCtx;
-      this._drawWater(b, t);
-      this._drawFar(b, t);
-      this._drawMid(b, t);
-      this._drawFloorFar(b);
-      this._drawHaze(b);
-      // THE UNDERWATER BLUR. Everything behind the playfield is genuinely blurred,
-      // and it is affordable because it happens at HALF device resolution: the
-      // filter runs over 960x540, a quarter of the pixels a full-screen blur would
-      // touch. (The upscale itself must still be nearest -- a filtered 2x magnify
-      // over 2M destination pixels was measured at ~46ms, which is the whole
-      // frame. Blur the small thing, then blit it hard.)
-      if (this.quality > 0 && typeof b.filter === 'string') {
-        b.filter = 'blur(1.3px)';
-        b.drawImage(bd, 0, 0, W, H);
-        b.filter = 'none';
-      }
-      const sm = ctx.imageSmoothingEnabled;
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(bd, 0, 0, W, H);
-      ctx.imageSmoothingEnabled = sm;
-    } else {
-      this._drawWater(ctx, t);
-      this._drawFar(ctx, t);
-      this._drawMid(ctx, t);
-      this._drawFloorFar(ctx);
-      this._drawHaze(ctx);
-    }
+    // STRAIGHT TO THE SCREEN. These four layers used to be composited into a
+    // half-resolution scratch canvas and blitted up in one go, which was a real
+    // saving on fill -- but that canvas-to-canvas blit turned out to be the bug
+    // you hit: INTERMITTENTLY (about two runs in three) it painted a single flat
+    // colour over the whole frame instead of the backdrop, while the backdrop
+    // canvas itself was provably correct every time. Chromium's accelerated
+    // canvas can serve a stale/degenerate read of a source surface that was
+    // written in the same frame, and no amount of ordering made it reliable.
+    //
+    // Drawing them directly costs more fill and is worth every millisecond: the
+    // layers are cheap now (flat bands and source-clipped blits, not the 46ms
+    // full-copy the optimisation was originally built for).
+    this._drawWater(ctx, t);
+    this._drawFar(ctx, t);
+    this._drawMid(ctx, t);
+    this._drawFloorFar(ctx);
+    this._drawHaze(ctx);
     this._drawSurfaceLine(ctx, t);
     this._drawRays(ctx, t);
     this._drawSunGlow(ctx, t);
@@ -1820,6 +1807,7 @@ const Ocean = {
     this._drawRings(ctx);
     this._drawSurfaceFoam(ctx, t);
     this._drawDeepTint(ctx);
+    this._drawWaterVeil(ctx);
     this._drawBokeh(ctx, t);
 
     ctx.restore();
@@ -2244,6 +2232,16 @@ const Ocean = {
 
   // A last, weak tint over everything so the deep genuinely closes in. The
   // corner vignette is already applied by the main loop; this is only colour.
+  // The water column itself: a flat translucent wash that thickens with depth. It
+  // is the honest, safe half of "everything looks underwater" -- one fillRect,
+  // no filter, and it reads as water between you and the scene.
+  _drawWaterVeil(ctx) {
+    const d = this.depthFrac();
+    const a = 0.06 + d * 0.10;
+    ctx.fillStyle = `rgba(46,132,150,${a.toFixed(3)})`;
+    ctx.fillRect(0, 0, W, H);
+  },
+
   _drawDeepTint(ctx) {
     const d = this.depthFrac();
     const nf = this._nightF();

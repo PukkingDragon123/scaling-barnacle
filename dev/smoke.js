@@ -48,6 +48,26 @@ const fails = [];
   await page.waitForTimeout(1400);
   console.log('scene =', await page.evaluate(() => Game.scene === WorldScene ? 'world' : 'OTHER'));
 
+  // The camera must never scroll left of the world origin. The pier is shorter
+  // than the screen, so worldW() - W is NEGATIVE, and clamp(v, 0, negative)
+  // returns the negative -- which slid the whole dock across the frame and put
+  // the house off the edge the moment you walked right. Walk both ways and check.
+  for (const [key, dir] of [['KeyD', 'right'], ['KeyA', 'left']]) {
+    await page.keyboard.down(key);
+    await page.waitForTimeout(1500);
+    await page.keyboard.up(key);
+    await page.waitForTimeout(200);
+    const cam = await page.evaluate(() => WorldScene.camX);
+    console.log('camX after walking ' + dir + ' =', Math.round(cam));
+    if (!(cam >= 0)) fails.push('camera scrolled past the world origin walking ' + dir + ': camX=' + cam);
+  }
+  // and the house has to be somewhere you can actually see it
+  const houseOnScreen = await page.evaluate(() => {
+    const s = WorldScene.spots().find(v => v.label.indexOf('House') >= 0);
+    return s ? (s.x - WorldScene.camX >= 0 && s.x - WorldScene.camX <= W) : null;
+  });
+  if (houseOnScreen === false) fails.push('the house is off screen while standing on the dock');
+
   // Walk LEFT to the piling. There is one now, at x=30 under the house, instead
   // of three spread down a 900-unit dock — so this waypoint is derived from the
   // scene rather than hardcoded, and a future layout change cannot stale it.

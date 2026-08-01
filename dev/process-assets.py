@@ -419,7 +419,20 @@ house_clean = hx2.resize((round(hx2.size[0] * 1.8), round(hx2.size[1] * 1.8)), I
 # of 598, so cut at 274 to clear the boards) and right of its stair rail (x 264).
 # The pier is then the only deck in the scene, so the two can't disagree about
 # plank style, post spacing or deck thickness.
-save('house_body', trim(house_clean.crop((264, 0, house_clean.size[0], 274))))
+# The house on the pier. trim() cuts on alpha > 0, and defringe leaves a haze of
+# almost-transparent pixels off the right edge, so it was keeping an 81px dead
+# margin on a 528px sprite -- the house then drew at 60% of the width the scene
+# gives it and read as a shed pushed to one side. Cut on a real alpha threshold.
+def _solid_trim(im, thr=8):
+    a = im.split()[3]
+    w, h = im.size
+    xs = [x for x in range(w) if a.crop((x, 0, x + 1, h)).getextrema()[1] > thr]
+    ys = [y for y in range(h) if a.crop((0, y, w, y + 1)).getextrema()[1] > thr]
+    if not xs or not ys:
+        return im
+    return im.crop((xs[0], ys[0], xs[-1] + 1, ys[-1] + 1))
+
+save('house_body', _solid_trim(house_clean.crop((264, 0, house_clean.size[0], 274))))
 
 wb = defringe(trim(global_key(Image.open(os.path.join(ROOT, 'IMG_4468.jpeg')), 48)), tol=88, passes=3)
 save('workbench', wb)

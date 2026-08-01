@@ -618,7 +618,23 @@ function frame(now) {
   Game.updateFade(dt);
   SND.update(G ? G.musicOn : true);
 
-  // draw — everything in logical 480x270 units at DPX texel density
+  // draw — everything in logical 480x270 units at DPX texel density.
+  //
+  // THE TRANSFORM IS RESET, NOT RESTORED. This used to be a bare save/scale and
+  // trust the matching restore at the bottom, and one unbalanced ctx.save()
+  // anywhere in a scene broke the whole game: the trailing restore() popped the
+  // wrong level, scale(DPX) survived the frame, and the NEXT frame multiplied it
+  // again. Four, sixteen, sixty-four... measured at 9.8e+55 after a couple of
+  // seconds, at which point one fillRect covers the canvas and everything else
+  // lands somewhere past the heat death of the coordinate system. What the player
+  // sees is the ocean turning into a single flat blue rectangle, intermittently,
+  // depending on whether the leaking path ran.
+  //
+  // Starting each frame from a known identity makes a leak cost one frame instead
+  // of the session, and costs nothing.
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
   ctx.save();
   ctx.scale(DPX, DPX);
   ctx.fillStyle = '#000';
