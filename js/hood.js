@@ -73,7 +73,7 @@ const Hood = {
 
   // The pier, in ocean world coordinates. G.ocean.x starts at 0 and that is where
   // Otto drops in off his own planks, so the origin IS home water.
-  DOCK_AT: { x: 6, y: 6 },
+  DOCK_AT: { x: 6, y: -2 },   // ON the planks, not treading water beside them
 
   // ---- the deck scene ---------------------------------------------------------
   FLOOR: 178,             // deck surface, screen y (the sea starts at SKY.HORIZON 118)
@@ -127,7 +127,7 @@ const Hood = {
       x: -1480, w: 106, deckY: -30, deckFrac: 0.73, doorFrac: 0.50,
       climbDX: -42, plotDX: 30,
       legF: [-0.191, 0.089, 0.452], legW: 0.06, legCol: '#6d4a3e',
-      fish: { x: -1180, y: 96 },
+      fish: { x: -1180, y: -4 },
     },
     {
       key: 'cottage', who: 'farmer', art: 'nhouse_cottage',
@@ -135,7 +135,7 @@ const Hood = {
       x: 880, w: 114, deckY: -27, deckFrac: 0.53, doorFrac: 0.51,
       climbDX: -46, plotDX: 32,
       legF: [-0.142, 0.081, 0.453], legW: 0.07, legCol: '#281e2a',
-      fish: { x: 1240, y: 62 },
+      fish: { x: 1240, y: -4 },
     },
     {
       key: 'shack', who: 'angler', art: 'nhouse_shack',
@@ -146,7 +146,7 @@ const Hood = {
       x: 2380, w: 100, deckY: -6, deckFrac: 0.52, doorFrac: 0.40,
       climbDX: -16, plotDX: 34,
       legF: [-0.441, -0.047, 0.429], legW: 0.084, legCol: '#33232e',
-      fish: { x: 2760, y: 148 },
+      fish: { x: 2760, y: -4 },
     },
   ],
 
@@ -904,11 +904,16 @@ const Hood = {
     var ceil = this.HOMES[a.homeI].deckY;
     if (t.up && t.y < ceil) ceil = t.y;
     if (a.y < ceil) a.y = ceil;
-    if (!a.climbing && !t.up && a.y < 2) a.y = 2;
+    // NOBODY SWIMS. These are otters and dolphins in dungarees who live in houses
+    // and keep planters -- watching one sink through the water column to a fishing
+    // mark read as a bug every time. They stay at or above the water line: on a
+    // deck, or paddling along the surface between them. Only Otto goes under.
+    var FLOAT = 2;                              // just awash, the way a boat sits
+    if (!a.climbing && a.y > FLOAT) { a.y = FLOAT; if (a.vy > 0) a.vy = 0; }
 
-    // a wake, but only while actually swimming
-    if (a.y > 3 && (a.vx * a.vx + a.vy * a.vy) > 900 && Math.random() < dt * 14) {
-      this._wake(a.x - a.face * 8, a.y + rand(-4, 4), -a.vx * 0.16, -a.vy * 0.16, false);
+    // a surface wake behind anyone actually paddling
+    if (Math.abs(a.vx) > 18 && Math.random() < dt * 10) {
+      this._wake(a.x - a.face * 8, FLOAT + rand(-1, 2), -a.vx * 0.16, -6, false);
     }
   },
 
@@ -925,8 +930,9 @@ const Hood = {
         p.tendDay = G.day;
         if (Math.random() < 0.5) this._wake(a.x + a.face * 6, a.y + 4, 0, -10, true);
       }
-    } else if (a.act === 'fish' && a.y > 3 && Math.random() < dt * 1.2) {
-      this._wake(a.x + rand(-6, 6), a.y - rand(2, 8), 0, -14, false);
+    } else if (a.act === 'fish' && Math.random() < dt * 1.2) {
+      // a float bobbing where the line went in
+      this._wake(a.x + rand(-6, 6), 2 + rand(0, 3), 0, -14, false);
     }
   },
 

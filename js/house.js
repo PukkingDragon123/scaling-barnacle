@@ -1,13 +1,19 @@
 // ---- house interior: the painted cutaway, furnished with the uploaded props ----
 'use strict';
 
-// The new interior cutaway (house_in2), sized so the room fills the frame and the
-// stilts carry off the bottom edge. Measured down the middle of the art
-// (1400x1286): wall to y 0.501, then the floor boards 0.504..0.523, then the dock
-// below. So you stand at 0.519 — on the boards, just shy of their front lip.
-const HUT_H = 290, HUT_W = Math.round(HUT_H * 1400 / 1286);
-const HUT_X = Math.round((W - HUT_W) / 2), HUT_Y = 22;
-const BOARD_TOP = HUT_Y + HUT_H * 0.507;        // where the dock's deck must line up
+// The interior cutaway (house_in2), drawn ONE DEVICE PIXEL PER SOURCE PIXEL. The
+// art is 1400x1286 and was being squeezed into 316x290 logical -- a filtered
+// downscale, which is where the softness came from. At DPX=4 the native size is
+// exactly 350 x 321.5 logical, so the blit is 1:1, needs no filtering at all, and
+// every board and nail in the painting survives. It is taller than the 270-unit
+// frame on purpose: the stilts run off the bottom edge, which is what they did in
+// the art anyway.
+//
+// Measured down the middle of the art: wall to y 0.501, floor boards 0.504..0.523,
+// dock below. You stand at 0.519 — on the boards, just shy of their front lip.
+const HUT_W = 1400 / DPX, HUT_H = 1286 / DPX;
+const HUT_X = Math.round((W - HUT_W) / 2), HUT_Y = 26;
+const BOARD_TOP = HUT_Y + HUT_H * 0.5023;       // the board surface, measured
 const PORCH_L = HUT_X + HUT_W * 0.30, PORCH_R = HUT_X + HUT_W * 0.945;
 const BED_X = Math.round(PORCH_L + 40), TABLE_X = Math.round(PORCH_R - 40);
 // the desk sits between them, >= 22 from each so the house's own [E] search
@@ -21,7 +27,11 @@ const HouseScene = {
   aquaFish: [],
   embers: [],
 
-  FLOOR: Math.round(HUT_Y + HUT_H * 0.519),   // standing on the boards
+  // MEASURED, not eyeballed: scanning a clear column of house_in2 puts the board
+  // surface at 0.5023 of the art's height and its front lip at 0.5226. Feet go a
+  // hair into the boards at 0.5045 so nothing balances on the top edge line, and
+  // every prop in here is placed against this one number.
+  FLOOR: Math.round(HUT_Y + HUT_H * 0.5045),
 
   enter(opts) {
     this.time = 0;
@@ -104,18 +114,17 @@ const HouseScene = {
     drawA(ctx, `ocean${Math.floor(this.time * 8) % 12}`, -30, 0, 540, 270);
     SKY.tint(ctx, G.clock, this.time);
 
-    // The dock, tiled behind the hut at the porch line and scaled to match this
-    // view — outside, the house is part of the pier, so it has to be here too or
-    // it reads as a shed adrift in open water.
-    const segW = Math.round(88 * HUT_W / 86);    // the exterior's 88 at this zoom
-    const segH = assetH('dock_11', segW);
-    const segTop = BOARD_TOP - segH * 0.0352;    // deck top to deck top
-    for (let x = HUT_X % (segW - 1) - segW; x < W + segW; x += segW - 1) {
-      drawA(ctx, 'dock_11', x, segTop, segW, segH);
-    }
-
-    // the cutaway itself, over the dock
+    // NO PIER BEHIND THE HOUSE. It used to tile dock_11 clear across the frame at
+    // this zoom, so the room sat inside a wall of trestles and railings that
+    // belonged to a different view. The cutaway has its own posts painted into it;
+    // everything either side of it is open sea, which is where the house is.
+    //
+    // Smoothing off for this one blit: at 1:1 there is nothing to interpolate, and
+    // saying so keeps it off the bilinear path entirely.
+    const sm = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
     drawA(ctx, 'house_in2', HUT_X, HUT_Y, HUT_W, HUT_H);
+    ctx.imageSmoothingEnabled = sm;
 
     // furniture, standing on the porch boards
     const stand = (name, cx, w) => {

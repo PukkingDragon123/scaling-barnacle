@@ -70,7 +70,9 @@ const Ocean = {
   DASH_SPEED: 300, DASH_ACC: 620, DASH_T: 0.26, DASH_CD: 0.62, DASH_AIR: 1.6,
   ROLL_SPEED: 265, ROLL_END: 135, ROLL_T: 0.52, ROLL_CD: 0.8, ROLL_INV: 0.62, ROLL_AIR: 1.1,
   DTAP: 0.26,             // double-tap window for the dash
-  SURF_HOLD: 0.9,         // how long UP must be held at the top to climb out
+  // The dock ladder: the one way out of the open ocean, at the world origin
+  // (Ocean x 0 is directly under Otto's pier).
+  DOCK_X: 0, DOCK_R: 46, DOCK_TOP: 54,
   BANK_MAX: 1.02,         // how far the sprite is allowed to pitch into a turn
   IFRAME: 1.1,
   HURT_T: 0.7,
@@ -165,7 +167,7 @@ const Ocean = {
   dashT: 0, dashCD: 0, ddx: 1, ddy: 0,
   rollT: 0, rollCD: 0, rdx: 1, rdy: 0,
   iframe: 0, hurtT: 0, mineT: 0,
-  leaving: 0, forcedExit: false, surfT: 0,
+  leaving: 0, forcedExit: false, surfT: 0, atDock: false,
   over: false, overT: 0,
   flash: 0, shakeT: 0, splashT: 0,
   msg: '', msgT: 0,
@@ -365,7 +367,7 @@ const Ocean = {
     this.bag = {}; this.bagCount = 0; this.bagPulse = 0;
     this.dashT = 0; this.dashCD = 0; this.rollT = 0; this.rollCD = 0;
     this.iframe = 0; this.hurtT = 0; this.mineT = 0;
-    this.leaving = 0; this.forcedExit = false; this.surfT = 0;
+    this.leaving = 0; this.forcedExit = false; this.surfT = 0; this.atDock = false;
     this.over = false; this.overT = 0;
     this.flash = 0; this.shakeT = 0; this.splashT = 0;
     this._sky = clamp(-this.py / 26, 0, 1);   // he drops in under the surface
@@ -391,7 +393,7 @@ const Ocean = {
         ? 'Open water! Pads swim  --  paw: dash  --  swirl: spin roll'
         : 'Open water! WASD/arrows swim  --  [Shift] dash  --  [Space] spin roll');
       Game.toast('The spin roll dodges anything and carries you a long way.');
-      Game.toast('Air runs out down deep -- surface to breathe, or hold UP up top to climb out.');
+      Game.toast('Air runs out -- surface anywhere to breathe. Swim home to the pier ladder to climb out.');
     }
     this._save();
   },
@@ -961,18 +963,18 @@ const Ocean = {
 
     this._setAnim(dt);
 
-    // Out the top: no magic exit button. Hold UP at the surface for a beat, the
-    // same contract the dive uses, so breaching mid-jump never boots you out.
+    // THE WAY HOME IS THE DOCK. Surfacing anywhere used to end the trip, which
+    // made the whole sea one screen deep -- you never had to know where you were,
+    // because up was always out. Now the only exit is the ladder under your own
+    // pier: swim back to it and climb. Breaking the surface mid-ocean does
+    // exactly what it should, which is let you breathe.
     if (this.leaving) {
       if (this.py <= 0.5) { this._exit(); return; }
-    } else if (this.py <= 2 && this._held(2)) {
-      // deliberately unhurried: the surface is also where he BREATHES, so a
-      // quick gulp of air must never be mistaken for asking to go home
-      this.surfT += dt;
-      if (this.surfT > this.SURF_HOLD) this.surface(false);
-    } else {
-      this.surfT = Math.max(0, this.surfT - dt * 2);
+      return;
     }
+    this.atDock = Math.abs(this.px - this.DOCK_X) < this.DOCK_R &&
+                  this.py < this.DOCK_TOP && this.py > -60;
+    if (this.atDock && Input.p('KeyE')) { this.surface(false); return; }
   },
 
   _updateBlackout(dt) {
@@ -1795,6 +1797,7 @@ const Ocean = {
     // context rather than in the half-res backdrop -- and it goes down AFTER the
     // rays, because light shafts stop at the sand.
     this._drawFloor(ctx, t);
+    this._drawHome(ctx, t);
     this._drawProps(ctx, t, false);
     this._drawMotes(ctx, t);
     this._drawBubbles(ctx);
@@ -2330,6 +2333,65 @@ const Ocean = {
   // then fogged toward the water's own colour -- because sand that keeps its
   // contrast at 2000 units down reads as a painted backdrop, and the fog is the
   // only thing that puts water between you and it.
+  // ---- home ------------------------------------------------------------------------
+  // Otto's own pier, seen from underneath, at the world origin. It is the only way
+  // out of the open ocean now, so it has to be VISIBLE from a distance and
+  // obviously climbable: posts going up out of frame, cross-bracing, and a ladder
+  // with real rungs running from the deck down past the waterline.
+  _drawHome(ctx, t) {
+    const sx = this.DOCK_X - this.camX;
+    if (sx < -140 || sx > W + 140) return;
+    const surf = -this.camY;
+    if (surf > H + 90) return;                  // the whole thing is above the frame
+
+    const postW = 7;
+    const bot = surf + 96;
+    ctx.save();
+    // the posts, in flat bands so they fade into the water without a gradient
+    ctx.fillStyle = '#7a4a2e';
+    for (let p = -1; p <= 1; p++) {
+      const px = sx + p * 34;
+      for (let b = 0; b < 5; b++) {
+        const y0 = surf - 30 + (bot - surf + 30) * (b / 5);
+        const y1 = surf - 30 + (bot - surf + 30) * ((b + 1) / 5);
+        ctx.globalAlpha = 0.92 * (1 - b / 5.6);
+        ctx.fillRect(px - postW / 2, y0, postW, y1 - y0 + 0.5);
+      }
+    }
+    ctx.globalAlpha = 0.8;
+    ctx.strokeStyle = '#7a4a2e';
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(sx - 34, surf + 18); ctx.lineTo(sx + 34, surf + 40);
+    ctx.moveTo(sx + 34, surf + 18); ctx.lineTo(sx - 34, surf + 40);
+    ctx.stroke();
+
+    // the underside of the deck, a solid lip at the water line
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#8a5a34';
+    ctx.fillRect(sx - 58, surf - 34, 116, 7);
+    ctx.fillStyle = '#c9a271';
+    ctx.fillRect(sx - 58, surf - 36, 116, 2.4);
+
+    // THE LADDER: the affordance and the hit box are the same object.
+    const lx = sx + 18;
+    const lTop = surf - 32, lBot = surf + this.DOCK_TOP;
+    ctx.fillStyle = '#a4805a';
+    ctx.fillRect(lx - 6, lTop, 2, lBot - lTop);
+    ctx.fillRect(lx + 4, lTop, 2, lBot - lTop);
+    ctx.fillStyle = this.atDock ? '#ffd66e' : '#c9a271';
+    for (let ry = lTop + 5; ry < lBot; ry += 7) ctx.fillRect(lx - 6, ry, 12, 1.8);
+
+    // a soft glow on it while he is in reach, so the exit is never lost
+    if (this.atDock) {
+      ctx.globalAlpha = 0.18 + 0.1 * Math.sin(t * 4);
+      ctx.fillStyle = '#ffe6b0';
+      ctx.fillRect(lx - 12, lTop - 4, 24, lBot - lTop + 8);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  },
+
   _drawForeground(ctx, t) {
     if (this.quality <= 0) return;
     const tint = this._tintAt(this.camY + H * 0.7);
@@ -2815,18 +2877,22 @@ const Ocean = {
     ctx.restore();
     text(ctx, `${this.bagCount}/${cap}`, W - 52, by + 4, { size: 8, color: full ? '#ff5a4a' : '#ffe6b0' });
 
-    // how to get out, while he is up near the light
-    if (!this.over && !this.leaving && this.py < 34) {
-      ctx.globalAlpha = 0.55 + 0.45 * Math.sin(this.time * 3);
-      text(ctx, touch ? 'hold the UP pad at the surface to climb out' : 'hold UP at the surface to climb out  ([Esc] anywhere)',
-        W / 2, 42, { size: 7, color: '#d8ccb4', align: 'center' });
+    // The ladder prompt, and only when he is actually at it.
+    if (!this.over && !this.leaving && this.atDock) {
+      ctx.globalAlpha = 0.6 + 0.4 * Math.sin(this.time * 3);
+      text(ctx, touch ? 'tap the paw to climb the ladder' : '[E] climb the ladder home',
+        W / 2, 42, { size: 7, color: '#ffe6b0', align: 'center' });
       ctx.globalAlpha = 1;
-      // and while he is holding it, show the beat filling up
-      if (this.surfT > 0.02) {
-        const k = clamp(this.surfT / this.SURF_HOLD, 0, 1);
-        rrect(ctx, W / 2 - 20, 52, 40, 3, '#08141c', '#2c4654');
-        ctx.fillStyle = '#a0f2b4';
-        ctx.fillRect(W / 2 - 19, 52.5, 38 * k, 2);
+    } else if (!this.over && !this.leaving && this.py < 20) {
+      // Up top and not home: say which way home is, because the sea is wide and
+      // the exit is a place now rather than a keypress.
+      const d = this.DOCK_X - this.px;
+      if (Math.abs(d) > this.DOCK_R) {
+        ctx.globalAlpha = 0.5;
+        text(ctx, (d < 0 ? '\u25c0 ' : '') + 'the pier is ' + Math.round(Math.abs(d) / this.PX_PER_M) +
+          'm ' + (d < 0 ? 'west' : 'east') + (d > 0 ? ' \u25b6' : ''),
+          W / 2, 42, { size: 7, color: '#d8ccb4', align: 'center' });
+        ctx.globalAlpha = 1;
       }
     }
     if (this.leaving && !this.over) {
