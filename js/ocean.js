@@ -810,12 +810,19 @@ const Ocean = {
     // Coral art is 20 variants; pick a small palette per chunk and stay with it so
     // a chunk has an identity instead of being confetti.
     const palette = (rng() * 20) | 0;
+    const weedPal = (rng() * 12) | 0;
+    // A thicket is WEED (the twelve uploaded plants), a garden is CORAL, and both
+    // scatter the odd shell. Picking the family off the zone's own kind is what
+    // makes the Kelp Shelf look like a kelp shelf.
+    const weedy = kind === 'thicket';
     const plant = (front) => {
       const x = x0 + rng() * this.CW;
       const shell = rng() < shellCh;
       const art = shell
         ? this.SHELL_ART[(rng() * this.SHELL_ART.length) | 0]
-        : 'coral_' + ((palette + ((rng() * 4) | 0)) % 20);
+        : (weedy && rng() < 0.75)
+          ? 'weed_' + ((weedPal + ((rng() * 4) | 0)) % 12)
+          : 'coral_' + ((palette + ((rng() * 4) | 0)) % 20);
       const soft = !shell && rng() < (kind === 'thicket' ? 0.78 : 0.42);
       // Near-field props are bigger AND crisper; the back row is small and dim.
       // With no parallax left to sell depth, this ratio is doing that whole job.

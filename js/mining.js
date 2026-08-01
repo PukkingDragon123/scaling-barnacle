@@ -133,7 +133,7 @@ const Mining = {
       ]
     },
     stone: {
-      key: 'stone', name: 'stone outcrop', art: 'node_stone', w: 46,
+      key: 'stone', name: 'stone outcrop', art: 'ore_stone', w: 54,
       hardness: 4, tier: 0, band: [0.00, 0.85], weight: 12, skill: 'mining', xp: 4,
       chips: [2, 3], snd: 'scrape',
       loot: [
@@ -142,7 +142,7 @@ const Mining = {
       ]
     },
     scrap: {
-      key: 'scrap', name: 'scrap pile', art: 'node_scrap', w: 46,
+      key: 'scrap', name: 'scrap pile', art: 'ore_scrap', w: 54,
       hardness: 6, tier: 1, band: [0.10, 0.80], weight: 5, skill: 'salvage', xp: 6,
       chips: [2, 7], snd: 'clink',
       loot: [
@@ -152,7 +152,7 @@ const Mining = {
       ]
     },
     coal: {
-      key: 'coal', name: 'coal seam', art: 'node_coal', w: 46,
+      key: 'coal', name: 'coal seam', art: 'ore_coal', w: 54,
       hardness: 6, tier: 1, band: [0.18, 0.95], weight: 7, skill: 'mining', xp: 6,
       chips: [6, 2], snd: 'scrape',
       loot: [
@@ -161,7 +161,7 @@ const Mining = {
       ]
     },
     iron: {
-      key: 'iron', name: 'iron vein', art: 'node_iron', w: 46,
+      key: 'iron', name: 'iron vein', art: 'ore_copper', w: 54,
       hardness: 8, tier: 1, band: [0.30, 1.00], weight: 6, skill: 'mining', xp: 9,
       chips: [2, 3], snd: 'clink',
       loot: [
@@ -181,7 +181,7 @@ const Mining = {
       ]
     },
     gold: {
-      key: 'gold', name: 'gold seam', art: 'node_gold', w: 46,
+      key: 'gold', name: 'gold seam', art: 'ore_gold', w: 54,
       hardness: 12, tier: 2, band: [0.62, 1.00], weight: 3, skill: 'mining', xp: 16,
       chips: [4, 2], snd: 'clink',
       loot: [
@@ -191,7 +191,7 @@ const Mining = {
       ]
     },
     crystal: {
-      key: 'crystal', name: 'crystal cluster', art: 'node_crystal', w: 46,
+      key: 'crystal', name: 'crystal cluster', art: 'ore_crystal', w: 56,
       hardness: 14, tier: 3, band: [0.78, 1.00], weight: 2, skill: 'mining', xp: 22,
       chips: [5, 3], snd: 'clink',
       loot: [

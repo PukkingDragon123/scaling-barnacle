@@ -653,6 +653,76 @@ for _n, _box in _DW_CUTS:
     if _c.size[0] > 2 and _c.size[1] > 2:
         save(_n, despeckle(_c))
 
+
+# ---- the August upload: ores, weeds, dock kit, item icons ----------------------
+# Four sheets, all laid out as free-standing objects on a flat field, so connected
+# components is the right cut -- no grid to guess and no gutters to find. Boxes
+# come back in scan order, which is not reading order, so each sheet sorts its own
+# boxes into rows first (bucketing by centre-y against a row tolerance) and then
+# left-to-right inside each row. That is what makes the name lists below line up
+# with what you see when you open the file.
+def _sheet_objects(path, bg_tol, names, row_tol=90, min_area=1400, cap=None):
+    im = key_bg(Image.open(os.path.join(ROOT, path)), tol=bg_tol)
+    boxes = components(im, min_area=min_area)
+    rows = []
+    for b in boxes:
+        cy = (b[1] + b[3]) / 2
+        for r in rows:
+            if abs(r[0] - cy) < row_tol:
+                r[1].append(b)
+                break
+        else:
+            rows.append([cy, [b]])
+    rows.sort(key=lambda r: r[0])
+    ordered = []
+    for _, rb in rows:
+        rb.sort(key=lambda b: b[0])
+        ordered.extend(rb)
+    out = []
+    for i, b in enumerate(ordered):
+        if i >= len(names) or (cap and i >= cap):
+            break
+        cell = trim(im.crop(tuple(b)))
+        if cell.size[0] < 4 or cell.size[1] < 4:
+            continue
+        if cell.size[1] > 200:
+            sc = 200 / cell.size[1]
+            cell = cell.resize((max(1, round(cell.size[0] * sc)), 200), Image.LANCZOS)
+        save(names[i], despeckle(cell))
+        out.append(names[i])
+    return out
+
+# ORE NODES. Bright, chunky, and each one sits on a FLAT BASE -- which is exactly
+# what a rock resting on the seabed needs, and what the old node art lacked.
+_sheet_objects('2B4D10F5-69D6-4D2A-9CA2-C323904D7D28.png', 30, [
+    'ore_stone', 'ore_copper', 'ore_gold', 'ore_crystal', 'ore_coal', 'ore_scrap',
+], row_tol=180, min_area=4000)
+
+# SEAWEED. Twelve plants, all rooted at the bottom of their own cell, so they can
+# be planted on the sand with the base as the anchor.
+_sheet_objects('B395B479-D087-4DA2-B444-2F4F08F6586B.png', 34, [
+    'weed_0', 'weed_1', 'weed_2', 'weed_3',
+    'weed_4', 'weed_5', 'weed_6', 'weed_7',
+    'weed_8', 'weed_9', 'weed_10', 'weed_11',
+], row_tol=160, min_area=3000)
+
+# THE DOCK KIT: everything you can build out on the planks, including the barn.
+_sheet_objects('CF64917A-4B5D-4D7A-8DE9-9BEC0F6EA47C.png', 30, [
+    'kit_barn', 'kit_pavilion', 'kit_hoist',
+    'kit_hayloft', 'kit_ropefence', 'kit_trough', 'kit_ramp',
+    'kit_deck', 'kit_trestle', 'kit_ladder', 'kit_rail', 'kit_lamp', 'kit_mooring',
+], row_tol=150, min_area=3000)
+
+# ITEM ICONS, on magenta.
+_sheet_objects('27DA4A95-FE40-4173-B479-B244453D2273.png', 60, [
+    'ic_logs', 'ic_rope', 'ic_coalsack', 'ic_ingots',
+    'ic_flask', 'ic_tea', 'ic_chowder', 'ic_skewer',
+    'ic_grill', 'ic_rolls', 'ic_barrel', 'ic_coop',
+    'ic_scarecrow', 'ic_pen', 'ic_cannon',
+    'ic_kelp', 'ic_oyster', 'ic_pineapple', 'ic_steak',
+    'ic_snail', 'ic_coral', 'ic_crate',
+], row_tol=110, min_area=2500)
+
 with open(os.path.join(OUT, 'manifest.json'), 'w') as f:
     json.dump(manifest, f)
 print(f'\n{len(manifest)} assets written to assets/')
