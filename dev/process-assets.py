@@ -627,6 +627,32 @@ for _i, _b in enumerate(_pboxes):
         _cell = _cell.resize((max(1, round(_cell.size[0] * _s)), 180), Image.LANCZOS)
     save(PICK_NAMES[_i], despeckle(_cell))
 
+
+# ---- driftwood, broken up ------------------------------------------------------
+# res_driftwood is a BUNDLE: three logs tied with rope. As an inventory icon a
+# bundle is right (it is a stack of the stuff), but the ocean scatters it as
+# scenery that is supposed to be adrift, and a neatly tied bundle bobbing in open
+# water reads as cargo somebody lost rather than as driftwood.
+#
+# So the bundle is cut into its three logs. The crops are measured off the alpha
+# map: the upright log occupies the top-centre, the long diagonal runs across the
+# middle, and the short one sits bottom-left. Each is trimmed to its own content
+# and keyed against the same background, so they come out as three loose pieces
+# that can be strewn at different sizes and angles.
+_dw = Image.open(os.path.join(OUT, 'res_driftwood.png')).convert('RGBA')
+# The rope crosses the middle (roughly x 50..95, y 60..110), so the cuts stay
+# clear of it: the upright above it, and the two clean ends of the long log
+# either side.
+_DW_CUTS = [
+    ('drift_0', (64, 0, 124, 62)),      # the upright, top-centre
+    ('drift_1', (98, 68, 157, 114)),    # the long log's right end
+    ('drift_2', (0, 78, 52, 124)),      # ... and its left end
+]
+for _n, _box in _DW_CUTS:
+    _c = trim(_dw.crop(_box))
+    if _c.size[0] > 2 and _c.size[1] > 2:
+        save(_n, despeckle(_c))
+
 with open(os.path.join(OUT, 'manifest.json'), 'w') as f:
     json.dump(manifest, f)
 print(f'\n{len(manifest)} assets written to assets/')

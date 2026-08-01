@@ -1239,6 +1239,12 @@ const Skills = {
   _tagRect: function () { return { x: W - 86, y: 38, w: 46, h: 13 }; },
 
   _drawTag: function (c) {
+    // SUPERSEDED. js/uibar.js draws a pixel-art trophy button in this corner with
+    // the unspent-point count on it, and two overlapping "you have skill points"
+    // widgets in the same band read as a bug. The rect and the click handler stay
+    // live -- they are the touch fallback if uibar is ever absent -- but nothing
+    // is painted while it IS present.
+    if (typeof UIBar !== 'undefined' && UIBar && UIBar._installed) return;
     if (!this.ensure()) return;
     var n = this.points();
     if (!n && !TouchUI.enabled) return;      // keyboard players only see it when it matters
@@ -1290,6 +1296,7 @@ const Skills = {
       if (Input.p('KeyK')) { self.openUI(); return; }
       // touch has no keyboard, so the badge is the way in
       if (Input.mouse.clicked && self._visibleTag() &&
+          !(typeof UIBar !== 'undefined' && UIBar && UIBar._installed) &&
           self._in(self._tagRect(), Input.mouse.x, Input.mouse.y)) {
         self.openUI();
       }

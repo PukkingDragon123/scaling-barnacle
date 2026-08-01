@@ -783,7 +783,10 @@ const Ocean = {
   // would dress the same line of sand and the seabed would grow eight coral
   // gardens stacked on one spot.
   SHELL_ART: ['shell_clam', 'shell_mussel', 'shell_cockle', 'shell_scallop', 'urchin_1', 'urchin_3'],
-  DRIFT_ART: ['res_driftwood', 'res_driftwood', 'res_driftwood', 'res_plank'],
+  // Three LOOSE logs, cut out of the bundle sprite in the asset pipeline. The
+  // bundle itself is a tied stack -- correct as an inventory icon, wrong bobbing
+  // in open water, where it read as cargo somebody lost.
+  DRIFT_ART: ['drift_0', 'drift_1', 'drift_2', 'drift_1', 'drift_2', 'res_plank'],
 
   _gen(ci, cj, key) {
     // Mix the two axes into the seed with large odd multipliers so neighbours

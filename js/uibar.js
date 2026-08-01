@@ -34,73 +34,82 @@ const UIBar = {
   },
 
   // ==== the baked icons ======================================================
-  // Two 18x18-logical drawings at DPX texels: a trophy cup and a flap satchel.
-  // Three shades and a highlight each -- the difference between an icon and a
-  // coloured rectangle is entirely in these few strokes.
+  // ACTUAL PIXEL ART: two 16x16 grids, one character per pixel, painted once into
+  // an offscreen canvas at DPX and then blitted. The previous pair were drawn with
+  // quadratic curves and arcs, which is why they read as vector clip-art sitting
+  // on top of a pixel game -- at this size every pixel is a deliberate decision
+  // and a curve just guesses for you.
+  //
+  // '.' is transparent; every other character indexes PAL.
+  PAL: {
+    o: '#2a1b10',    // outline
+    d: '#8a5a20',    // dark gold / dark leather
+    m: '#e8b84e',    // mid gold
+    l: '#ffd66e',    // light gold
+    w: '#fff2c8',    // highlight
+    b: '#7a4a2a',    // dark leather
+    t: '#b07840',    // mid leather
+    c: '#c99a5e',    // light leather
+    s: '#5a3a18',    // shadow under things
+  },
+  TROPHY: [
+    '................',
+    '..oooooooooooo..',
+    '.o.wmmmmmmmml.o.',
+    'oo.wmmmmmmmml.oo',
+    'o.o.mmmmmmmm.o.o',
+    'o.o.wmmmmmml.o.o',
+    'oo.o.mmmmmm.o.oo',
+    '.oo.o.mmmm.o.oo.',
+    '..o..ol..lo..o..',
+    '.......dd.......',
+    '.......dd.......',
+    '......oddo......',
+    '.....odddddo....',
+    '....olmmmmmlo...',
+    '....ooooooooo...',
+    '................',
+  ],
+  SATCHEL: [
+    '................',
+    '.....bbbbbb.....',
+    '....b......b....',
+    '...b........b...',
+    '...b........b...',
+    '..oooooooooooo..',
+    '.occccccccccco..',
+    '.ocwwccccccwco..',
+    '.occccccccccco..',
+    '.otttttmmttttto.',
+    '.ottttollottto..',
+    '.ottttollottto..',
+    '.otttttmmttttto.',
+    '..ottttttttto...',
+    '...ooooooooo....',
+    '................',
+  ],
+
   _icons() {
     if (this._cv) return this._cv;
-    const S = 18, q = DPX;
+    const S = 16, q = DPX;
     const cv = document.createElement('canvas');
     cv.width = S * 2 * q; cv.height = S * q;
     const c = cv.getContext('2d');
-    c.scale(q, q);
-
-    // ---- trophy ----
-    c.save();
-    c.translate(0, 0);
-    c.fillStyle = '#8a5a20';                       // plinth
-    c.fillRect(5.5, 14, 7, 2);
-    c.fillRect(7.5, 12.5, 3, 2);
-    c.fillStyle = '#e8b84e';                       // cup
-    c.beginPath();
-    c.moveTo(4.5, 3); c.lineTo(13.5, 3);
-    c.lineTo(12.6, 9); c.quadraticCurveTo(9, 12.4, 5.4, 9);
-    c.closePath(); c.fill();
-    c.strokeStyle = '#e8b84e';                     // handles
-    c.lineWidth = 1.3;
-    c.beginPath(); c.arc(4.2, 5.4, 2.2, Math.PI * 0.5, Math.PI * 1.5); c.stroke();
-    c.beginPath(); c.arc(13.8, 5.4, 2.2, -Math.PI * 0.5, Math.PI * 0.5); c.stroke();
-    c.fillStyle = '#fff2c8';                       // shine
-    c.fillRect(6.2, 4, 1.6, 4.2);
-    c.fillStyle = '#a87820';                       // bowl shadow
-    c.fillRect(5.2, 3, 7.6, 1);
-    c.fillStyle = '#ffd66e';                       // the star on the plinth
-    c.beginPath();
-    for (let i = 0; i < 5; i++) {
-      const a = -Math.PI / 2 + i * TAU / 5, r1 = 1.8, r2 = 0.8;
-      const a2 = a + TAU / 10;
-      c.lineTo(9 + Math.cos(a) * r1, 15 + Math.sin(a) * r1);
-      c.lineTo(9 + Math.cos(a2) * r2, 15 + Math.sin(a2) * r2);
-    }
-    c.closePath(); c.fill();
-    c.restore();
-
-    // ---- satchel ----
-    c.save();
-    c.translate(S, 0);
-    c.strokeStyle = '#8a5a30';                     // strap
-    c.lineWidth = 1.4;
-    c.beginPath(); c.arc(9, 8, 6.4, Math.PI * 1.05, Math.PI * 1.95); c.stroke();
-    c.fillStyle = '#b07840';                       // body
-    c.beginPath();
-    c.moveTo(3.4, 7.5); c.lineTo(14.6, 7.5);
-    c.quadraticCurveTo(15.4, 15, 12.5, 15.4);
-    c.lineTo(5.5, 15.4);
-    c.quadraticCurveTo(2.6, 15, 3.4, 7.5);
-    c.closePath(); c.fill();
-    c.fillStyle = '#8a5a30';                       // under-flap shadow
-    c.fillRect(3.6, 7.5, 10.8, 1.6);
-    c.fillStyle = '#c99a5e';                       // flap
-    c.beginPath();
-    c.moveTo(3.2, 7.5); c.lineTo(14.8, 7.5);
-    c.lineTo(14, 11); c.quadraticCurveTo(9, 12.6, 4, 11);
-    c.closePath(); c.fill();
-    c.fillStyle = '#ffd66e';                       // buckle
-    c.fillRect(8.1, 10, 1.8, 2.4);
-    c.fillStyle = '#fff2c8';                       // flap highlight
-    c.fillRect(4.4, 8, 8, 0.8);
-    c.restore();
-
+    const paint = (grid, ox) => {
+      for (let y = 0; y < grid.length; y++) {
+        const row = grid[y];
+        for (let x = 0; x < row.length; x++) {
+          const ch = row[x];
+          if (ch === '.') continue;
+          const col = this.PAL[ch];
+          if (!col) continue;
+          c.fillStyle = col;
+          c.fillRect((ox + x) * q, y * q, q, q);
+        }
+      }
+    };
+    paint(this.TROPHY, 0);
+    paint(this.SATCHEL, S);
     this._cv = cv;
     return cv;
   },
@@ -186,7 +195,7 @@ const UIBar = {
   draw(c) {
     if (!this._visible() || this._peerOpen()) return;
     const cv = this._icons();
-    const S = 18, q = DPX;
+    const S = 16, q = DPX;
     const m = Input.mouse;
     const pts = this._points();
     const fresh = this.newRecipes();
@@ -200,7 +209,7 @@ const UIBar = {
       c.lineWidth = PIX * 2;
       c.strokeRect(b.x + PIX, y + PIX, this.BW - PIX * 2, this.BH - PIX * 2);
       const si = b.key === 'skills' ? 0 : 1;
-      c.drawImage(cv, si * S * q, 0, S * q, S * q, b.x + 2, y + 2, S, S);
+      c.drawImage(cv, si * S * q, 0, S * q, S * q, b.x + 3, y + 3, S, S);
 
       // the badge: what is waiting inside
       const n = b.key === 'skills' ? pts : fresh;

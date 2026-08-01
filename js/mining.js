@@ -34,6 +34,21 @@ const Mining = {
 
   SWING_T: 0.44,         // seconds per full opick_0..3 swing
   HIT_AT: 0.55,          // fraction of the swing where frame 2 (the strike) lands
+
+  // ---- THE TIMING GAME --------------------------------------------------------
+  // A sweep runs back and forth across a bar while you are on a node. Strike
+  // inside the sweet spot and the blow lands harder; strike in the narrow core of
+  // it and it lands MUCH harder. Miss and the swing still counts, it just does
+  // the ordinary damage -- the game rewards skill, it never punishes you into a
+  // stall. The window narrows as the node's tier goes up, which is what makes a
+  // crystal cluster feel different from a log rather than merely slower.
+  BAR_W: 74,             // logical width of the bar over the node
+  SWEEP_T: 0.86,         // seconds for one full there-and-back
+  ZONE_W: 0.30,          // fraction of the bar that is the good zone, at tier 0
+  CORE_W: 0.11,          // ... and the perfect core inside it
+  ZONE_TIGHTEN: 0.055,   // subtracted per node tier
+  GOOD_MUL: 1.6,
+  PERFECT_MUL: 2.6,
   REACH: 42,             // how far in front of Otto a node can be mined (nodes grew, so did this)
   CURSOR_R: 20,          // click slop when aiming with the pointer
   NOTE_GAP: 1.4,         // rate limit on the "too soft" complaint
@@ -199,6 +214,11 @@ const Mining = {
   swinging: false,
   busy: false,           // true while a swing is in flight; scenes can gate on it
   swingT: 0,
+  sweep: 0,              // 0..1 position of the timing cursor
+  sweepDir: 1,
+  sweepFor: null,        // the node uid the current sweep belongs to
+  lastHit: '',           // 'perfect' | 'good' | '' -- for the flash
+  lastHitT: 0,
   hitDone: false,
   aimX: 0, aimY: 0,      // world-space aim point
   holding: false,
@@ -749,16 +769,130 @@ const Mining = {
     if (typeof this.anim === 'function') this.anim(this.SWING_T * 1.35);
   },
 
+  // Half-width of the good zone and its core for this node, as fractions of the
+  // bar. Centred at 0.5, so a zone is [0.5 - half, 0.5 + half].
+  zoneFor: function (n) {
+    var def = this.NODES[n.kind];
+    var t = def ? def.tier : 0;
+    var g = Math.max(0.12, this.ZONE_W - t * this.ZONE_TIGHTEN);
+    var c = Math.max(0.05, this.CORE_W - t * this.ZONE_TIGHTEN * 0.5);
+    return { good: g * 0.5, core: c * 0.5 };
+  },
+
+  // What the sweep is sitting on RIGHT NOW: 'perfect', 'good' or ''.
+  sweepGrade: function (n) {
+    if (!n) return '';
+    var z = this.zoneFor(n);
+    var d = Math.abs(this.sweep - 0.5);
+    if (d <= z.core) return 'perfect';
+    if (d <= z.good) return 'good';
+    return '';
+  },
+
+  // The sweep only runs while a node is actually targeted, and it restarts from
+  // the left whenever the target changes -- otherwise you could park on a node,
+  // wait for the cursor to drift into the middle, and tap.
+  _tickSweep: function (dt, target) {
+    if (!target) { this.sweepFor = null; return; }
+    if (this.sweepFor !== target.uid) {
+      this.sweepFor = target.uid;
+      this.sweep = 0;
+      this.sweepDir = 1;
+    }
+    var sp = dt / this.SWEEP_T * 2;
+    this.sweep += sp * this.sweepDir;
+    if (this.sweep >= 1) { this.sweep = 1; this.sweepDir = -1; }
+    else if (this.sweep <= 0) { this.sweep = 0; this.sweepDir = 1; }
+    if (this.lastHitT > 0) this.lastHitT -= dt;
+  },
+
+  // Shock rings: a pooled expanding circle at the point of contact. Six is plenty
+  // -- they last a third of a second -- and the pool is built lazily so nothing
+  // is allocated on a boot that never mines.
+  RING_MAX: 6,
+  _ring: function (x, y, r) {
+    if (!this.rings) {
+      this.rings = [];
+      for (var i = 0; i < this.RING_MAX; i++) this.rings.push({ t: 0, x: 0, y: 0, r: 0 });
+      this._ri = 0;
+    }
+    var o = this.rings[this._ri];
+    this._ri = (this._ri + 1) % this.RING_MAX;
+    o.t = 0.34; o.x = x; o.y = y; o.r = r;
+  },
+
+  // THE TIMING BAR, over the node you are on. The good zone and its core are drawn
+  // as bands so the target is legible at a glance, and the cursor is a bright
+  // needle. It only exists while a node is targeted, which is also the only time
+  // the sweep is running.
+  _drawSweep: function (ctx) {
+    var n = this.target;
+    if (!n || n.dead) return;
+    var z = this.zoneFor(n);
+    var w = this.BAR_W, h = 7;
+    var x = n.x - w / 2, y = n.y - n.h * 0.5 - 22;
+
+    // OPAQUE. Translucent bands over a dark track were nearly invisible against
+    // the water -- and a timing game you cannot read the target of is just a
+    // random multiplier.
+    ctx.fillStyle = '#0a1018';
+    ctx.fillRect(x - 1.5, y - 1.5, w + 3, h + 3);
+    ctx.fillStyle = '#3d5666';
+    ctx.fillRect(x, y, w, h);
+    // good zone, then the perfect core inside it
+    ctx.fillStyle = '#5fc97a';
+    ctx.fillRect(x + (0.5 - z.good) * w, y, z.good * 2 * w, h);
+    ctx.fillStyle = '#ffd66e';
+    ctx.fillRect(x + (0.5 - z.core) * w, y, z.core * 2 * w, h);
+    // the needle
+    var cx = x + this.sweep * w;
+    ctx.fillStyle = '#0a1018';
+    ctx.fillRect(cx - 1.6, y - 3, 3.2, h + 6);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(cx - 0.8, y - 2.4, 1.6, h + 4.8);
+
+    // a flash on the last graded hit, so the feedback lands on the bar too
+    if (this.lastHitT > 0 && this.lastHit) {
+      ctx.globalAlpha = clamp(this.lastHitT / 0.5, 0, 1) * 0.5;
+      ctx.fillStyle = this.lastHit === 'perfect' ? '#ffd66e' : '#a0f2b4';
+      ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+      ctx.globalAlpha = 1;
+    }
+  },
+
+  _drawRings: function (ctx, camX, camY) {
+    if (!this.rings) return;
+    ctx.strokeStyle = '#ffe6b0';
+    for (var i = 0; i < this.rings.length; i++) {
+      var o = this.rings[i];
+      if (o.t <= 0) continue;
+      var k = 1 - o.t / 0.34;
+      ctx.globalAlpha = (1 - k) * 0.8;
+      ctx.lineWidth = 2.4 * (1 - k) + 0.5;
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, o.r * (0.25 + k), 0, TAU);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  },
+
   // One landed blow. Returns true if the node broke.
   _land: function (n) {
     var def = this.NODES[n.kind];
     if (!this.canBreak(n)) { this._tooSoft(n); return false; }
 
-    var dmg = this.power();
+    // THE TIMING PAYS OFF HERE. Grade is read at the instant of contact, not when
+    // the swing started, so what you are aiming at is what you see on the bar.
+    var grade = this.grade || '';
+    this.grade = '';
+    var mul = grade === 'perfect' ? this.PERFECT_MUL : (grade === 'good' ? this.GOOD_MUL : 1);
+    var dmg = Math.max(1, Math.round(this.power() * mul));
+    this.lastHit = grade;
+    this.lastHitT = grade ? 0.5 : 0;
     n.hp -= dmg;
-    n.shakeT = 0.22;
-    n.shakeA = 1.1 + dmg * 0.25;
-    n.hitT = 0.16;
+    n.shakeT = grade === 'perfect' ? 0.4 : 0.22;
+    n.shakeA = (1.1 + dmg * 0.25) * (grade === 'perfect' ? 1.7 : 1);
+    n.hitT = grade === 'perfect' ? 0.3 : 0.16;
     // Where the blow lands, clamped INSIDE the rock: auto-targeting can leave the
     // cursor a long way off, and the spark and chips have to come off the node.
     n.hitX = clamp((this.aimX - n.x) * 0.4, -n.w * 0.34, n.w * 0.34);
@@ -767,10 +901,25 @@ const Mining = {
     this.combo++;
     this.comboT = 1.6;
 
-    this._chipBurst(n.x + n.hitX, n.y + n.hitY, def, 5 + Math.min(4, dmg * 2));
+    // IMPACT. A graded blow throws far more debris, kicks a shock ring, shakes the
+    // scene and says so -- the whole point of a timing game is that a good hit
+    // LOOKS different from a bad one.
+    var chips = 5 + Math.min(4, dmg * 2) + (grade === 'perfect' ? 16 : grade === 'good' ? 8 : 0);
+    this._chipBurst(n.x + n.hitX, n.y + n.hitY, def, chips);
+    if (grade) {
+      this._ring(n.x + n.hitX, n.y + n.hitY, grade === 'perfect' ? 26 : 16);
+      this._fly(grade === 'perfect' ? 'PERFECT!' : 'good hit',
+        n.x, n.y - n.h * 0.5 - 8,
+        grade === 'perfect' ? '#ffd66e' : '#a0f2b4');
+      if (typeof Ocean !== 'undefined' && Ocean && grade === 'perfect') {
+        Ocean.shakeT = Math.max(Ocean.shakeT || 0, 0.22);
+      }
+      this._vibe(grade === 'perfect' ? 45 : 22);
+    }
     if (def.snd === 'thump') this._snd('thump', 0.35);
     else this._snd(def.snd === 'clink' ? 'clink' : 'scrape');
-    this._xp(def.skill, 1);
+    if (grade === 'perfect') this._snd('ding', 1.2);
+    this._xp(def.skill, grade === 'perfect' ? 3 : (grade ? 2 : 1));
 
     if (n.hp <= 0) { this._break(n); return true; }
     if (n.hp <= dmg) this._snd('ding');       // one more and it goes
@@ -946,6 +1095,11 @@ const Mining = {
     if (G.mining.lastDay < G.day) this.newDay();
 
     this.time += dt;
+    if (this.rings) {
+      for (var _r = 0; _r < this.rings.length; _r++) {
+        if (this.rings[_r].t > 0) this.rings[_r].t -= dt;
+      }
+    }
     if (this._noteGap > 0) this._noteGap -= dt;
     if (this.noteT > 0) this.noteT -= dt;
     if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) this.combo = 0; }
@@ -968,6 +1122,7 @@ const Mining = {
     var locked = this.swinging && this.target && !this.target.dead &&
       this._within(this.target, px, py, this.REACH + 10);
     if (!locked) this.target = this.aim(px, py, dir, this.aimX, this.aimY);
+    this._tickSweep(dt, this.target);
 
     if (this.swinging) {
       this.swingT += dt;
@@ -976,6 +1131,8 @@ const Mining = {
         this.hitDone = true;
         // Re-check the target at the moment of impact: he may have drifted off it.
         var hitN = this.target && this._within(this.target, px, py, this.REACH + 10) ? this.target : null;
+        // graded HERE, at contact, so what the bar shows is what the blow gets
+        this.grade = hitN ? this.sweepGrade(hitN) : '';
         if (hitN) this._land(hitN);
         else this._snd('bubble');            // a whiff through open water
       }
@@ -1089,6 +1246,8 @@ const Mining = {
       this._drawRing(ctx, n, n.x, n.y);
     }
 
+    this._drawRings(ctx, camX, camY);
+    this._drawSweep(ctx);
     this._drawChips(ctx, camX, camY);
     this._drawLoot(ctx, camX, camY);
     this._drawFlys(ctx, camX, camY);
