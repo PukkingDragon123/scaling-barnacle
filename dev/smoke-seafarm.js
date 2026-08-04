@@ -117,7 +117,7 @@ async function standOnBed(page, i) {
   if (geo.ys.some(y => y >= 1000)) fails.push('a bed cached the FLOOR_DEEP fallback height — floorAt ran before Ocean.ensure()');
 
   // ---- 4. seeds via the debug path, then into the water ----------------------
-  await page.evaluate(() => { Farm.ensure(); G.farm.seeds.blade = 3; Game.save(); });
+  await page.evaluate(() => { Farm.ensure(); G.farm.seeds.kelp = 3; Game.save(); });
   await page.evaluate(() => { Game.go(Ocean, { from: 'dock' }); });
   await page.waitForFunction(() => Game.scene === Ocean && Game.fadeDir === 0 && Game.fade === 0, null, { timeout: 20000 });
   await page.waitForTimeout(400);
@@ -163,12 +163,12 @@ async function standOnBed(page, i) {
   await page.waitForTimeout(300);
   const planted = await page.evaluate(() => {
     const p = Farm.plots()[0];
-    return { open: Farm.open, crop: p.crop, stage: p.stage, seeds: G.farm.seeds.blade,
+    return { open: Farm.open, crop: p.crop, stage: p.stage, seeds: G.farm.seeds.kelp,
              xp: G.skills && G.skills.farming ? G.skills.farming.xp : -1 };
   });
   note('planted: ' + JSON.stringify(planted));
   if (planted.open) fails.push('the pouch stayed open after planting');
-  if (planted.crop !== 'blade') fails.push('Digit1 did not plant kelp blade (crop=' + planted.crop + ')');
+  if (planted.crop !== 'kelp') fails.push('Digit1 did not plant kelp blade (crop=' + planted.crop + ')');
   if (planted.seeds !== 2) fails.push('planting did not spend a seed packet (left=' + planted.seeds + ')');
   if (planted.xp <= xp0) fails.push('planting paid no farming XP (' + xp0 + ' -> ' + planted.xp + ')');
 
@@ -185,10 +185,10 @@ async function standOnBed(page, i) {
   const persisted = await page.evaluate(() => {
     const p = Farm.plots()[0];
     return { crop: p.crop, tilled: p.tilled, watered: p.watered, days: p.days,
-             y: Math.round(Farm.bedY(p)), seeds: G.farm.seeds.blade };
+             y: Math.round(Farm.bedY(p)), seeds: G.farm.seeds.kelp };
   });
   note('after reload: ' + JSON.stringify(persisted));
-  if (persisted.crop !== 'blade' || !persisted.tilled) fails.push('the planted bed did not survive a reload');
+  if (persisted.crop !== 'kelp' || !persisted.tilled) fails.push('the planted bed did not survive a reload');
   if (!persisted.watered) fails.push('the tended flag did not survive a reload');
   if (persisted.seeds !== 2) fails.push('the seed pouch did not survive a reload');
   if (persisted.y >= 1000) fails.push('after reload the bed height cached the FLOOR_DEEP fallback (' + persisted.y + ')');

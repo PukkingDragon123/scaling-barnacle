@@ -674,8 +674,10 @@ for _n, _box in _DW_CUTS:
 # boxes into rows first (bucketing by centre-y against a row tolerance) and then
 # left-to-right inside each row. That is what makes the name lists below line up
 # with what you see when you open the file.
-def _sheet_objects(path, bg_tol, names, row_tol=90, min_area=1400, cap=None):
+def _sheet_objects(path, bg_tol, names, row_tol=90, min_area=1400, cap=None, dfbg=None):
     im = key_bg(Image.open(os.path.join(ROOT, path)), tol=bg_tol)
+    if dfbg is not None:
+        im = defringe(im, dfbg, tol=bg_tol + 24, passes=2)
     boxes = components(im, min_area=min_area)
     rows = []
     for b in boxes:
@@ -735,6 +737,54 @@ _sheet_objects('27DA4A95-FE40-4173-B479-B244453D2273.png', 60, [
     'ic_kelp', 'ic_oyster', 'ic_pineapple', 'ic_steak',
     'ic_snail', 'ic_coral', 'ic_crate',
 ], row_tol=110, min_area=2500)
+
+
+# ---- the lush-farm upload: beds, seaweed, seed packets, crops, real sand -------
+# Six sheets that between them replace the coded farm and dress the whole seabed.
+
+# FARM BEDS (20C22AC7): two rows of five widths. The top row is the plain sandy
+# bed; the bottom is the ornate gold-and-pearl one, which the game uses as the
+# READY state -- a bed that dresses itself up when the crop comes in is a status
+# readout that needs no icon. Row-bucketed components, left to right = smallest
+# to widest.
+_sheet_objects('20C22AC7-5D63-48DD-AF9F-ED7C964079C1.png', 26,
+    ['bed_0', 'bed_1', 'bed_2', 'bed_3', 'bed_4',
+     'bedr_0', 'bedr_1', 'bedr_2', 'bedr_3', 'bedr_4'],
+    row_tol=200, min_area=3000)
+
+# LUSH SCENERY (527D8332): an 8x4 grid -- tall, small, flowering and berried rows
+# of eight species. Sliced on gutters like every other regular sheet; named flat,
+# row-major: lush_0..7 tall, lush_8..15 small, lush_16..23 flowering,
+# lush_24..31 berried.
+grid_slice('527D8332-9CE3-47B7-B962-02C9C8A63282.png', 8, 4,
+           [f'lush_{i}' for i in range(32)], tol=30, defr=True, inset=0, solo=False)
+
+# SEED PACKETS: eight shell spat bags (829D5CE9) and eight plant seed bags
+# (A42CE0A5). The plant packets match the crop sheet below species-for-species,
+# in the same order.
+_sheet_objects('829D5CE9-FA4F-4717-A28D-DE2B28916EA3.png', 26,
+    [f'pack_shell_{i}' for i in range(8)], row_tol=240, min_area=8000)
+_sheet_objects('A42CE0A5-85D6-43A2-A878-577DEDB42ED3.png', 26,
+    [f'pack_plant_{i}' for i in range(8)], row_tol=240, min_area=8000)
+
+# THE CROPS (DFE68B18): eight species, one per row; the columns are sprout,
+# growing, mature-with-fruit, and the harvested BUNDLE -- which is the produce
+# icon, drawn by the same hand as the plant it came from. Species keys line up
+# with pack_plant_0..7.
+SEA_KEYS = ['kelp', 'grass', 'ruby', 'fan', 'bluefan', 'ember', 'jade', 'goldw']
+_names2 = []
+for _k in SEA_KEYS:
+    _names2 += [f'sea_{_k}_0', f'sea_{_k}_1', f'sea_{_k}_2', f'sea_{_k}_p']
+grid_slice('DFE68B18-442B-40FC-8055-5E3356AF4787.png', 4, 8, _names2,
+           tol=30, defr=True, inset=0, solo=False)
+
+# REAL SAND (726A9C92, on magenta): eighteen bank chunks and two long strips.
+# The strips are what the ocean lays along the floor line -- painted sand with
+# shells and starfish in it instead of three flat fills.
+_sheet_objects('726A9C92-B618-4960-8A9F-705712DAEE34.png', 40,
+    [f'sandc_{i}' for i in range(6)] + [f'sandc_{i}' for i in range(6, 12)] +
+    [f'sandc_{i}' for i in range(12, 18)] + ['sandstrip_0', 'sandstrip_1'],
+    row_tol=140, min_area=6000, dfbg=(251, 2, 251))
 
 with open(os.path.join(OUT, 'manifest.json'), 'w') as f:
     json.dump(manifest, f)

@@ -35,32 +35,96 @@ const Farm = {
   //   berry  55 ->  80 over 4d  (+25 ->  6.3/day)
   //   gourd  95 -> 150 over 6d  (+55 ->  9.2/day)
   //   moon  180 -> 360 over 8d  (+180 -> 22.5/day)
-  ORDER: ['blade', 'curl', 'berry', 'gourd', 'moon'],
+  // THE NEW ROSTER: the eight painted sea plants (DFE68B18, one row each: three
+  // growth stages plus a harvested-bundle icon) and four shell spat lines. Two
+  // rules hold it together:
+  //
+  //   * `out` is the PRODUCE BIN a harvest credits. Five of the plants alias the
+  //     legacy keys (blade/curl/berry/gourd/moon) so every recipe, NPC gift list
+  //     and cooking cost that names them keeps working -- the art is new, the
+  //     economy underneath is not. The other three coin their own keys.
+  //   * `bin: 'storage'` sends the harvest to G.storage instead -- that is where
+  //     shells live, so a grown clam is exactly a dived clam to ClamNet, the
+  //     workbench and every heart in the game. SHELLS ARE FARMED NOW: you buy
+  //     spat from the terminal and raise it, instead of waiting on wild spawns.
+  //
+  // art = sprite prefix ('sea_kelp' -> sea_kelp_0/1/2); shell = drawn from the
+  // shell sprite at three scales instead. pack = the packet icon in the shop.
+  ORDER: ['kelp', 'grass', 'ruby', 'ember', 'fan', 'bluefan', 'jade', 'goldw',
+          'spat_clam', 'spat_mussel', 'spat_oyster', 'spat_abalone'],
   CROPS: {
-    blade: {
-      name: 'Kelp Blade', seedName: 'Kelp Blade Seeds', seedPrice: 10,
-      sd: 1, qty: 2, value: 9, bonus: 0.10, mh: 20,
+    kelp: {
+      name: 'Kelp Blade', seedName: 'Kelp Seeds', seedPrice: 10, out: 'blade',
+      art: 'sea_kelp', pack: 'pack_plant_0',
+      sd: 1, qty: 2, value: 9, bonus: 0.10, mh: 22,
       desc: 'Ready in 2 days. Pocket money that keeps coming.',
     },
-    curl: {
-      name: 'Sea Curl', seedName: 'Sea Curl Seeds', seedPrice: 30,
-      sd: 2, qty: 3, value: 17, bonus: 0.12, mh: 17,
-      desc: 'Ready in 4 days. Three curls a bed, reliably.',
+    grass: {
+      name: 'Sea Curl', seedName: 'Seagrass Seeds', seedPrice: 30, out: 'curl',
+      art: 'sea_grass', pack: 'pack_plant_1',
+      sd: 2, qty: 3, value: 17, bonus: 0.12, mh: 18,
+      desc: 'Ready in 4 days. Three bundles a bed, reliably.',
     },
-    berry: {
-      name: 'Tide Berry', seedName: 'Tide Berry Seeds', seedPrice: 55,
-      sd: 2, qty: 2, value: 40, bonus: 0.18, mh: 18,
-      desc: 'Ready in 4 days. Often throws a bonus berry.',
+    ruby: {
+      name: 'Tide Berry', seedName: 'Ruby Weed Seeds', seedPrice: 55, out: 'berry',
+      art: 'sea_ruby', pack: 'pack_plant_2',
+      sd: 2, qty: 2, value: 40, bonus: 0.18, mh: 19,
+      desc: 'Ready in 4 days. Often throws a bonus sprig.',
     },
-    gourd: {
-      name: 'Reef Gourd', seedName: 'Reef Gourd Seeds', seedPrice: 95,
+    ember: {
+      name: 'Reef Gourd', seedName: 'Ember Coral Cuttings', seedPrice: 95, out: 'gourd',
+      art: 'sea_ember', pack: 'pack_plant_5',
       sd: 3, qty: 2, value: 75, bonus: 0.15, mh: 19,
       desc: 'Ready in 6 days. Heavy, slow, worth it.',
     },
-    moon: {
-      name: 'Moonbloom', seedName: 'Moonbloom Bulbs', seedPrice: 180,
+    fan: {
+      name: 'Moonbloom', seedName: 'Moonfan Bulbs', seedPrice: 180, out: 'moon',
+      art: 'sea_fan', pack: 'pack_plant_3',
       sd: 4, qty: 3, value: 120, bonus: 0.20, mh: 22,
       desc: 'Ready in 8 days. The pearl of the seabed garden.',
+    },
+    bluefan: {
+      name: 'Blue Fan', seedName: 'Blue Fan Spores', seedPrice: 90, out: 'bluefan',
+      art: 'sea_bluefan', pack: 'pack_plant_4',
+      sd: 3, qty: 2, value: 70, bonus: 0.14, mh: 20,
+      desc: 'Ready in 6 days. Cool colour, warm margin.',
+    },
+    jade: {
+      name: 'Jade Frond', seedName: 'Jade Frond Spores', seedPrice: 150, out: 'jade',
+      art: 'sea_jade', pack: 'pack_plant_6',
+      sd: 4, qty: 2, value: 110, bonus: 0.16, mh: 20,
+      desc: 'Ready in 8 days. Collectors pay for the shine.',
+    },
+    goldw: {
+      name: 'Gold Weed', seedName: 'Gold Weed Seeds', seedPrice: 260, out: 'goldw',
+      art: 'sea_goldw', pack: 'pack_plant_7',
+      sd: 5, qty: 3, value: 150, bonus: 0.20, mh: 22,
+      desc: 'Ready in 10 days. The late-game money press.',
+    },
+
+    spat_clam: {
+      name: 'Clam', seedName: 'Clam Spat', seedPrice: 14, out: 'clam', bin: 'storage',
+      shell: 'shell_clam', pack: 'pack_shell_0',
+      sd: 1, qty: 2, value: 8, bonus: 0.15, mh: 12,
+      desc: 'Grows a clam in 2 days. Farmed beats foraged.',
+    },
+    spat_mussel: {
+      name: 'Mussel', seedName: 'Mussel Spat', seedPrice: 30, out: 'mussel', bin: 'storage',
+      shell: 'shell_mussel', pack: 'pack_shell_2',
+      sd: 2, qty: 2, value: 14, bonus: 0.15, mh: 12,
+      desc: 'Grows mussels in 4 days, rope-cultured.',
+    },
+    spat_oyster: {
+      name: 'Oyster', seedName: 'Oyster Spat', seedPrice: 70, out: 'oyster', bin: 'storage',
+      shell: 'shell_scallop', pack: 'pack_shell_3',
+      sd: 3, qty: 2, value: 34, bonus: 0.12, mh: 13,
+      desc: 'Grows oysters in 6 days. Crack for pearls.',
+    },
+    spat_abalone: {
+      name: 'Abalone', seedName: 'Abalone Spat', seedPrice: 160, out: 'abalone', bin: 'storage',
+      shell: 'shell_abalone', pack: 'pack_shell_7',
+      sd: 4, qty: 1, value: 90, bonus: 0.20, mh: 14,
+      desc: 'One abalone in 8 days, worth the wait.',
     },
   },
 
@@ -100,8 +164,11 @@ const Farm = {
   _bedSeed: null,     // the ocean seed those heights were sampled from
 
   // ---- picker window geometry ------------------------------------------------------
-  WX: 122, WY: 50, WW: 236, WH: 164,
-  ROW_H: 24,
+  // Sized for the full roster: twelve packets in TWO COLUMNS of six. One column
+  // of 24-unit rows only ever fit five -- the old roster's count -- and rows six
+  // through twelve would draw clean off the panel.
+  WX: 44, WY: 44, WW: 392, WH: 186,
+  ROW_H: 25, COL_ROWS: 6,
 
   // ---- state plumbing ---------------------------------------------------------------
 
@@ -134,7 +201,11 @@ const Farm = {
     if (!f.crops || typeof f.crops !== 'object') f.crops = {};
     for (const k of this.ORDER) {
       f.seeds[k] = Math.max(0, Math.round(f.seeds[k]) || 0);
-      f.crops[k] = Math.max(0, Math.round(f.crops[k]) || 0);
+      // produce is BINNED BY `out`, not by crop key -- that is what lets a new
+      // plant refill a legacy bin (kelp -> blade) and keeps the ledger keys
+      // stable if a crop is ever renamed. Shell lines bank in G.storage instead.
+      const c = this.CROPS[k];
+      if (c.bin !== 'storage') f.crops[c.out] = Math.max(0, Math.round(f.crops[c.out]) || 0);
     }
     f.planted = Math.max(0, Math.round(f.planted) || 0);
     f.reaped = Math.max(0, Math.round(f.reaped) || 0);
@@ -331,10 +402,24 @@ const Farm = {
   },
 
   seedCount(key) { return this.ensure() ? (G.farm.seeds[key] || 0) : 0; },
-  produceCount(key) { return this.ensure() ? (G.farm.crops[key] || 0) : 0; },
+  // `key` may be a crop key or an out-bin key; both resolve to the same bin
+  produceCount(key) {
+    if (!this.ensure()) return 0;
+    const c = this.CROPS[key];
+    if (c && c.bin === 'storage') return G.storage[c.out] || 0;
+    return G.farm.crops[c ? c.out : key] || 0;
+  },
   seedTotal() { let n = 0; for (const k of this.ORDER) n += this.seedCount(k); return n; },
   produceTotal() { let n = 0; for (const k of this.ORDER) n += this.produceCount(k); return n; },
-  produceValue() { let v = 0; for (const k of this.ORDER) v += this.produceCount(k) * this.PRODUCE[k].value; return v; },
+  produceValue() {
+    let v = 0;
+    for (const k of this.ORDER) {
+      const c = this.CROPS[k];
+      if (c.bin === 'storage') continue;         // shells sell through ClamNet
+      v += this.produceCount(k) * c.value;
+    }
+    return v;
+  },
 
   readyCount() { let n = 0; for (const p of this.plots()) if (this.available(p) && this.ready(p)) n++; return n; },
   // beds whose crop has not had a current fanned over it today (the old name is
@@ -429,7 +514,9 @@ const Farm = {
     G.farm.seeds[key]--;
     G.farm.planted++;
     p.crop = key; p.stage = 0; p.days = 0; p.dry = 0; p.dead = false; p.watered = false;
+    p.popT = 0.45;                               // the swell-into-place animation
     this.burst(p.x, this.bedY(p) - 2, 1, 8);
+    this.burst(p.x, this.bedY(p) - 6, 3, 26);    // and a proper puff of sand
     SND.pop(1.15);
     Game.toast(`Planted ${c.name} — fan a fresh current over it daily.`);
     Game.save();
@@ -461,10 +548,11 @@ const Farm = {
     if (!this.ready(p)) return null;
     const key = p.crop, c = this.CROPS[key];
     const count = c.qty + (Math.random() < c.bonus ? 1 : 0);
-    // Produce goes into the farm's own ledger, NOT the dive bag: Shop, Craft and
-    // NPCs all read G.farm.crops, and a haul that could drown on the way up would
-    // silently break every one of them.
-    G.farm.crops[key] += count;
+    // Produce goes into the ledger its consumers read: G.farm.crops[out] for the
+    // plants (Shop, Craft and NPCs all read it), G.storage for the shell lines --
+    // a farmed clam IS a dived clam to everything downstream.
+    if (c.bin === 'storage') G.storage[c.out] = (G.storage[c.out] || 0) + count;
+    else G.farm.crops[c.out] = (G.farm.crops[c.out] || 0) + count;
     G.farm.reaped += count;
     p.crop = null; p.stage = 0; p.days = 0; p.dry = 0; p.watered = false; p.dead = false;
     this.burst(p.x, this.bedY(p) - 8, 2, 16);
@@ -545,7 +633,8 @@ const Farm = {
     if (!this.ensure()) return 0;
     let v = 0, c = 0;
     for (const k of keys) {
-      const n = this.produceCount(k);
+      if (!this.PRODUCE[k]) continue;            // shell bins are ClamNet's to sell
+      const n = G.farm.crops[k] || 0;
       if (n <= 0) continue;
       v += n * this.PRODUCE[k].value;
       c += n;
@@ -623,6 +712,8 @@ const Farm = {
     this._stamp = Game.time;
 
     this.time += dt;
+    // decay the plant-pop timers; transient, so a reload simply skips the wiggle
+    for (const pl of G.farm.plots) if (pl.popT > 0) pl.popT -= dt;
     if (G.farm.lastDay < G.day) this.newDay();   // day can roll over mid-dive or under a modal
 
     if (this.fx.length) {
@@ -730,28 +821,18 @@ const Farm = {
       return;
     }
 
-    // ---- the bed: a low mound of turned seabed, sitting ON the sand line ---------
-    // Three stacked bands, widest at the base, so it reads as raised ground rather
-    // than a dark rectangle pasted onto the floor.
+    // ---- the bed is ART now: the painted garden box, seated on the sand line.
+    // The plain box is the working bed; the ornate gold-and-pearl one is the
+    // READY state, so a garden you can harvest announces itself from across the
+    // screen without a single icon. (bed_1 / bedr_1 -- the second width of five;
+    // BED_W hasn't moved, so reach and spacing are untouched.)
+    const ripeNow = p.crop && !p.dead && this.ready(p);
+    const bedArt = ripeNow ? 'bedr_1' : 'bed_1';
+    const bw = this.BED_W + 12;
+    const bh = assetH(bedArt, bw);
     ctx.fillStyle = 'rgba(4,12,16,0.42)';
     ctx.fillRect(x - hw - 1.5, by - 0.5, this.BED_W + 3, 2.5);        // contact shadow
-    ctx.fillStyle = '#4e3a22';
-    ctx.fillRect(x - hw, by - 2, this.BED_W, 3);
-    ctx.fillStyle = '#5c4629';
-    ctx.fillRect(x - hw + 2.5, by - 4, this.BED_W - 5, 2.5);
-    ctx.fillStyle = '#6d5231';
-    ctx.fillRect(x - hw + 5.5, by - 5.5, this.BED_W - 11, 1.75);      // lit crest of the mound
-
-    const grit = this._grit[p.i];
-    ctx.fillStyle = '#382814';
-    for (const s of grit) if (!s.lit) ctx.fillRect(x + s.dx * 0.8, by - 4.6 + s.dy, PIX * 2, PIX * 2);
-    ctx.fillStyle = '#8a6434';
-    for (const s of grit) if (s.lit) ctx.fillRect(x + s.dx * 0.8, by - 4.6 + s.dy, PIX * 2, PIX * 2);
-
-    // kerb stones hold the mound together against the drift
-    ctx.fillStyle = '#7c8a80';
-    ctx.fillRect(x - hw - 1, by - 3, 1.5, 3.5);
-    ctx.fillRect(x + hw - 0.5, by - 3, 1.5, 3.5);
+    drawA(ctx, bedArt, x - bw / 2, by - bh + 3, bw, bh);
 
     if (p.crop && !p.dead) {
       if (p.watered) this._drawCurrent(ctx, x, by);
@@ -782,9 +863,17 @@ const Farm = {
 
   _drawCrop(ctx, p, x, soilY) {
     const c = this.CROPS[p.crop];
-    const name = `crop_${p.crop}_${p.stage}`;
+    // Plants come off the painted crop sheet (sea_<key>_<stage>); shell lines
+    // draw the shell itself at three sizes -- a clam growing IS a clam getting
+    // bigger, and no separate sheet says it better.
+    const name = c.shell || `${c.art}_${p.stage}`;
     const ripe = this.ready(p);
-    const grow = c.mh * [0.36, 0.66, 1][p.stage];
+    let grow = c.mh * (c.shell ? [0.45, 0.72, 1][p.stage] : [0.36, 0.66, 1][p.stage]);
+    // the pop: a freshly planted or just-advanced crop swells into place
+    if (p.popT > 0) {
+      const k = 1 - p.popT / 0.45;
+      grow *= 0.3 + 0.7 * (1 - (1 - k) * (1 - k)) + Math.sin(k * Math.PI) * 0.12;
+    }
     const w = this._widthFor(name, grow);
     const h = assetH(name, w);
     // Everything down here sways from where it is rooted — a crop that bobbed up
@@ -841,7 +930,8 @@ const Farm = {
     ctx.arc(x, topY + 4, 8 + pulse * 2.5, 0, TAU);
     ctx.fill();
 
-    const art = this.PRODUCE[p.crop].art;
+    const cdef = this.CROPS[p.crop];
+    const art = cdef.shell || (cdef.art + '_p');
     const iy = topY - 10 - pulse * 1.2;
     ctx.fillStyle = 'rgba(6,14,18,0.4)';
     ctx.beginPath();
@@ -945,7 +1035,9 @@ const Farm = {
   closePicker() { this.open = false; SND.click(); },
 
   _rowRect(i) {
-    return { x: this.WX + 8, y: this.WY + 28 + i * this.ROW_H, w: this.WW - 16, h: this.ROW_H - 2 };
+    const colW = (this.WW - 24) / 2;
+    const col = Math.floor(i / this.COL_ROWS), row = i % this.COL_ROWS;
+    return { x: this.WX + 8 + col * (colW + 8), y: this.WY + 28 + row * this.ROW_H, w: colW, h: this.ROW_H - 2 };
   },
   _closeRect() { return { x: this.WX + this.WW - 26, y: this.WY + 2, w: 24, h: 18 }; },
   _in(r, mx, my) { return mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h; },
@@ -960,6 +1052,13 @@ const Farm = {
       if (Input.p(`Digit${i + 1}`)) { this.sel = i; this._tryPlant(i); return; }
     }
     if (Input.wheelDelta) this.sel = clamp(this.sel + Input.wheelDelta, 0, this.SEEDS.length - 1);
+    // arrows walk the two-column grid; Enter plants the selection. Digits only
+    // reach the first nine packets, and the roster is twelve now.
+    if (Input.p('ArrowUp')) this.sel = clamp(this.sel - 1, 0, this.SEEDS.length - 1);
+    if (Input.p('ArrowDown')) this.sel = clamp(this.sel + 1, 0, this.SEEDS.length - 1);
+    if (Input.p('ArrowLeft')) this.sel = clamp(this.sel - this.COL_ROWS, 0, this.SEEDS.length - 1);
+    if (Input.p('ArrowRight')) this.sel = clamp(this.sel + this.COL_ROWS, 0, this.SEEDS.length - 1);
+    if (Input.p('Enter')) { this._tryPlant(this.sel); return; }
 
     if (!Input.mouse.clicked) return;
     const mx = Input.mouse.x, my = Input.mouse.y;
@@ -1013,15 +1112,13 @@ const Farm = {
 
       text(c, `${i + 1}. ${cd.name}`, r.x + 22, r.y + 3,
         { size: 7, color: n > 0 ? '#f6e8c9' : '#8a7a5a' });
-      text(c, `${this.totalDays(s.key)}d  •  ${cd.qty}x $${cd.value}  •  packet $${cd.seedPrice}`,
+      text(c, `${this.totalDays(s.key)}d  •  ${cd.qty}x$${cd.value}`,
         r.x + 22, r.y + 12, { size: 6, color: n > 0 ? '#a89878' : '#6a5c44' });
-      text(c, n > 0 ? `x${n}` : '—', r.x + r.w - 46, r.y + 6,
+      text(c, n > 0 ? `x${n}` : '—', r.x + r.w - 6, r.y + 6,
         { size: 7, color: n > 0 ? '#ffe66e' : '#6a5c44', align: 'right' });
-      text(c, n > 0 ? 'PLANT' : 'NONE', r.x + r.w - 6, r.y + 6,
-        { size: 7, color: n > 0 ? '#a0f2b4' : '#6a5c44', align: 'right' });
     }
 
-    text(c, TouchUI.enabled ? 'tap a packet to plant  •  X to close' : '[1-5] plant   [Esc] close',
+    text(c, TouchUI.enabled ? 'tap a packet to plant  •  X to close' : '[1-9] or arrows + Enter   [Esc] close',
       X + 10, Y + this.WH - 13, { size: 6, color: '#8a9484' });
     text(c, `$${G.money}`, X + WWi - 10, Y + this.WH - 13, { size: 6, color: '#ffe66e', align: 'right' });
 
@@ -1050,8 +1147,12 @@ for (const k of Farm.ORDER) {
     key: k,
     name: c.seedName,
     price: c.seedPrice,
-    art: `crop_${k}_seed`,
+    art: c.pack,                                   // the painted packet IS the icon
     desc: c.desc,
   });
-  Farm.PRODUCE[k] = { name: c.name, value: c.value, art: `crop_${k}_p` };
+  // PRODUCE is keyed by the OUT bin. Shell lines skip it: their harvest lands in
+  // G.storage and is priced by ITEMS like any dived shell.
+  if (c.bin !== 'storage') {
+    Farm.PRODUCE[c.out] = { name: c.name, value: c.value, art: c.art + '_p' };
+  }
 }

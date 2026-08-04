@@ -697,17 +697,23 @@ const Ocean = {
     // across the sand it grows from is floating scenery, and size and blur read
     // as "close" without the lie. Kelp and garden columns only; the ridge stays
     // bare so its skyline shows.
+    // Real sprites now, not stroked lines: oversized tall plants from the lush
+    // set, translucent, swaying from the root. Even the sparse plain gets the
+    // odd one -- a near-plane that only exists in busy places reads as a bug.
     const fg = [];
-    if (kind === 'thicket' || kind === 'garden') {
-      const nf = kind === 'thicket' ? 3 + ((rng() * 3) | 0) : 1 + ((rng() * 2) | 0);
+    {
+      const nf = kind === 'thicket' ? 4 + ((rng() * 3) | 0)
+        : kind === 'garden' ? 2 + ((rng() * 3) | 0)
+        : rng() < 0.4 ? 1 : 0;
       for (let i = 0; i < nf; i++) {
         fg.push({
           x: x0 + rng() * this.CW,
-          h: 90 + rng() * 130,
-          w: 4 + rng() * 5,
+          art: 'lush_' + ((rng() * 8) | 0),          // the tall row
+          s: 95 + rng() * 85,                        // far larger than the mid props
           ph: rng() * TAU,
-          lean: (rng() - 0.5) * 0.7,
-          leaf: 2 + ((rng() * 3) | 0),
+          lean: (rng() - 0.5) * 0.3,
+          flip: rng() < 0.5,
+          a: 0.42 + rng() * 0.2,
         });
       }
     }
@@ -799,11 +805,14 @@ const Ocean = {
     const col = this._col(ci);
     const band = col.band;                        // 0 sunlit shelf, 1 the deep plain
     const kind = col.kind;
-    const dens = kind === 'garden' ? 1.15 : kind === 'thicket' ? 1
-      : kind === 'ridge' ? 0.55 : kind === 'rubble' ? 0.5 : 0.25;
-    const shellCh = kind === 'rubble' ? 0.34 : kind === 'sparse' ? 0.2 : 0.12;
-    const nBack = Math.round((4 + rng() * 7) * dens);
-    const nFront = Math.round((2 + rng() * 3.5) * dens);
+    // LUSH. Densities roughly doubled across the board: the sand should read as
+    // a meadow with clearings, not a desert with the odd plant. Sparse columns
+    // stay genuinely sparse so the busy ones have something to contrast with.
+    const dens = kind === 'garden' ? 2.1 : kind === 'thicket' ? 1.9
+      : kind === 'ridge' ? 0.9 : kind === 'rubble' ? 0.85 : 0.4;
+    const shellCh = kind === 'rubble' ? 0.3 : kind === 'sparse' ? 0.2 : 0.1;
+    const nBack = Math.round((5 + rng() * 8) * dens);
+    const nFront = Math.round((3 + rng() * 4) * dens);
     const props = [];
     const owns = (fy) => fy >= y0 && fy < y0 + this.CH;
 
@@ -818,11 +827,22 @@ const Ocean = {
     const plant = (front) => {
       const x = x0 + rng() * this.CW;
       const shell = rng() < shellCh;
+      // Three families now: the 32-piece lush set (tall 0..7, small 8..15,
+      // flowering 16..23, berried 24..31), the original weeds, and the corals.
+      // Thickets leans hard into lush greens; gardens mix flowering lush with
+      // coral so they read as planted rather than merely overgrown.
+      const r = rng();
+      const lushSp = (weedPal + ((rng() * 3) | 0)) % 8;
       const art = shell
         ? this.SHELL_ART[(rng() * this.SHELL_ART.length) | 0]
-        : (weedy && rng() < 0.75)
-          ? 'weed_' + ((weedPal + ((rng() * 4) | 0)) % 12)
-          : 'coral_' + ((palette + ((rng() * 4) | 0)) % 20);
+        : weedy
+          ? (r < 0.45 ? 'lush_' + lushSp                       // tall
+            : r < 0.7 ? 'lush_' + (8 + lushSp)                 // small
+            : r < 0.82 ? 'lush_' + (24 + lushSp)               // berried
+            : 'weed_' + ((weedPal + ((rng() * 4) | 0)) % 12))
+          : (r < 0.3 ? 'lush_' + (16 + lushSp)                 // flowering
+            : r < 0.5 ? 'lush_' + (8 + lushSp)
+            : 'coral_' + ((palette + ((rng() * 4) | 0)) % 20));
       const soft = !shell && rng() < (kind === 'thicket' ? 0.78 : 0.42);
       // Near-field props are bigger AND crisper; the back row is small and dim.
       // With no parallax left to sell depth, this ratio is doing that whole job.
@@ -1430,6 +1450,31 @@ const Ocean = {
           b.life = b.t = rand(3.5, 5.5);
         }
       }, 40);
+
+      // ---- ambient life in the water ------------------------------------------
+      // A slow seep of tiny bubbles off the meadow (any random x near the camera
+      // whose sand is in frame), and Otto's own breath: a little cluster off his
+      // head every few seconds. Neither costs anything -- both feed the existing
+      // recycled pool -- and together they are most of what makes the water feel
+      // inhabited rather than merely tinted.
+      if (Math.random() < dt * 4) {
+        const sx = this.camX + Math.random() * W;
+        const sy = this.floorAt(sx);
+        if (sy - this.camY < H + 10) {
+          const b = this._take(this.bubbles);
+          b.x = sx; b.y = sy - 3;
+          b.vx = rand(-3, 3); b.vy = rand(-14, -8);
+          b.r = rand(0.5, 1.3);
+          b.wob = rand(TAU); b.sp = rand(0.8, 2);
+          b.air = false;
+          b.life = b.t = rand(2, 4);
+        }
+      }
+      this._breathT = (this._breathT || 0) - dt;
+      if (this._breathT <= 0 && this.py > 4) {
+        this._breathT = rand(2.2, 3.8);
+        this._puff(this.px + this.face * 7, this.py - 4, 2 + (Math.random() * 2 | 0), 20);
+      }
     }
     // the far layer's drifting shapes
     for (let i = 0; i < this.sils.length; i++) {
@@ -1462,8 +1507,15 @@ const Ocean = {
     this._sky = lerp(this._sky, airK, clamp(dt * 3.2, 0, 1));
     const lift = lerp(H * 0.24, H * 0.66, this._sky);
     const k = 1 - Math.pow(0.0025, dt);
-    this.camX += (tx - this.camX) * k;
-    this.camY += (Math.max(ty, -lift) - this.camY) * k;
+    // THE CURRENT: a slow figure-of-eight drift that fades in as Otto slows down
+    // and vanishes entirely at speed. Hovering, the frame breathes like the water
+    // it is looking through; swimming, the camera is all business. Applied to the
+    // TARGET, not the camera, so the ease above keeps smoothing it.
+    const calm = clamp(1 - this.speed() / 70, 0, 1) * (1 - this._sky);
+    const swx = Math.sin(this.time * 0.31) * 2.6 * calm;
+    const swy = Math.sin(this.time * 0.47 + 1.7) * 1.8 * calm;
+    this.camX += (tx + swx - this.camX) * k;
+    this.camY += (Math.max(ty + swy, -lift) - this.camY) * k;
   },
 
   // ---- animation state machine ------------------------------------------------
@@ -2022,6 +2074,12 @@ const Ocean = {
     if (fade <= 0.01) return;
     const cv = this._farLayer();
     if (!cv) return;
+    // UNFILTERED. Since the half-res backdrop went away this draws at full device
+    // resolution, and a bilinear tap on ~2M destination pixels was measured at
+    // 65ms -- the same lesson as the rays and the caustics, relearned a third
+    // time. The layer is baked blurred; nearest sampling of it is invisible.
+    const _sm = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
     const lw = this._farW, lh = this._farH;
     // 0.16 is the slowest thing on screen; the whole depth read hangs off the
     // ratio between this, the mid band (0.55) and the props (1.0)
@@ -2063,6 +2121,7 @@ const Ocean = {
       }
     }
     ctx.restore();
+    ctx.imageSmoothingEnabled = _sm;
 
     // something big, out in the blue
     for (let i = 0; i < this.sils.length; i++) {
@@ -2090,6 +2149,8 @@ const Ocean = {
     const par = 0.78, lift = 46;
     const cx = this.camX * par, cy = this.camY * par;
     const nf = this._nightF();
+    const _sm = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;           // baked soft; see _drawFar
     const i0 = Math.floor(cx / tw);
     for (let i = i0; i * tw - cx < W; i++) {
       const x = i * tw - cx;
@@ -2116,6 +2177,7 @@ const Ocean = {
       }
     }
     ctx.globalAlpha = 1;
+    ctx.imageSmoothingEnabled = _sm;
   },
 
   // ---- the seabed -------------------------------------------------------------
@@ -2214,6 +2276,71 @@ const Ocean = {
     fill(2.5, pal.sand);
     fill(this.FLOOR_SAND, pal.silt);
     fill(this.FLOOR_SAND + this.FLOOR_SILT, pal.dark);
+
+    // ---- PAINTED SAND over the fills: the uploaded strips, tiled along the
+    // line. The strip's own bumpy top edge is what makes the floor read as a
+    // beach instead of a graph -- shells, starfish and speckle are in the art.
+    // Tiles are anchored to WORLD x (not screen), mirrored on parity so the
+    // repeat never reads, and seated 6 units into the fills so the strip's
+    // ragged top is the visible surface. Source-clipped: only the on-screen
+    // slice of each 1447px strip is sampled.
+    const s0 = ASSETS['sandstrip_0'], s1 = ASSETS['sandstrip_1'];
+    if (s0 && s0.width) {
+      // unfiltered: a full-width near-1:1 blit, per-destination-pixel priced
+      const _sm = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = false;
+      const TW = 340;                                    // logical width per tile
+      const i0 = Math.floor(this.camX / TW);
+      const i1 = Math.floor((this.camX + W) / TW);
+      // ONE height for every tile on screen. Seating each tile on its own patch
+      // of floor put neighbouring tiles a few units apart, and the joint read as
+      // a cliff line marching along the sand. The floor is near flat, so the
+      // height at the screen centre serves the whole frame.
+      const sy = this.floorAt(this.camX + W / 2) - this.camY - 6;
+      for (let i = i0; i <= i1; i++) {
+        const img = (i & 1) && s1 && s1.width ? s1 : s0;
+        const th = TW * img.height / img.width;
+        const sx = i * TW - this.camX;
+        const vx0 = Math.max(0, sx), vx1 = Math.min(W, sx + TW);
+        if (vx1 <= vx0) continue;
+        const scale = img.width / TW;
+        if (i & 2) {
+          // every other pair mirrored; the source span measures from the far edge
+          ctx.save();
+          ctx.translate(vx1, sy);
+          ctx.scale(-1, 1);
+          ctx.drawImage(img, (sx + TW - vx1) * scale, 0, (vx1 - vx0) * scale, img.height,
+            0, 0, vx1 - vx0, th);
+          ctx.restore();
+        } else {
+          ctx.drawImage(img, (vx0 - sx) * scale, 0, (vx1 - vx0) * scale, img.height,
+            vx0, sy, vx1 - vx0, th);
+        }
+      }
+      ctx.imageSmoothingEnabled = _sm;
+    }
+
+    // ---- glints: a scatter of twinkling points on the sand, deterministic per
+    // column so they hold still while the camera moves. One fillStyle, alpha per
+    // point -- the cheapest possible sparkle.
+    ctx.fillStyle = '#fff6d8';
+    const c0 = Math.floor(this.camX / this.CW), c1 = Math.floor((this.camX + W) / this.CW);
+    for (let ci = c0; ci <= c1; ci++) {
+      const rng = mulberry32((Math.imul(ci, 2246822519) ^ 0x9E37) | 0);
+      for (let g = 0; g < 7; g++) {
+        const gx = ci * this.CW + rng() * this.CW;
+        const ph = rng() * TAU, sp = 0.7 + rng() * 1.6;
+        const sx = gx - this.camX;
+        if (sx < -2 || sx > W + 2) continue;
+        const gy = this.floorAt(gx) - this.camY + 2 + rng() * 6;
+        if (gy < -2 || gy > H + 2) continue;
+        const tw = Math.sin(t * sp + ph);
+        if (tw < 0.55) continue;                          // dark most of the time: a glint, not a lamp
+        ctx.globalAlpha = (tw - 0.55) * 1.6;
+        ctx.fillRect(sx, gy, 1.2, 1.2);
+      }
+    }
+    ctx.globalAlpha = 1;
   },
 
   _drawHaze(ctx) {
@@ -2402,46 +2529,45 @@ const Ocean = {
 
   _drawForeground(ctx, t) {
     if (this.quality <= 0) return;
-    const tint = this._tintAt(this.camY + H * 0.7);
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = cssRGB(rgbLerp([12, 30, 30], tint, 0.42));
-    // the two or three columns whose fronds can be on screen
-    const c0 = Math.floor((this.camX - 48) / this.CW);
-    const c1 = Math.floor((this.camX + W + 48) / this.CW);
+    // The near plane: big translucent plants swaying past the camera. Alpha does
+    // the depth-of-field work -- at 0.4-0.6 over the lit scene they read as out
+    // of focus without a single filter. Rooted on their own sand and drawn at
+    // world scale, like everything else that grows here.
+    //
+    // UNFILTERED: these are the biggest magnified blits in the scene (up to ~180
+    // logical = 720 device pixels tall), and a bilinear tap per destination pixel
+    // is the priced-per-pixel trap again. At 0.4-0.6 alpha over a busy scene the
+    // nearest-neighbour edges are invisible.
+    const _sm = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    const c0 = Math.floor((this.camX - 96) / this.CW);
+    const c1 = Math.floor((this.camX + W + 96) / this.CW);
     for (let ci = c0; ci <= c1; ci++) {
       const c = this._col(ci);
-      if (!c.fg || !c.fg.length) return;
+      if (!c.fg || !c.fg.length) continue;     // an EMPTY column must not end the pass
       for (let i = 0; i < c.fg.length; i++) {
         const f = c.fg[i];
+        const img = ASSETS[f.art];
+        if (!img || !img.width) continue;
         const bx = f.x - this.camX;
-        if (bx < -60 || bx > W + 60) continue;
-        const by = this.floorAt(f.x) - this.camY + 3;
-        if (by < -20 || by - f.h > H + 20) continue;
-        const sway = Math.sin(t * 0.55 + f.ph) * 16 + f.lean * 30;
-        ctx.globalAlpha = 0.34;
-        ctx.lineWidth = f.w;
-        ctx.beginPath();
-        ctx.moveTo(bx, by);
-        ctx.quadraticCurveTo(bx + sway * 0.3, by - f.h * 0.55, bx + sway, by - f.h);
-        ctx.stroke();
-        // a couple of side leaves off the stem, thinner and shorter
-        ctx.lineWidth = f.w * 0.55;
-        ctx.globalAlpha = 0.26;
-        for (let l = 0; l < f.leaf; l++) {
-          const u = 0.3 + l * (0.5 / f.leaf);
-          const lx = bx + sway * u * 0.55, ly = by - f.h * u;
-          const dir = (l & 1) ? 1 : -1;
-          ctx.beginPath();
-          ctx.moveTo(lx, ly);
-          ctx.quadraticCurveTo(lx + dir * 10, ly - 8, lx + dir * 15 + sway * 0.2, ly - 17);
-          ctx.stroke();
-        }
+        if (bx < -110 || bx > W + 110) continue;
+        const by = this.floorAt(f.x) - this.camY + 6;
+        const h = f.s;
+        if (by < -20 || by - h > H + 20) continue;
+        const w = h * img.width / img.height;
+        const sway = Math.sin(t * 0.5 + f.ph) * 0.06 + f.lean * 0.1;
+        ctx.save();
+        ctx.globalAlpha = f.a;
+        ctx.translate(Math.round(bx * DPX) / DPX, by);
+        ctx.rotate(sway);
+        if (f.flip) ctx.scale(-1, 1);
+        ctx.drawImage(img, -w / 2, -h, w, h);
+        ctx.restore();
       }
     }
-    ctx.globalAlpha = 1;
-    ctx.restore();
+    ctx.imageSmoothingEnabled = _sm;
   },
+
 
   // ---- the sun, underwater --------------------------------------------------------
   // A soft ball of light hanging at the water line where the sky's sun is, fading
