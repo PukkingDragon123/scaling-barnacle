@@ -237,7 +237,32 @@
         // that by hand here produced indices from the wrong origin and spawned
         // nothing at all.
         if (M.Mining.ensureAround) M.Mining.ensureAround(O.camX, O.camY, seed);
+        // The ocean zooms its world layers, so screen units are no longer world
+        // units. Mining converts the pointer position itself and needs the factor.
+        M.Mining.camZoom = O.ZOOM || 1;
         if (M.Mining.update) M.Mining.update(dt, O.px, O.py, { x: O.camX, y: O.camY });
+        // [E] takes up the rock in reach -- mining is a deliberate act now, not
+        // something proximity starts for you. Handled here rather than inside
+        // Mining because the ocean owns the key.
+        //
+        // [E] IS CONTESTED, and Input.p does not consume, so every claimant fires
+        // on the same press unless they defer explicitly. Rocks are the LOWEST
+        // priority of the four: the dock ladder is the way out, and a farm bed or a
+        // neighbour is a thing somebody built or is standing there, while a rock is
+        // scenery you can always take a step toward and try again. Hood and Farm
+        // already publish a reach for exactly this (Farm defers to Hood the same
+        // way), so mining reads both and stands down.
+        //
+        // Reading a reach that another system may not have refreshed yet this frame
+        // is fine: one stale frame on a priority check cannot mistill a bed, it can
+        // at worst make the first press after you swim off a bed do nothing.
+        const busyE = O.atDock || O.over || O.leaving ||
+          (M.Hood && M.Hood._reach) || (M.Farm && M.Farm.reach);
+        M.Mining.keyOwned = !busyE;          // the prompt reads this, so UI matches behaviour
+        if (M.Mining.engage && !busyE && typeof Input !== 'undefined' && Input.p('KeyE')) {
+          if (M.Mining.candidate) M.Mining.engage(M.Mining.candidate);
+          else if (M.Mining.target) M.Mining.disengage();
+        }
       }
       if (M.Tame && M.Tame.update) M.Tame.update(dt, O.px, O.py);
       if (M.Hood && M.Hood.update) M.Hood.update(dt);

@@ -50,6 +50,15 @@ const Tame = {
   MAX_BABIES: 2,
   PUFF_MAX: 40,
   FLY_MAX: 8,
+  // THE WAKE. Every moving animal lays down a short ribbon of fading points behind
+  // it, so a fish reads as travelling THROUGH water rather than sliding across a
+  // picture of it. 120 points across up to 20 animals is about six each, which at
+  // WAKE_LIFE is a tail two body-lengths long -- long enough to see, short enough
+  // that a crowded frame does not turn into spaghetti.
+  WAKE_MAX: 120,
+  WAKE_LIFE: 0.72,         // seconds a point survives
+  WAKE_GAP: 7,             // world units of travel between drops (distance, NOT time,
+                           // so a fast animal gets a longer trail and not a denser one)
   WILD_MEM: 64,            // remembered wild animals; the shyest are forgotten first
 
   // Ocean's chunk grid, so a stretch of water always holds the same animals.
@@ -287,7 +296,8 @@ const Tame = {
   mobs: null,
   puffs: null,
   flys: null,
-  _pi: 0, _fi: 0,           // pool cursors
+  wake: null,
+  _pi: 0, _fi: 0, _wi: 0,   // pool cursors
   _seen: null, _seenN: 0,
   _fav: null, _favDirty: true,
   _offerable: null,
@@ -484,6 +494,10 @@ const Tame = {
         dir: 1, bank: 0, ph: 0, animT: 0, alpha: 0,
         state: 0, stateT: 0, ease: 0, trust: 0, adult: true, babies: 0,
         wanderT: 0, tagT: 0, rng: null, bph: [0, 0], slot: 0,
+        // swim: distance travelled, which drives BOTH the wake drop spacing and the
+        // tail-beat phase. Using distance instead of wall-clock is what stops a
+        // hovering animal from flapping on the spot.
+        swim: 0, wakeD: 0,
       };
     }
 
@@ -492,6 +506,11 @@ const Tame = {
 
     this.flys = new Array(this.FLY_MAX);
     for (i = 0; i < this.FLY_MAX; i++) this.flys[i] = { t: 0, x: 0, y: 0, txt: '', tone: 0 };
+
+    // wake points: r is the radius at birth, tone picks one of two fill colours so
+    // the whole ribbon costs two fillStyle writes for the entire frame
+    this.wake = new Array(this.WAKE_MAX);
+    for (i = 0; i < this.WAKE_MAX; i++) this.wake[i] = { t: 0, x: 0, y: 0, r: 1, tone: 0 };
 
     this._seen = {};
     this._fav = {};
@@ -520,6 +539,9 @@ const Tame = {
     this._pspd = 0;
     this._offerable = null;
     for (var i = 0; i < this.PUFF_MAX; i++) this.puffs[i].t = 0;
+    // and the wake, or a fresh trip opens with trails hanging where the last one
+    // left animals swimming
+    for (var w = 0; w < this.WAKE_MAX; w++) this.wake[w].t = 0;
     for (var j = 0; j < this.FLY_MAX; j++) this.flys[j].t = 0;
   },
 
@@ -1665,6 +1687,7 @@ const Tame = {
     this._ensurePets(px, py);
     this._ai(dt, px, py);
     this._updatePuffs(dt);
+    this._updateWake(dt);
     this._updateFlys(dt);
     this._pickOfferable(px, py);
     this._verbInput();
@@ -1850,6 +1873,70 @@ const Tame = {
 
     // A moving animal trails the occasional bubble; a bolting one trails several.
     if (m.state === 2 && m.rng && m.rng() < dt * 6) this._puff(m.x - m.dir * 6, m.y, 1, 26);
+
+    // ---- the wake ------------------------------------------------------------
+    // Both of these run off DISTANCE TRAVELLED, not elapsed time. That single
+    // choice is what fixes the old "weird" swim: the tail-beat and the trail are
+    // properties of moving, so an animal holding station goes still instead of
+    // flapping and shedding bubbles while parked.
+    var moved = Math.sqrt(m.vx * m.vx + m.vy * m.vy) * dt;
+    m.swim += moved;
+    m.wakeD += moved;
+    if (m.wakeD >= this.WAKE_GAP && m.alpha > 0.15) {
+      m.wakeD = 0;
+      // dropped at the TAIL, which is behind the nose -- and the sheets face left,
+      // so "behind" is +dir
+      var bx = m.x - m.dir * (m.spr ? m.spr.box * 0.34 : 8);
+      // spread across the tail's height, so the trail is a ribbon with some body
+      // to it rather than a one-pixel line
+      this._wakePt(bx, m.y + (m.rng ? (m.rng() - 0.5) * 6 : 0), sp2);
+    }
+  },
+
+  // One point of wake. Size tracks speed so a bolting animal leaves a fatter trail
+  // than an ambling one, which is most of what sells the difference between the two.
+  _wakePt: function (x, y, speed) {
+    var p = this.wake[this._wi];
+    this._wi = (this._wi + 1) % this.WAKE_MAX;
+    p.t = this.WAKE_LIFE;
+    p.x = x;
+    p.y = y;
+    p.r = 1.5 + clamp(speed / 90, 0, 1) * 2.4;
+    p.tone = (this._wi & 1);
+  },
+
+  _updateWake: function (dt) {
+    for (var i = 0; i < this.WAKE_MAX; i++) {
+      var p = this.wake[i];
+      if (p.t <= 0) continue;
+      p.t -= dt;
+      p.y -= 5 * dt;                                // the disturbed water lifts a little
+    }
+  },
+
+  // The whole ribbon in two fillStyle writes. Points shrink and fade together, so a
+  // trail tapers toward its oldest end without any per-point colour work.
+  _drawWake: function (ctx, camX, camY) {
+    if (!this.wake) return;
+    var x0 = camX - 20, x1 = camX + W + 20, y0 = camY - 20, y1 = camY + H + 20;
+    var tone, i, p, k, r;
+    for (tone = 0; tone < 2; tone++) {
+      ctx.fillStyle = tone === 0 ? '#cfeeff' : '#9fd2ea';
+      for (i = 0; i < this.WAKE_MAX; i++) {
+        p = this.wake[i];
+        if (p.t <= 0 || p.tone !== tone) continue;
+        if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
+        k = p.t / this.WAKE_LIFE;                   // 1 at birth, 0 at death
+        r = p.r * (0.35 + k * 0.65);
+        // Falloff is k^1.5, not k^2. Squared looked right on paper but the trail
+        // was gone within a third of its life, so on screen it read as a hairline
+        // scratch behind the animal rather than a wake -- invisible at a glance,
+        // which is the same as not having built it.
+        ctx.globalAlpha = k * Math.sqrt(k) * 0.5;
+        ctx.fillRect(p.x - r * 0.5, p.y - r * 0.5, r, r);
+      }
+    }
+    ctx.globalAlpha = 1;
   },
 
   _pickOfferable: function (px, py) {
@@ -1883,8 +1970,12 @@ const Tame = {
     // pointer verbs the ocean's other systems own.
     var m = this._offerable || this.pettable();
     if (!m) return;
-    var sx = m.x - this._camX, sy = m.y - this._camY;
-    var box = (m.adult ? m.spr.box : m.spr.baby) * 0.6;
+    // World -> SCREEN, and the ocean zooms its world layers, so the offset from the
+    // camera has to be scaled by the same factor the draw used. Without the zoom
+    // term a tap lands short of the animal by more the further right it is.
+    var z = (typeof Ocean !== 'undefined' && Ocean && Ocean.ZOOM) || 1;
+    var sx = (m.x - this._camX) * z, sy = (m.y - this._camY) * z;
+    var box = (m.adult ? m.spr.box : m.spr.baby) * 0.6 * z;
     if (Math.abs(Input.mouse.x - sx) < box && Math.abs(Input.mouse.y - sy) < box) {
       if (this._offerable === m && this._hasAnyFoodFor(m)) this.offerSelected(m);
       else this.pet(m);
@@ -1951,6 +2042,10 @@ const Tame = {
     this._camY = camY;
     var x0 = camX - 120, x1 = camX + W + 120, y0 = camY - 120, y1 = camY + H + 120;
 
+    // The wake goes down before any animal, so every trail is behind every body
+    // rather than only behind the ones drawn later in the pool.
+    this._drawWake(ctx, camX, camY);
+
     for (var i = 0; i < this.MAX_MOBS; i++) {
       var m = this.mobs[i];
       if (!m.live) continue;
@@ -1968,11 +2063,27 @@ const Tame = {
     var fi = Math.floor(m.animT * sp.fps) % 4;
     if (fi < 0) fi = 0;
     var box = m.adult ? sp.box : sp.baby;
-    var bob = Math.sin(this.time * sp.bob + m.ph) * sp.bobA;
+
+    // THE BOUNCE. This used to be a plain sine of wall-clock time at a fixed
+    // amplitude, and that is what read as weird: an animal holding station bobbed
+    // up and down on the spot like a float, and a bolting one bobbed by exactly the
+    // same amount, so the motion never had anything to do with the swimming.
+    //
+    // Now the phase advances with DISTANCE SWUM, so the beat belongs to the body
+    // moving through water, and the amplitude scales with speed on top of a small
+    // idle float -- an animal at rest breathes, an animal at a sprint surges. The
+    // 0.06 is per world unit, which puts a typical cruise near the old cadence.
+    var spd = Math.sqrt(m.vx * m.vx + m.vy * m.vy);
+    var drive = clamp(spd / (sp.speed || 60), 0, 1.4);
+    var amp = sp.bobA * (0.22 + drive * 0.85);
+    var bob = Math.sin(m.swim * 0.06 * sp.bob + this.time * 0.9 + m.ph) * amp;
+    // and a touch of surge along the travel axis, so the beat pushes as well as
+    // lifts. Quarter-phase behind the lift, which is what makes it read as a stroke.
+    var surge = Math.cos(m.swim * 0.06 * sp.bob + this.time * 0.9 + m.ph) * amp * 0.35 * drive;
 
     // No trailing babies: a lone animal you can swim up to and pet is the whole
     // interaction now, and a shoal of half-size copies behind it read as clutter.
-    this._blit(ctx, frames[fi], m.x, m.y + bob, box, m.dir, m.bank, m.alpha);
+    this._blit(ctx, frames[fi], m.x - m.dir * surge, m.y + bob, box, m.dir, m.bank, m.alpha);
   },
 
   _blit: function (ctx, name, x, y, box, dir, bank, alpha) {

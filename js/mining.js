@@ -210,6 +210,12 @@ const Mining = {
   flys: [],
   seed: 1,
   cam: { x: 0, y: 0 },   // last camera the scene handed us
+  // How many logical screen units the scene draws per world unit. The ocean zooms
+  // its world layers, so a pointer position in screen units is NOT a world offset
+  // any more -- it has to be divided by this before it is added to the camera, or
+  // the cursor aims progressively further right and lower than it points. The scene
+  // sets it; 1 keeps every other caller behaving exactly as before.
+  camZoom: 1,
   target: null,          // node currently aimed at
   swinging: false,
   busy: false,           // true while a swing is in flight; scenes can gate on it
@@ -657,7 +663,8 @@ const Mining = {
   // Drop whatever is furthest from the camera. The chunk cache is cleared for
   // those ids so they regenerate identically if the player swims back.
   _trim: function () {
-    var cam = this.cam, i, n, d, dd, best, cy = cam.y + H * 0.5, cx = cam.x + W * 0.5;
+    var cam = this.cam, iz = this.camZoom > 0 ? 1 / this.camZoom : 1, i, n, d, dd, best,
+      cy = cam.y + H * 0.5 * iz, cx = cam.x + W * 0.5 * iz;
     // Cheapest correct thing at this size: repeatedly drop the single furthest.
     while (this.nodes.length > this.MAX_NODES) {
       best = -1; d = -1;
@@ -744,6 +751,35 @@ const Mining = {
   hold: function (on) { this.holding = !!on; },
   setAim: function (wx, wy) { this.aimX = wx; this.aimY = wy; },
 
+  // ---- ENGAGING A ROCK -------------------------------------------------------
+  // Proximity used to be enough: swim past a rock and the sweep bar and progress
+  // ring popped up on it unasked, so crossing a field of them strobed UI at you
+  // and a stray click mined whatever happened to be nearest. Now a rock has to be
+  // taken up deliberately -- `candidate` is merely what is in reach and gets the
+  // [E] prompt, and `target` (the thing with the bar, the ring and the swings) is
+  // only ever set by engage().
+  //
+  // Leaving reach drops it, which is the one implicit release: walking away from a
+  // rock obviously means you are done with it, and making the player press a key
+  // to confirm that would be pedantry.
+  engage: function (n) {
+    if (!n || n.dead) return false;
+    if (this.target === n) { this.disengage(); return false; }
+    this.target = n;
+    this.sweepFor = null;                  // restart the sweep from the left
+    this._engagedT = 0;
+    if (typeof this.snd === 'function') this.snd('tap');
+    return true;
+  },
+  disengage: function () {
+    this.target = null;
+    this.sweepFor = null;
+    this.holding = false;
+    if (!this.swinging) this.busy = false;
+  },
+  // Whether pressing the interact key right now would start mining something.
+  canEngage: function () { return !!(this.candidate && !this.candidate.dead && this.candidate !== this.target); },
+
   // ------------------------------------------------------------- swinging -----
   // opick_0..3 = wind-up, raised, strike, recover. The hit lands as frame 2
   // comes up, which is what makes the ping read as contact.
@@ -819,6 +855,29 @@ const Mining = {
     var o = this.rings[this._ri];
     this._ri = (this._ri + 1) % this.RING_MAX;
     o.t = 0.34; o.x = x; o.y = y; o.r = r;
+  },
+
+  // The [E] hint over a rock in reach that is not yet taken up. This is the whole
+  // visible difference the engage step makes: swimming past a rock field now shows
+  // a small prompt on the nearest one instead of throwing a timing bar and a
+  // progress ring onto every rock you drift near.
+  //
+  // Nothing here allocates: the bob is a sine of the caller's clock and the width
+  // comes from textWidth, same as the "too soft" note below.
+  _drawPrompt: function (ctx) {
+    var n = this.candidate;
+    if (!n || n.dead || n === this.target) return;
+    // [E] is contested and rocks lose; don't advertise a key that another system
+    // owns this frame. keyOwned is set by whoever drives mining (js/integrate.js);
+    // undefined means nobody is arbitrating, so the prompt shows.
+    if (this.keyOwned === false) return;
+    if (typeof text !== 'function' || typeof uiPanel !== 'function') return;
+    var bob = Math.sin((this.time || 0) * 4) * 0.8;
+    var y = n.y - n.h * 0.5 - 13 + bob;
+    var label = '[E] mine';
+    var tw = textWidth(ctx, label, 7) + 9;
+    uiPanel(ctx, n.x - tw * 0.5, y - 10, tw, 13, 0.86, false);
+    text(ctx, label, n.x, y - 7, { size: 7, color: '#ffe6b0', align: 'center' });
   },
 
   // THE TIMING BAR, over the node you are on. The good zone and its core are drawn
@@ -1089,8 +1148,8 @@ const Mining = {
     if (typeof dt !== 'number' || !isFinite(dt)) dt = 0.016;
     if (dt > 0.1) dt = 0.1;                  // a tab-switch must not teleport loot
     if (cam) { this.cam.x = cam.x || 0; this.cam.y = cam.y || 0; }
-    if (typeof px !== 'number' || !isFinite(px)) px = this.cam.x + W * 0.5;
-    if (typeof py !== 'number' || !isFinite(py)) py = this.cam.y + H * 0.5;
+    if (typeof px !== 'number' || !isFinite(px)) px = this.cam.x + W * 0.5 / (this.camZoom || 1);
+    if (typeof py !== 'number' || !isFinite(py)) py = this.cam.y + H * 0.5 / (this.camZoom || 1);
 
     if (G.mining.lastDay < G.day) this.newDay();
 
@@ -1108,20 +1167,31 @@ const Mining = {
     var dir = this.facing > 0 ? 1 : (this.facing < 0 ? -1 : 0);
     if (this.pollInput && typeof Input !== 'undefined') {
       this.holding = !!(Input.mouse.down || Input.keys.KeyX);
-      this.aimX = this.cam.x + Input.mouse.x;
-      this.aimY = this.cam.y + Input.mouse.y;
+      var iz = this.camZoom > 0 ? 1 / this.camZoom : 1;
+      this.aimX = this.cam.x + Input.mouse.x * iz;
+      this.aimY = this.cam.y + Input.mouse.y * iz;
       if (Input.keys.KeyD || Input.keys.ArrowRight) dir = 1;
       else if (Input.keys.KeyA || Input.keys.ArrowLeft) dir = -1;
     }
     if (typeof Game !== 'undefined' && (Game.fadeDir !== 0 || Game.helpOpen)) this.holding = false;
 
     // ---- aim + swing state machine ----
-    // The target is LOCKED for the duration of a swing: re-aiming mid-swing made
-    // the progress ring hop between rocks and let a blow land on something the
-    // player never wound up on.
-    var locked = this.swinging && this.target && !this.target.dead &&
-      this._within(this.target, px, py, this.REACH + 10);
-    if (!locked) this.target = this.aim(px, py, dir, this.aimX, this.aimY);
+    // aim() no longer picks the target, only the CANDIDATE: what an [E] press
+    // would take up. The engaged target survives until it dies or Otto swims out
+    // of reach, so the bar never hops to a neighbouring rock mid-swing.
+    this.candidate = this.aim(px, py, dir, this.aimX, this.aimY);
+    // A click on a rock IS an interact, so the pointer still works without a
+    // second key: the first press takes the rock up rather than being swallowed
+    // as a swing on nothing. Computed after aim() so it acts on THIS frame's
+    // candidate, not last frame's.
+    if (this.pollInput && typeof Input !== 'undefined' &&
+        !this.target && Input.mouse.down && this.candidate) {
+      this.engage(this.candidate);
+    }
+    if (this.target && (this.target.dead || !this._within(this.target, px, py, this.REACH + 10))) {
+      this.disengage();
+    }
+    if (this.target) this._engagedT = (this._engagedT || 0) + dt;
     this._tickSweep(dt, this.target);
 
     if (this.swinging) {
@@ -1247,6 +1317,7 @@ const Mining = {
     }
 
     this._drawRings(ctx, camX, camY);
+    this._drawPrompt(ctx);
     this._drawSweep(ctx);
     this._drawChips(ctx, camX, camY);
     this._drawLoot(ctx, camX, camY);

@@ -40,9 +40,27 @@ const fails=[];
     }, 8);
   }, info);
   await page.waitForTimeout(600);
-  const sw = await page.evaluate(() => ({ sweep: Ocean && Mining.sweep, target: !!Mining.target, zone: Mining.target ? Mining.zoneFor(Mining.target) : null }));
-  console.log('sweep running:', JSON.stringify(sw));
-  if (!sw.target) fails.push('no target locked while parked on a node');
+  // ENGAGE IS REQUIRED NOW. Parking next to a rock must leave it a candidate and
+  // nothing more -- proximity used to throw a timing bar and a progress ring onto
+  // whatever you drifted near, and this suite asserted that, so the assertion is
+  // inverted here rather than deleted: "no target while merely parked" is the
+  // behaviour worth protecting, and "engage() takes it up" is the other half.
+  const idle = await page.evaluate(() => ({
+    candidate: !!Mining.candidate, target: !!Mining.target, sweep: Mining.sweep,
+  }));
+  console.log('parked (no engage):', JSON.stringify(idle));
+  if (!idle.candidate) fails.push('parked on a node but it is not even a candidate');
+  if (idle.target) fails.push('a node is targeted WITHOUT an engage -- proximity still mines');
+  await page.screenshot({ path: OUT + '/mine-prompt.png', fullPage: false });
+
+  const sw = await page.evaluate(() => {
+    Mining.engage(Mining.candidate);
+    return { sweep: Mining.sweep, target: !!Mining.target, zone: Mining.target ? Mining.zoneFor(Mining.target) : null };
+  });
+  await page.waitForTimeout(300);
+  console.log('after engage:', JSON.stringify(sw));
+  if (!sw.target) fails.push('engage() did not take up the node in reach');
+  if (!sw.zone) fails.push('no timing zone once engaged');
   await page.screenshot({ path: OUT + '/mine-bar.png', fullPage: false });
   // force a perfect hit and a miss, compare damage
   const dmg = await page.evaluate(() => {

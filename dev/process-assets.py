@@ -572,10 +572,8 @@ grid_slice('ECF92C7E-C2C6-419B-88F1-54677C25A7B6.png', 4, 2,
            ['node_wood', 'node_stone', 'node_iron', 'node_gold',
             'node_crystal', 'node_coal', 'node_scrap', 'node_wreck'],
            tol=44, target_h=190, solo=True, defr=True, inset=6)
-grid_slice('B5914D75-909C-4C2D-8A1F-C1F66B237242.png', 4, 2,
-           ['res_driftwood', 'res_stone', 'res_ore', 'res_crystal',
-            'res_plank', 'res_nail', 'res_ingot', None],
-           tol=44, target_h=150, solo=True, defr=True, inset=6)
+# The resource icons off this sheet are cut by COMPONENTS, not a grid -- see the
+# call down in the _sheet_objects section, which is where the helper is defined.
 
 print('crafting stations, weapons, farm tools...')
 grid_slice('B61CD705-62F4-492C-BF81-67C8CC7F703F.png', 2, 2,
@@ -641,30 +639,24 @@ for _i, _b in enumerate(_pboxes):
     save(PICK_NAMES[_i], despeckle(_cell))
 
 
-# ---- driftwood, broken up ------------------------------------------------------
-# res_driftwood is a BUNDLE: three logs tied with rope. As an inventory icon a
-# bundle is right (it is a stack of the stuff), but the ocean scatters it as
-# scenery that is supposed to be adrift, and a neatly tied bundle bobbing in open
-# water reads as cargo somebody lost rather than as driftwood.
+# ---- driftwood: NOT cut up ------------------------------------------------------
+# There used to be a drift_0/1/2 here, the res_driftwood bundle chopped into what
+# were meant to be three loose logs. It never worked and the idea is unsalvageable,
+# so it is gone rather than retuned:
 #
-# So the bundle is cut into its three logs. The crops are measured off the alpha
-# map: the upright log occupies the top-centre, the long diagonal runs across the
-# middle, and the short one sits bottom-left. Each is trimmed to its own content
-# and keyed against the same background, so they come out as three loose pieces
-# that can be strewn at different sizes and angles.
-_dw = Image.open(os.path.join(OUT, 'res_driftwood.png')).convert('RGBA')
-# The rope crosses the middle (roughly x 50..95, y 60..110), so the cuts stay
-# clear of it: the upright above it, and the two clean ends of the long log
-# either side.
-_DW_CUTS = [
-    ('drift_0', (64, 0, 124, 62)),      # the upright, top-centre
-    ('drift_1', (98, 68, 157, 114)),    # the long log's right end
-    ('drift_2', (0, 78, 52, 124)),      # ... and its left end
-]
-for _n, _box in _DW_CUTS:
-    _c = trim(_dw.crop(_box))
-    if _c.size[0] > 2 and _c.size[1] > 2:
-        save(_n, despeckle(_c))
+#   * The bundle is TIED. The rope crosses the middle of every log, so an
+#     axis-aligned box either contains rope or is a stub of a log, and the shipped
+#     cuts were both -- rope fringe down one edge and a hard chop across the grain.
+#   * Masking the rope by colour does not separate them either. The rope's orange
+#     and the wood's own dark shading overlap in RGB (both clear r-b > 60 with g
+#     below r), so any threshold that removes the rope bleaches holes in the logs.
+#   * Removing the rope and re-running components does not split the bundle:
+#     the logs touch each other where the rope crossed, so it stays one blob.
+#
+# The ocean now strews the whole bundle and the whole plank stack instead, varied
+# by scale, flip and a per-piece tilt. A tied bundle of driftwood on the sand below
+# a fishing pier reads fine -- considerably better than a chopped stub -- and no
+# cropping artifact can come back.
 
 
 # ---- the August upload: ores, weeds, dock kit, item icons ----------------------
@@ -706,6 +698,23 @@ def _sheet_objects(path, bg_tol, names, row_tol=90, min_area=1400, cap=None, dfb
         save(names[i], despeckle(cell))
         out.append(names[i])
     return out
+
+# RESOURCE ICONS -- components, NOT a grid. This sheet is 4 objects on the top row
+# and only THREE on the bottom, and neither row is centred in an even 4x2. A grid
+# slice broke it two ways at once: the plank stack straddled the first vertical
+# line, so cell 1 of the bottom row came out a bare SLIVER of planks (and shipped
+# as res_nail), and every name after it shifted by one -- the nails became
+# res_ingot and the ingots fell off the end into the discarded None. The driftwood
+# bundle on the top row lost the tip of its right-hand log to the same line, which
+# is why the item icon looked chopped. Row-bucketed components find 4 then 3 whole
+# objects, so every name lands on the art it is called after.
+#
+# This must stay BELOW the _sheet_objects def: the file is a straight-line script,
+# and calling the helper from the earlier icon section is a NameError.
+_sheet_objects('B5914D75-909C-4C2D-8A1F-C1F66B237242.png', 44, [
+    'res_driftwood', 'res_stone', 'res_ore', 'res_crystal',
+    'res_plank', 'res_nail', 'res_ingot',
+], row_tol=260, min_area=9000, dfbg=(151, 157, 172))
 
 # ORE NODES. Bright, chunky, and each one sits on a FLAT BASE -- which is exactly
 # what a rock resting on the seabed needs, and what the old node art lacked.

@@ -172,6 +172,43 @@ const Ocean = {
   flash: 0, shakeT: 0, splashT: 0,
   msg: '', msgT: 0,
   time: 0, quality: 1,
+
+  // ---- ZOOM -------------------------------------------------------------------
+  // The open sea was framed at the same 480x270 as the dock, and at that width Otto
+  // is a small thing in a lot of empty blue -- the sprites, the sand and the plants
+  // all lose out. The world layers are drawn through a scale() of ZOOM, so the
+  // visible slice of the world is VW x VH logical units instead of W x H.
+  //
+  // WHAT HAD TO CHANGE, AND WHAT DELIBERATELY DID NOT. Anything that CENTRES on the
+  // frame, or measures from its far edge, has to use VW/VH or it aims at a point
+  // that is now off screen -- the camera targets, the sky lift, and the few places
+  // that sample the world at "the middle of the screen". Those are fixed below.
+  //
+  // Culling bounds (`if (sx > W) continue`) are deliberately left at W/H. The
+  // visible area is now SMALLER than W x H, so a W-wide test is merely generous: it
+  // admits a little more than it needs to and can never cull something that is
+  // still on screen. Tightening them would buy back a few props' worth of fill and
+  // risk a pop-in seam on every one of ~140 call sites, which is a bad trade.
+  // Full-frame fills are safe for the mirror-image reason: a W x H rect drawn under
+  // the scale over-covers the viewport rather than leaving a gap.
+  //
+  // The HUD is unaffected -- it is drawn after the world's restore(), in screen
+  // space, so it keeps the full 480x270 and stays pixel-exact.
+  //
+  // WHY EXACTLY 1.5, AND NOT A ROUNDER-SOUNDING 1.3. The zoom has to keep the art
+  // on whole device pixels or the whole scene goes soft, which would undo far more
+  // than the zoom gains. Sprites are authored at APIX (0.5 logical units per sprite
+  // texel) on a DPX of 4, so one sprite texel covers APIX * DPX * ZOOM = 2 * ZOOM
+  // device pixels. That is only an integer when ZOOM lands on a multiple of 0.5:
+  //   1.25 -> 2.5 device px per texel, every sprite half a pixel soft
+  //   1.5  -> 3   device px per texel, crisp
+  // 1.5 also puts the logical grid on 6 device pixels, so the pixel font and every
+  // fillRect-drawn UI element inside the world (the [E] prompt, the timing bar, the
+  // trust pips) stay exact too. It shows a 320x180 slice of the world.
+  ZOOM: 1.5,
+  get VW() { return W / this.ZOOM; },
+  get VH() { return H / this.ZOOM; },
+
   _bdCv: null, _bdCtx: null,
   _stamp: -1, _installed: false, _init: false,
   _ft: 0.016, _qt: 0,
@@ -789,10 +826,16 @@ const Ocean = {
   // would dress the same line of sand and the seabed would grow eight coral
   // gardens stacked on one spot.
   SHELL_ART: ['shell_clam', 'shell_mussel', 'shell_cockle', 'shell_scallop', 'urchin_1', 'urchin_3'],
-  // Three LOOSE logs, cut out of the bundle sprite in the asset pipeline. The
-  // bundle itself is a tied stack -- correct as an inventory icon, wrong bobbing
-  // in open water, where it read as cargo somebody lost.
-  DRIFT_ART: ['drift_0', 'drift_1', 'drift_2', 'drift_1', 'drift_2', 'res_plank'],
+  // WHOLE sprites only. This used to be drift_0/1/2, the driftwood bundle chopped
+  // into three "loose logs" -- but the bundle is tied, so every crop carried rope
+  // fringe down one edge and a hard chop across the grain, and at scenery size that
+  // is what you actually noticed. The cuts are gone from the pipeline (see the
+  // driftwood note in dev/process-assets.py for why they cannot be rescued).
+  //
+  // Variety comes from the per-piece `rot`, `flip` and `s` these props already
+  // carry, which is enough: two sprites at random angles and sizes read as scatter,
+  // where a chopped stub read as a bug.
+  DRIFT_ART: ['res_driftwood', 'res_plank', 'res_driftwood', 'res_plank'],
 
   _gen(ci, cj, key) {
     // Mix the two axes into the seed with large odd multipliers so neighbours
@@ -1492,8 +1535,10 @@ const Ocean = {
   // ---- camera -----------------------------------------------------------------
   _camera(dt) {
     // leads the direction of travel a touch, so you see where you are going
-    const tx = this.px - W * 0.5 + clamp(this.vx * 0.28, -52, 52);
-    const ty = this.py - H * 0.46 + clamp(this.vy * 0.20, -34, 40);
+    // VW/VH, not W/H: the frame shows a smaller slice of the world now, so
+    // centring on W/2 would park Otto well right of centre.
+    const tx = this.px - this.VW * 0.5 + clamp(this.vx * 0.28, -52, 52);
+    const ty = this.py - this.VH * 0.46 + clamp(this.vy * 0.20, -34, 40);
     // How much sky the frame is allowed to give up. Underwater the water line stays
     // near the top -- the interesting things are below him. Once he is genuinely
     // clear of the sea it opens to nearly two thirds of the frame, so a breach
@@ -1505,7 +1550,7 @@ const Ocean = {
     // launch still opens it to nearly two thirds.
     const airK = clamp((10 - this.py) / 44, 0, 1);
     this._sky = lerp(this._sky, airK, clamp(dt * 3.2, 0, 1));
-    const lift = lerp(H * 0.24, H * 0.66, this._sky);
+    const lift = lerp(this.VH * 0.24, this.VH * 0.66, this._sky);
     const k = 1 - Math.pow(0.0025, dt);
     // THE CURRENT: a slow figure-of-eight drift that fades in as Otto slows down
     // and vanishes entirely at speed. Hovering, the frame breathes like the water
@@ -1515,7 +1560,25 @@ const Ocean = {
     const swx = Math.sin(this.time * 0.31) * 2.6 * calm;
     const swy = Math.sin(this.time * 0.47 + 1.7) * 1.8 * calm;
     this.camX += (tx + swx - this.camX) * k;
-    this.camY += (Math.max(ty + swy, -lift) - this.camY) * k;
+
+    // ---- the floor clamp -------------------------------------------------------
+    // The camera used to follow Otto all the way down with no lower bound, so
+    // sitting on the seabed put the sand line near the middle of the frame and gave
+    // the bottom half of the screen to whatever is UNDER the sand. That was survivable
+    // while four stacked palette bands lived down there; now that the sand is one
+    // painted strip over one fill, it is a large flat field and there is nothing to
+    // look at. The honest fix is not to draw more mass under the floor, it is to stop
+    // pointing the camera at it: the sand line is held at 80% of the frame or lower,
+    // so the fill is only ever the thin dark hem beneath the strip.
+    //
+    // GUARDED, because the two bounds can cross. In shallow water the bed cap can sit
+    // ABOVE the sky lift, and applying them in the wrong order would pin the camera to
+    // the wrong one -- the same trap as the dock's clamp(v, 0, negative), which
+    // returned the negative and slid the whole scene.
+    let tyc = Math.max(ty + swy, -lift);
+    const bedCap = this.floorAt(this.px) - this.VH * 0.80;
+    if (bedCap > -lift) tyc = Math.min(tyc, bedCap);
+    this.camY += (tyc - this.camY) * k;
   },
 
   // ---- animation state machine ------------------------------------------------
@@ -1815,6 +1878,11 @@ const Ocean = {
       const a = Math.min(2.5, this.shakeT * 8);
       ctx.translate(Math.round(rand(-a, a) * DPX) / DPX, Math.round(rand(-a, a) * DPX) / DPX);
     }
+    // THE ZOOM. Everything from here to the matching restore() draws into a
+    // VW x VH viewport; see the ZOOM note up in the state block. The shake is
+    // applied outside it on purpose, so a knock is the same distance on screen
+    // whatever the zoom is.
+    if (this.ZOOM !== 1) ctx.scale(this.ZOOM, this.ZOOM);
 
     // The four backdrop layers together cover roughly five screens of fill, and
     // on a software canvas at 1920x1080 that alone measured 110ms a frame. They
@@ -1885,7 +1953,7 @@ const Ocean = {
   // (the bands, the haze, the deep tint) is clipped to below this by arithmetic
   // rather than by ctx.clip, because a clip is a per-pixel cost and this is a
   // horizontal split.
-  _waterTop() { return clamp(-this.camY, 0, H); },
+  _waterTop() { return clamp(-this.camY, 0, this.VH); },
 
   _drawWater(ctx, t) {
     const wy0 = this._waterTop();
@@ -2223,7 +2291,7 @@ const Ocean = {
   // to live here were drawn with paths, and next to the uploaded sprites they
   // read as exactly what they were. What stands on the sand now is art.
   _drawFloorFar(ctx) {
-    const water = this._tintAt(this.camY + H * 0.62);
+    const water = this._tintAt(this.camY + this.VH * 0.62);
     const step = 48;
     const par = 0.72, lift = 40;
     const cx = this.camX * par, cy = this.camY * par;
@@ -2247,6 +2315,66 @@ const Ocean = {
     ctx.fill();
   },
 
+  // The colour to fill the world with UNDER the painted sand strip, sampled from
+  // the strip's own bottom rows so the two cannot read as separate layers.
+  //
+  // Two levels of caching, because there are two different costs. The SAMPLE is a
+  // getImageData -- a pipeline stall -- and never changes, so it is taken once. The
+  // tinted result changes with depth and daylight, so it is cached the same way
+  // _bedPal caches its tones: quantised into a key, recomputed only when the key
+  // moves. Both matter; a getImageData per frame would be far worse than the
+  // banding this replaces.
+  //
+  // The mix goes through the water tint rather than the palette's dark tone so the
+  // sand under the strip drowns in the water at the same rate as everything else
+  // on the bed -- the same rule tone() follows in _bedPal.
+  _sandUnderCol(mid) {
+    if (this._underRGB === undefined) {
+      this._underRGB = null;
+      const img = ASSETS['sandstrip_0'];
+      if (img && img.width) {
+        const cv = document.createElement('canvas');
+        cv.width = Math.min(64, img.width);
+        cv.height = 4;
+        const c = cv.getContext('2d', { willReadFrequently: true });
+        // just the bottom four rows of the strip, squeezed across
+        c.drawImage(img, 0, img.height - 4, img.width, 4, 0, 0, cv.width, 4);
+        let r = 0, g = 0, b = 0, n = 0;
+        try {
+          const d = c.getImageData(0, 0, cv.width, 4).data;
+          for (let i = 0; i < d.length; i += 4) {
+            if (d[i + 3] < 128) continue;        // the strip is keyed; skip the cut-out
+            r += d[i]; g += d[i + 1]; b += d[i + 2]; n++;
+          }
+        } catch (e) { n = 0; }                    // a tainted canvas is not worth a crash
+        if (n) this._underRGB = [r / n, g / n, b / n];
+      }
+    }
+    if (!this._underRGB) return null;
+    const nf = this._nightF();
+    const key = (((mid / 12) | 0) * 32) + ((nf * 16) | 0);
+    if (this._ukey === key && this._ucol) return this._ucol;
+    const df = clamp(mid / this.DEEP, 0, 1);
+    // BARELY any water in this mix. The first cut faded toward the water tint the
+    // way _bedPal's tones do (up to 0.7 at depth) -- but those tones are stacked
+    // UNDER a sprite that gets no water fade at all, so at that strength the fill
+    // came out teal, and the strip's bottom edge became the hard seam this was
+    // supposed to remove. It has to read as the same sand continuing, so the tint
+    // is a hint (0.06..0.18) and the darkening does the rest of the work.
+    let c = rgbLerp(this._underRGB, this._tintAt(mid), 0.04 + df * 0.08);
+    // Only a WHISPER darker than the strip's face. The strip's bottom rows are
+    // solid sand at about (195,166,110); mixing a fifth of the way to a brown put
+    // the fill ~30 levels below that, and a 30-level step along a dead straight
+    // edge is a line you can see. Measured, not guessed -- the strip's bottom row
+    // is fully opaque across its whole width, so this fill butts directly against
+    // a known colour and any mismatch shows.
+    c = rgbLerp(c, [46, 38, 30], 0.07);
+    if (nf > 0) c = rgbLerp(c, [6, 14, 34], nf * 0.5);
+    this._ukey = key;
+    this._ucol = cssRGB(c);
+    return this._ucol;
+  },
+
   _drawFloor(ctx, t) {
     if (typeof G === 'undefined' || !G || !this._cols) return;
     const STEP = this.FLOOR_STEP;
@@ -2259,7 +2387,7 @@ const Ocean = {
       if (sy < top) top = sy;
     }
     if (top > H + 2) return;
-    const pal = this._bedPal(this.floorAt(this.camX + W * 0.5));
+    const pal = this._bedPal(this.floorAt(this.camX + this.VW * 0.5));
     const right = (n - 1) * STEP;
 
     const fill = (off, col) => {
@@ -2272,10 +2400,30 @@ const Ocean = {
       ctx.closePath();
       ctx.fill();
     };
-    fill(0, pal.lip);
-    fill(2.5, pal.sand);
-    fill(this.FLOOR_SAND, pal.silt);
-    fill(this.FLOOR_SAND + this.FLOOR_SILT, pal.dark);
+    // NO STACKED BANDS. This used to be four fills of the same traced line offset
+    // down the page -- a lit lip, the sand, silt, then a dark mass -- and with the
+    // painted strip laid over the top of them the leftovers showed below it as
+    // three hard horizontal bands of flat colour. That banding is the "layer below
+    // the sand" and it is the most obviously code-drawn thing left on screen.
+    //
+    // What is under the strip now is ONE fill, in the strip's own bottom-edge
+    // colour, so there is no seam to see: the sand simply continues down out of
+    // frame. The fill still has to exist -- the strip is only ~60 logical tall and
+    // the bed can sit high in the frame, so without it the bottom of the screen
+    // would show open water under the seabed.
+    //
+    // The old palette bands stay as the FALLBACK for a missing strip asset, since
+    // art that fails to load is silent in this codebase and a bare line would read
+    // as a hole in the world.
+    const under = this._sandUnderCol(this.floorAt(this.camX + this.VW * 0.5));
+    if (under) {
+      fill(0, under);
+    } else {
+      fill(0, pal.lip);
+      fill(2.5, pal.sand);
+      fill(this.FLOOR_SAND, pal.silt);
+      fill(this.FLOOR_SAND + this.FLOOR_SILT, pal.dark);
+    }
 
     // ---- PAINTED SAND over the fills: the uploaded strips, tiled along the
     // line. The strip's own bumpy top edge is what makes the floor read as a
@@ -2296,7 +2444,7 @@ const Ocean = {
       // of floor put neighbouring tiles a few units apart, and the joint read as
       // a cliff line marching along the sand. The floor is near flat, so the
       // height at the screen centre serves the whole frame.
-      const sy = this.floorAt(this.camX + W / 2) - this.camY - 6;
+      const sy = this.floorAt(this.camX + this.VW / 2) - this.camY - 6;
       for (let i = i0; i <= i1; i++) {
         const img = (i & 1) && s1 && s1.width ? s1 : s0;
         const th = TW * img.height / img.width;
@@ -2347,7 +2495,7 @@ const Ocean = {
     const wy0 = this._waterTop();
     if (wy0 >= H) return;                     // nothing but sky in frame
     const d = this.depthFrac();
-    const base = this._tintAt(this.camY + H * 0.5);
+    const base = this._tintAt(this.camY + this.VH * 0.5);
     const a0 = 0.16 + d * 0.4;
     const BANDS = 8, bh = (H - wy0) / BANDS;
     for (let i = 0; i < BANDS; i++) {
