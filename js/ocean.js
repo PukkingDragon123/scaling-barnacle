@@ -648,7 +648,7 @@ const Ocean = {
     if (G.flags.pendingRegrow) Game.newDayRegrow(true);
     if (typeof SND !== 'undefined') { SND.splash(); SND.setScene('surface'); }
     if (count > 0) Game.toast(`Hauled in ${count} finds (worth ~$${value})`);
-    if (this.forcedExit) Game.toast('You surfaced gasping for air!');
+    if (this.forcedExit) Game.toast('You surface gasping. Closer than it needed to be.');
     Game.save();
     Game.go(WorldScene, {});
   },

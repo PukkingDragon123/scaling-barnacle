@@ -35,6 +35,7 @@ const ok = (cond, msg) => { if (!cond) fails.push(msg); console.log((cond ? 'ok 
     () => typeof G !== 'undefined' && G && typeof ASSETS !== 'undefined' && ASSETS.dock_11 && ASSETS.dock_11.width,
     null, { timeout: 60000 });
   await page.waitForFunction(() => Game.fadeDir === 0 && Game.fade === 0, null, { timeout: 30000 });
+  await page.evaluate(() => { if (typeof TitleScene !== 'undefined' && Game.scene === TitleScene) { Game.scene = WorldScene; WorldScene.enter({}); } if (G && G.flags) G.flags.letter = true; if (typeof Quests !== 'undefined') Quests.letter = false; }); // tests skip the title menu, like the old boot
   await page.waitForTimeout(500);
 
   // ---- 1. GEAR tab: nothing purchasable ------------------------------------
@@ -104,7 +105,12 @@ const ok = (cond, msg) => { if (!cond) fails.push(msg); console.log((cond ? 'ok 
   });
   ok(bag1.started, 'Inv.craft(g_bag2) accepted');
   await page.waitForFunction(() => G.gear.bag >= 1, null, { timeout: 8000 });
-  const goal = await page.evaluate(() => ({ bag: G.gear.bag, done: GOAL_DONE[3](G), name: GOALS[3].name }));
+  // look the chapter up by KEY: the questline reorders freely, and a magic index
+  // broke the moment a chapter was added ahead of the bag
+  const goal = await page.evaluate(() => {
+    const qi = QUESTS.findIndex(q => q.key === 'bag');
+    return { bag: G.gear.bag, done: GOAL_DONE[qi](G), name: GOALS[qi].name };
+  });
   ok(goal.bag === 1 && bag1.before === 0, `G.gear.bag 0 -> ${goal.bag}`);
   ok(goal.done, `goal "${goal.name}" predicate satisfied by crafting`);
 

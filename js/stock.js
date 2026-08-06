@@ -312,7 +312,7 @@ const Stock = {
       return false;
     }
     const a = G.stock.list[G.stock.list.length - 1];
-    Game.toast(`${a.name} settles into Pen ${pen + 1}. Feed daily!`);
+    Game.toast(`${a.name} settles into pen ${pen + 1}. A feed a day keeps it happy.`);
     this._firstTimeHint();
     Game.save();
     return true;
@@ -323,9 +323,9 @@ const Stock = {
     if (!this.ensure()) return false;
     const sp = this.byKey(speciesKey);
     if (!sp) return false;
-    if (this.penCount() <= 0) { SND.alarm(); Game.toast('Build a Livestock Pen on the dock first!'); return false; }
+    if (this.penCount() <= 0) { SND.alarm(); Game.toast('A pen has to come first -- the crafting bench sells the kit.'); return false; }
     if (this.freePen() < 0) { SND.alarm(); Game.toast('Every pen is full.'); return false; }
-    if (G.money < sp.price) { SND.alarm(); Game.toast('Not enough sand dollars!'); return false; }
+    if (G.money < sp.price) { SND.alarm(); Game.toast('Not enough sand dollars.'); return false; }
     // reuse the canonical purchase helper so cash/toast/save behave identically
     Shop.buy(sp.price, () => this.buy(sp.key), `${sp.name} fry`);
     return true;
@@ -362,7 +362,7 @@ const Stock = {
     a.happy = clamp(a.happy + this.HAPPY_PET, 0, 1);
     this._burst(a, 1, 3);
     SND.rub();
-    if (a.happy >= 1 && before < 1) { SND.chime(); Game.toast(`${a.name} could not possibly be happier!`); }
+    if (a.happy >= 1 && before < 1) { SND.chime(); Game.toast(`${a.name} could not be happier.`); }
     else Game.toast(`${a.name} leans into your paw.`);
     Game.save();
     return true;
@@ -381,7 +381,7 @@ const Stock = {
     G.stock.collected += n;
     this._burst(a, 2, 8);
     SND.pop(1.2);
-    if (n > 1) { SND.chime(); Game.toast(`${a.name} gives you ${n} x ${sp.product.name}!`); }
+    if (n > 1) { SND.chime(); Game.toast(`${a.name} gives you ${n} x ${sp.product.name}.`); }
     else Game.toast(`Collected ${sp.product.name} from ${a.name}.`);
     Game.save();
     return key;
@@ -880,7 +880,7 @@ const Stock = {
     if (typeof Craft !== 'undefined' && Craft.open) return;
     if (typeof NPCs !== 'undefined' && NPCs.open) return;
     const pens = this.penCount();
-    if (pens <= 0) { SND.alarm(); Game.toast('Build a Livestock Pen first!'); return; }
+    if (pens <= 0) { SND.alarm(); Game.toast('A pen has to come first.'); return; }
     this.pen = clamp(p | 0, 0, pens - 1);
     this.sel = 0;
     this.open = true;

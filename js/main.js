@@ -297,7 +297,7 @@ const Game = {
       const d = JSON.parse(localStorage.getItem(SAVE_KEY));
       if (!d) { G = base; return; }
       G = Object.assign(base, d);
-      for (const k of ['storage', 'gear', 'stats', 'flags', 'decor'])
+      for (const k of ['storage', 'gear', 'stats', 'flags', 'qflags', 'decor'])
         G[k] = Object.assign(defaultState()[k], d[k] || {});
       if (!Array.isArray(G.growth) || G.growth.length !== 3) G.growth = [1, 1, 1];
       if (!Array.isArray(G.seeds) || G.seeds.length !== 3) G.seeds = [11, 22, 33];
@@ -338,19 +338,20 @@ const Game = {
         G.stats.sold++;
         SND.cash();
         SND.droneOff();
-        this.toast(`Drone pickup: +$${G.pendingCrate.value}!`);
+        this.toast(`The drone came by: +$${G.pendingCrate.value}.`);
         G.pendingCrate = null;
         this.save();
       }
     }
-    // Otto's plan: advance the current goal when its condition is met
+    // the story: turn the page when the current chapter's condition comes true.
+    // The reward and the (quiet) toast live in Quests.complete; the flat +$25
+    // fanfare this used to print is gone with the rest of the shouting.
     if (G.goal < GOALS.length && GOAL_DONE[G.goal](G)) {
       const done = GOALS[G.goal];
       G.goal++;
-      G.money += 25;
-      SND.chime();
-      this.toast(`Goal complete: ${done.name}!  (+$25)`);
-      if (G.goal >= GOALS.length) this.toast('Otto is living the dream. You did it!');
+      if (typeof Quests !== 'undefined' && Quests.complete) Quests.complete(done);
+      else { SND.chime(); this.toast(`journal: "${done.name}" -- done.`); }
+      if (G.goal >= GOALS.length) this.toast('That was the last page of the journal.');
       this.save();
     }
     // autosave
@@ -387,9 +388,17 @@ const Game = {
     if (this.scene !== DiveScene && !TouchUI.enabled)
       text(c, '[H] help', W - 12, 29, { size: 6.5, color: 'rgba(255,255,255,0.75)', align: 'right' });
 
-    // centre: current goal
-    const goalTxt = G.goal < GOALS.length ? GOALS[G.goal].name : 'Living the dream';
+    // centre: the current chapter. Clicking it (or [J]) opens the journal, and it
+    // glows for a moment when a chapter has just finished.
+    const goalTxt = G.goal < GOALS.length ? GOALS[G.goal].name : 'The pier, at ease';
     const gw = textWidth(c, goalTxt, 7) + 28;
+    this._goalRect = { x: W / 2 - gw / 2, y: 6, w: gw, h: 15 };
+    if (typeof Quests !== 'undefined' && Quests._pulse > 0) {
+      c.globalAlpha = 0.25 + 0.2 * Math.sin(this.time * 6);
+      c.fillStyle = '#ffe6b0';
+      c.fillRect(W / 2 - gw / 2 - 2, 4, gw + 4, 19);
+      c.globalAlpha = 1;
+    }
     uiPanel(c, W / 2 - gw / 2, 6, gw, 15, 0.92, true);
     c.fillStyle = '#e8a93c';
     c.beginPath();
@@ -482,92 +491,134 @@ const Game = {
 // ---- title screen -----------------------------------------------------------------
 const TitleScene = {
   customCursor: false,
-  time: 0, fin: null, finT: 5,
+  time: 0,
+  sel: 0,
+  confirm: false,      // "start over?" armed on the New Tide row
 
-  enter() { this.time = 0; SND.setScene('title'); },
+  enter() { this.time = 0; this.sel = 0; this.confirm = false; SND.setScene('title'); },
+
+  // The rows are built per frame because hasSave() can change under us (New Tide
+  // wipes it). Continue leads when there is a save; otherwise Begin stands alone.
+  _rows() {
+    const rows = [];
+    if (Game.hasSave()) rows.push({ key: 'continue', label: 'continue' });
+    rows.push({ key: 'new', label: Game.hasSave() ? (this.confirm ? 'start over -- sure?' : 'new tide') : 'begin' });
+    rows.push({ key: 'sound', label: SND.muted ? 'sound: off' : 'sound: on' });
+    return rows;
+  },
+  _rowY(i) { return 178 + i * 17; },
+
+  _activate(row) {
+    if (row.key === 'continue') {
+      Game.load();
+      Game.go(WorldScene, {});
+      this._armLetter();
+    } else if (row.key === 'new') {
+      // a saved pier deserves one "are you sure" -- and only one
+      if (Game.hasSave() && !this.confirm) { this.confirm = true; SND.blip(); return; }
+      this.confirm = false;
+      Game.newGame();
+      Game.go(WorldScene, {});
+      this._armLetter();
+    } else if (row.key === 'sound') {
+      SND.toggleMute();
+      SND.blip();
+    }
+  },
+
+  // The opening letter is armed HERE, at the front door, and only here -- so a
+  // player always gets it once, and a test harness that jumps straight into a
+  // scene is never parked behind a prop it has no key for.
+  _armLetter() {
+    if (typeof Quests !== 'undefined' && G && G.flags && !G.flags.letter) Quests.letter = true;
+  },
 
   update(dt) {
     this.time += dt;
-    this.finT -= dt;
-    if (this.finT <= 0 && !this.fin) {
-      this.fin = { x: -20 };
-      this.finT = rand(9, 18);
+    const rows = this._rows();
+    this.sel = clamp(this.sel, 0, rows.length - 1);
+    if (Input.p('ArrowDown') || Input.p('KeyS')) { this.sel = (this.sel + 1) % rows.length; this.confirm = false; SND.blip(); }
+    if (Input.p('ArrowUp') || Input.p('KeyW')) { this.sel = (this.sel + rows.length - 1) % rows.length; this.confirm = false; SND.blip(); }
+    if (Input.p('Escape')) this.confirm = false;
+    if (Input.p('Enter') || Input.p('Space')) { this._activate(rows[this.sel]); return; }
+    // pointer: hover selects, click activates; a click anywhere else continues,
+    // because "tap to play" is still the promise on a phone
+    const m = Input.mouse;
+    let overRow = -1;
+    for (let i = 0; i < rows.length; i++) {
+      const y = this._rowY(i);
+      if (m.y >= y - 5 && m.y <= y + 7 && m.x > W / 2 - 70 && m.x < W / 2 + 70) overRow = i;
     }
-    if (this.fin) {
-      this.fin.x += 46 * dt;
-      if (this.fin.x > W + 20) this.fin = null;
-    }
-    if (Input.p('Enter') || Input.p('Space') || Input.mouse.clicked) {
-      if (Game.hasSave()) Game.load(); else Game.newGame();
-      Game.go(WorldScene, {});
-      return;
-    }
-    if (Input.p('KeyN')) {
-      Game.newGame();
-      Game.go(WorldScene, {});
+    if (overRow >= 0 && overRow !== this.sel) { this.sel = overRow; this.confirm = false; }
+    if (m.clicked) {
+      if (overRow >= 0) this._activate(rows[overRow]);
+      else this._activate(rows[0]);
     }
   },
 
   draw(c) {
-    // the painted sea, alive
-    SKY.update(0, this.time);
-    SKY.drawSky(c, 0.62, this.time, 0);
-    SKY.drawSea(c, 0.62, this.time, 0);
-    // shark fin drive-by (a promise of things to come)
-    if (this.fin) {
-      c.fillStyle = '#141c26';
-      c.beginPath();
-      c.moveTo(this.fin.x - 8, 186);
-      c.quadraticCurveTo(this.fin.x, 168, this.fin.x + 6, 186);
-      c.closePath(); c.fill();
-      c.fillStyle = 'rgba(255,255,255,0.2)';
-      c.fillRect(this.fin.x - 12, 186, 22, 1);
+    // the sea the game is about, moving -- the uploaded loop, not a painted one
+    const oc = ASSETS[`ocean${Math.floor(this.time * 8) % 12}`];
+    const sm = c.imageSmoothingEnabled;
+    c.imageSmoothingEnabled = false;
+    if (oc && oc.width) c.drawImage(oc, 0, 0, W, H);
+    else { c.fillStyle = '#3aa7c9'; c.fillRect(0, 0, W, H); }
+
+    // home, out on the right: real pier art with the hut on it, bobbing a shade
+    const bob = Math.sin(this.time * 1.1) * 1.2;
+    const seg = ASSETS.dock_11, hut = ASSETS.hut_full;
+    if (seg && seg.width) {
+      const sw = 92, sh = sw * seg.height / seg.width;
+      c.drawImage(seg, W - 150, 176 + bob, sw, sh);
+      c.drawImage(seg, W - 62, 176 + bob, sw, sh);
+      if (hut && hut.width) {
+        const hw = 96, hh = hw * hut.height / hut.width;
+        c.drawImage(hut, W - 138, 176 - hh + 8 + bob, hw, hh);
+      }
     }
-    // drifting shells
-    for (let i = 0; i < 3; i++) {
-      const keys = ['clam', 'mussel', 'scallop'];
-      const bx = 70 + i * 160 + Math.sin(this.time * 0.7 + i * 2) * 8;
-      const by = 232 + Math.sin(this.time * 1.2 + i * 2.6) * 3;
-      c.globalAlpha = 0.9;
-      drawAC(c, `shell_${keys[i]}`, bx, by, 15);
-      c.globalAlpha = 1;
-    }
-    // otter on a buoy
-    const bob = Math.sin(this.time * 1.5) * 3;
-    c.fillStyle = '#8a2620';
-    c.beginPath(); c.arc(W / 2, 209 + bob, 13, 0, TAU); c.fill();
-    c.fillStyle = '#c8352a';
-    c.beginPath(); c.arc(W / 2 - 1, 208 + bob, 11.5, 0, TAU); c.fill();
-    c.fillStyle = '#f2ede2';
-    c.fillRect(W / 2 - 12, 203 + bob, 24, 4);
-    c.fillStyle = 'rgba(0,0,0,0.25)';
-    c.beginPath(); c.ellipse(W / 2, 222 + bob * 0.4, 15, 3, 0, 0, TAU); c.fill();
-    const br = Math.sin(this.time * 2.1) * 0.02;
-    const oimg = ASSETS.o2_10;   // waving hello
+    // Otto on the planks, waving
+    const oimg = ASSETS.o2_10;
     if (oimg && oimg.width) {
-      c.save();
-      c.translate(W / 2, 204 + bob);
-      c.scale(1 - br * 0.7, 1 + br);
-      c.drawImage(oimg, -13, -26, 26 * oimg.width / oimg.height, 26);
-      c.restore();
+      const oh = 26, ow = oh * oimg.width / oimg.height;
+      c.drawImage(oimg, W - 52 - ow / 2, 176 - oh + 3 + bob, ow, oh);
     }
-    // title with layered drop shadow
-    const wob = Math.sin(this.time * 2) * 2;
-    text(c, "MR. OTTO'S", W / 2 + 2, 40 + wob + 2, { size: 26, color: 'rgba(30,12,24,0.8)', align: 'center', shadow: false });
-    text(c, "MR. OTTO'S", W / 2, 40 + wob, { size: 26, color: '#ffe6b0', align: 'center', shadow: false });
-    text(c, 'CLAM FARM', W / 2 + 3, 70 - wob + 3, { size: 32, color: 'rgba(20,30,50,0.85)', align: 'center', shadow: false });
-    text(c, 'CLAM FARM', W / 2, 70 - wob, { size: 32, color: '#5ad2f0', align: 'center', shadow: false });
-    text(c, 'a cozy clam-scraping sim ... mostly cozy', W / 2, 112, { size: 8, color: '#f4d4a8', align: 'center' });
-    // prompt
-    if (Math.sin(this.time * 4) > -0.3) {
-      const label = TouchUI.enabled || matchMedia('(pointer: coarse)').matches
-        ? 'TAP to ' + (Game.hasSave() ? 'continue' : 'start')
-        : (Game.hasSave() ? 'Press ENTER to continue' : 'Press ENTER to start');
-      text(c, label, W / 2, 240, { size: 10, color: '#fff', align: 'center' });
+    c.imageSmoothingEnabled = sm;
+
+    // a soft dusk wash at the bottom so the menu text sits on something calm --
+    // stepped strips, because one rect put a hard line clean across the sea
+    c.fillStyle = 'rgba(8,20,34,0.12)';
+    c.fillRect(0, 150, W, H - 150);
+    c.fillRect(0, 162, W, H - 162);
+    c.fillRect(0, 174, W, H - 174);
+
+    // the name of the place. Kept hand-set: it is the one piece of lettering the
+    // game owns.
+    const wob = Math.sin(this.time * 1.6) * 1.5;
+    text(c, "MR. OTTO'S", W / 2 + 2, 44 + wob + 2, { size: 24, color: 'rgba(30,12,24,0.75)', align: 'center', shadow: false });
+    text(c, "MR. OTTO'S", W / 2, 44 + wob, { size: 24, color: '#ffe6b0', align: 'center', shadow: false });
+    text(c, 'CLAM FARM', W / 2 + 3, 72 - wob + 3, { size: 30, color: 'rgba(20,30,50,0.8)', align: 'center', shadow: false });
+    text(c, 'CLAM FARM', W / 2, 72 - wob, { size: 30, color: '#5ad2f0', align: 'center', shadow: false });
+    text(c, 'a little life on the water', W / 2, 104, { size: 8, color: '#f4d4a8', align: 'center' });
+
+    // the menu
+    const rows = this._rows();
+    for (let i = 0; i < rows.length; i++) {
+      const y = this._rowY(i);
+      const on = i === this.sel;
+      if (on) {
+        const pad = textWidth(c, rows[i].label, 9) / 2 + 14;
+        c.fillStyle = 'rgba(255,230,176,0.12)';
+        c.fillRect(W / 2 - pad, y - 4, pad * 2, 13);
+        text(c, '>', W / 2 - pad + 4, y, { size: 8, color: '#ffe6b0', align: 'left' });
+      }
+      text(c, rows[i].label, W / 2, y, {
+        size: 9, align: 'center',
+        color: on ? '#ffffff' : '#c8d8dc',
+      });
     }
-    if (Game.hasSave())
-      text(c, '[N] new game', W / 2, 255, { size: 7, color: '#c8b49a', align: 'center' });
-    text(c, '[M] map   [N] mute', 8, H - 12, { size: 6, color: '#a89478' });
+    text(c, TouchUI.enabled || matchMedia('(pointer: coarse)').matches
+      ? 'tap a line to choose' : 'arrows + enter', W / 2, H - 14,
+      { size: 6.5, color: 'rgba(255,255,255,0.55)', align: 'center' });
   },
 };
 
@@ -599,10 +650,26 @@ function frame(now) {
   // one-time landscape hint on phones
   if (TouchUI.enabled && !Game.rotHinted && window.innerHeight > window.innerWidth) {
     Game.rotHinted = true;
-    Game.toast('Tip: rotate your phone for a bigger view!');
+    Game.toast('Sideways is roomier, if you like.');
   }
 
   // updates
+  // The journal (and the opening letter) run BEFORE the branch so [J] can open
+  // them, and they park the scene while up -- same standing as Shop and Bench.
+  if (Game.fadeDir === 0 && G && Game.scene !== TitleScene &&
+      typeof Quests !== 'undefined' && !Shop.open && !Bench.open && !Game.helpOpen) {
+    Quests.update(dt);
+    // clicking the chapter banner is the mouse's way into the journal
+    if (!Quests.open && !Quests.letter && Input.mouse.clicked && Game._goalRect) {
+      const r = Game._goalRect, m = Input.mouse;
+      if (m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y && m.y <= r.y + r.h) {
+        Quests.open = true;
+        Quests.scroll = clamp((G.goal || 0) - 1, 0, Math.max(0, QUESTS.length - Quests.ROWS));
+        SND.blip();
+      }
+    }
+  }
+  const questUp = typeof Quests !== 'undefined' && (Quests.open || Quests.letter);
   if (Game.fadeDir === 0) {
     if (Game.helpOpen) {
       if (Input.p('Escape') || Input.mouse.clicked) Game.helpOpen = false;
@@ -610,11 +677,13 @@ function frame(now) {
       Shop.update(dt);
     } else if (Bench.open) {
       Bench.update(dt);
+    } else if (questUp) {
+      // parked: the journal or the letter has the frame
     } else if (Game.scene) {
       Game.scene.update(dt);
     }
   }
-  if (G && Game.scene !== TitleScene) Game.globalUpdate(dt);
+  if (G && Game.scene !== TitleScene && !questUp) Game.globalUpdate(dt);
   Game.updateFade(dt);
   SND.update(G ? G.musicOn : true);
 
@@ -664,6 +733,8 @@ function frame(now) {
   if (G && Game.scene !== TitleScene && !Shop.open && !Bench.open) Game.drawHUD(ctx);
   if (Shop.open) Shop.draw(ctx);
   if (Bench.open) Bench.draw(ctx);
+  // the journal and the opening letter sit above the HUD, below the touch pads
+  if (G && Game.scene !== TitleScene && typeof Quests !== 'undefined') Quests.draw(ctx);
   TouchUI.draw(ctx);
   Game.drawToasts(ctx);
   if (Game.helpOpen) Game.drawHelp(ctx);
@@ -687,9 +758,12 @@ ctx.fillRect(0, 0, W, H);
 text(ctx, 'loading the sea...', W / 2, H / 2 - 4, { size: 10, color: '#9fc4d4', align: 'center' });
 ctx.restore();
 loadAssets(() => {
-  // straight into the game — no menu
+  // The game state is created HERE, before the menu, on purpose: everything in
+  // the codebase (and every test harness) treats "G exists" as "the game is up",
+  // and the title is just the front porch. Continue re-loads over this; New Tide
+  // replaces it. Nothing is lost either way because nothing has happened yet.
   if (Game.hasSave()) Game.load(); else Game.newGame();
-  Game.scene = WorldScene;
-  WorldScene.enter({});
+  Game.scene = TitleScene;
+  TitleScene.enter();
   requestAnimationFrame(frame);
 });

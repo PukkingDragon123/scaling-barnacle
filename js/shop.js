@@ -18,7 +18,7 @@ const Shop = {
     SND.blip();
     if (!G.flags.seenShop) {
       G.flags.seenShop = true;
-      Game.toast('Sell shells here — a drone picks them up and pays you!');
+      Game.toast('Shells sell here. A drone collects and leaves the money.');
     }
   },
 
@@ -27,7 +27,7 @@ const Shop = {
   buy(price, apply, name) {
     if (G.money < price) {
       SND.alarm();
-      Game.toast('Not enough sand dollars!');
+      Game.toast('Not enough sand dollars.');
       return;
     }
     G.money -= price;
@@ -104,6 +104,31 @@ const Shop = {
             btn: pens ? `$${sp.price}` : 'NO PEN', price: sp.price,
             // buyAnimal owns the whole transaction (pen check, cash, naming, save)
             act: pens ? () => S.buyAnimal(sp.key) : null,
+          });
+        }
+      }
+      // KEEPSAKES -- one item, and it is not for you. Appears once somebody is at
+      // eight hearts (the journal's 'A heart alongside' chapter), because selling
+      // a proposal to a stranger is a strange thing for a stall to do.
+      {
+        let close = false;
+        const f = (G && G.friends) || {};
+        for (const k in f) { if (f[k] && f[k].pts >= 200) { close = true; break; } }
+        if (close && !(G && G.partner)) {
+          push({ info: 'KEEPSAKES -- for asking someone to stay' });
+          const held = (G.storage && G.storage.pearlband) || 0;
+          push({
+            gart: 'open_pearl', label: 'Pearl Band',
+            sub: 'A promise, worn small. Give it to someone dear.' + (held ? '   (holding 1)' : ''),
+            btn: held ? 'HELD' : '$900', price: 900,
+            act: held ? null : () => {
+              if (G.money < 900) { SND.alarm(); return; }
+              G.money -= 900;
+              G.storage.pearlband = 1;
+              SND.chime();
+              Game.toast('The pearl band is in your pocket. No hurry.');
+              Game.save();
+            },
           });
         }
       }

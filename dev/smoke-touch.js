@@ -33,6 +33,7 @@ const errors = [];
   // lost — which made this test pass or fail depending on how fast the machine
   // decoded 27MB of art.
   await p.waitForFunction(() => Game.fadeDir === 0 && Game.fade === 0, null, { timeout: 30000 });
+  await p.evaluate(() => { if (typeof TitleScene !== 'undefined' && Game.scene === TitleScene) { Game.scene = WorldScene; WorldScene.enter({}); } if (G && G.flags) G.flags.letter = true; if (typeof Quests !== 'undefined') Quests.letter = false; }); // tests skip the title menu, like the old boot
   await p.waitForTimeout(400);
   await p.evaluate(() => {
     const cv = document.getElementById('game');

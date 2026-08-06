@@ -99,31 +99,221 @@ const NODE_DEFS = {
 const BENCH_CRACK = { clam: 'clamMeat', mussel: 'musselMeat', oyster: 'oysterMeat' };
 const BENCH_POLISH = { abalone: 'abalonePol', pearl: 'pearlPol' };
 
-// Otto's plan: one clear goal at a time, from first scrape to the dream.
-const GOALS = [
-  { name: 'Scrape together 5 shells',    hint: 'Dive at the North Piling' },
-  { name: 'Send a crate to market',      hint: 'Sell on the laptop; the drone pays on pickup' },
-  { name: 'Crack a shell at the workbench', hint: 'Tap when the marker is centered' },
-  { name: 'Craft the Mesh Bag',          hint: 'Workbench — rope & driftwood ([C] to whittle)' },
-  { name: 'Rate the piling for the Mid Bed', hint: 'BUILD tab — oysters live further down' },
-  { name: 'Find a pearl',                hint: 'Crack oysters — clean cracks find more' },
-  { name: 'Polish something precious',   hint: 'Pearls & abalone gleam at the workbench' },
-  { name: 'Reach the Deep Bed',          hint: 'BUILD tab — bring a headlamp' },
-  { name: 'Survive the Gray One',        hint: "When the water goes quiet: DON'T MOVE" },
-  { name: 'The dream: save $5,000',      hint: 'A manor, a trophy, and a full coin purse' },
+// THE STORY, one chapter at a time. This used to be a bare list of goal strings;
+// it is the questline now -- each entry carries who it comes from, a few quiet
+// lines for the journal, and a small thank-you at the end. The old GOALS /
+// GOAL_DONE pair is derived from it below, so the banner, the help line and the
+// advance hook in main.js keep working, and an old save's G.goal index still
+// points at a sensible chapter.
+//
+// The writing rule for every line in here: say it the way a neighbour would.
+// Nothing shouts, nothing explains twice, and nobody is excited on your behalf.
+const QUESTS = [
+  {
+    key: 'hello', from: 'prof',
+    name: 'Say hello at the post',
+    hint: 'Someone is waiting on the deck',
+    brief: [
+      'The letter said the neighbours were good folk.',
+      'One of them is already standing at the visitor post,',
+      'pretending he only happened to be passing.',
+    ],
+    done: (g) => !!(g.friends && g.friends.prof && g.friends.prof.met),
+    reward: { money: 20, note: 'Fintan slips you a little starting money.' },
+  },
+  {
+    key: 'shells', from: 'prof',
+    name: 'Five shells for the pantry',
+    hint: 'Dive at the piling and scrape',
+    brief: [
+      'Start the way everyone here started:',
+      'dive at the piling, scrape five shells loose,',
+      'and climb back up before your air runs thin.',
+    ],
+    done: (g) => g.stats.scraped >= 5,
+    reward: { money: 40 },
+  },
+  {
+    key: 'crate', from: 'prof',
+    name: 'Send the first crate',
+    hint: 'Sell on the house laptop; the drone pays on pickup',
+    brief: [
+      'The laptop in the house reaches the market.',
+      'List what you scraped. A drone comes for the crate',
+      'and leaves the money under a pebble, as is proper.',
+    ],
+    done: (g) => g.stats.sold >= 1,
+    reward: { money: 60 },
+  },
+  {
+    key: 'knife', from: 'angler',
+    name: 'The knack of the knife',
+    hint: 'Crack a shell at the workbench, tap on the centre',
+    brief: [
+      'Marlow says a shell opens for timing, not force.',
+      'Crack one at the workbench. Wait for the middle.',
+      'You will know the sound when you hear it.',
+    ],
+    done: (g) => g.stats.cracked >= 1,
+    reward: { money: 40 },
+  },
+  {
+    key: 'bag', from: 'sprout',
+    name: 'A bag that fits',
+    hint: 'Workbench: rope and driftwood',
+    brief: [
+      'Pockets only go so far.',
+      'Twist some rope, save some driftwood,',
+      'and make yourself a proper mesh bag.',
+    ],
+    done: (g) => g.gear.bag >= 1,
+    reward: { money: 50 },
+  },
+  {
+    key: 'neighbours', from: 'sprout',
+    name: 'Meet the neighbours',
+    hint: 'All three of them, wherever you find them',
+    brief: [
+      'Three of them live out on the water.',
+      'Sprout grows things, Fintan measures things,',
+      'and Marlow catches things. Say hello properly.',
+    ],
+    done: (g) => {
+      const f = g.friends || {};
+      return !!(f.farmer && f.farmer.met && f.prof && f.prof.met && f.angler && f.angler.met);
+    },
+    reward: { money: 40, note: 'It is a small bay. Now everyone knows your name.' },
+  },
+  {
+    key: 'planted', from: 'sprout',
+    name: 'Something planted',
+    hint: 'Buy a packet at the stall, plant it on a seabed bed',
+    brief: [
+      'Sprout will not stop mentioning it,',
+      'so: buy a packet of seeds, swim down,',
+      'and put something in the sand to wait for.',
+    ],
+    done: (g) => !!(g.qflags && g.qflags.planted),
+    reward: { money: 60 },
+  },
+  {
+    key: 'midbed', from: 'prof',
+    name: 'Room to grow',
+    hint: 'BUILD tab: rate the piling for the mid bed',
+    brief: [
+      'The shallows are honest work, but the oysters',
+      'live a little further down. Rate the piling',
+      'and the mid bed is yours to tend.',
+    ],
+    done: (g) => g.bridge >= 2,
+    reward: { money: 80 },
+  },
+  {
+    key: 'petted', from: 'sprout',
+    name: 'A gentle touch',
+    hint: 'Swim up slowly and press [T]',
+    brief: [
+      'The animals out there are curious about you.',
+      'Move slowly, let one look you over,',
+      'and pet it before it changes its mind.',
+    ],
+    done: (g) => !!(g.qflags && g.qflags.petted),
+    reward: { money: 40 },
+  },
+  {
+    key: 'mined', from: 'angler',
+    name: 'Stone and spark',
+    hint: 'Take up a rock with [E] and mind the timing bar',
+    brief: [
+      'The seabed keeps stone, coal and old iron.',
+      'Take a rock up with [E] and swing on the beat.',
+      'Five good chunks will do to start.',
+    ],
+    done: (g) => !!(g.mining && g.mining.mined >= 5),
+    reward: { money: 60 },
+  },
+  {
+    key: 'pearl', from: 'prof',
+    name: 'A pearl of your own',
+    hint: 'Crack oysters; clean cracks find more',
+    brief: [
+      'An irritation, wrapped in patience, until it shines.',
+      'Fintan has a whole lecture about it.',
+      'Find one and you will only get the short version.',
+    ],
+    done: (g) => g.stats.pearls >= 1,
+    reward: { money: 100 },
+  },
+  {
+    key: 'polish', from: 'prof',
+    name: 'Polish and pride',
+    hint: 'Pearls and abalone gleam at the workbench',
+    brief: [
+      'Anything worth keeping is worth the buffing wheel.',
+      'Polish something precious and see what the',
+      'market ledger makes of it.',
+    ],
+    done: (g) => g.stats.polished >= 1,
+    reward: { money: 80 },
+  },
+  {
+    key: 'deepbed', from: 'angler',
+    name: 'The deep bed',
+    hint: 'BUILD tab; bring a headlamp',
+    brief: [
+      'Below the mid bed the light gives up.',
+      'Marlow fishes down there and says it is fine,',
+      'which from Marlow is a glowing review.',
+    ],
+    done: (g) => g.bridge >= 3,
+    reward: { money: 120 },
+  },
+  {
+    key: 'still', from: 'angler',
+    name: 'Hold steady',
+    hint: 'When the water goes quiet, stop moving',
+    brief: [
+      'Sooner or later the gray one drifts past.',
+      'Marlow has said it a dozen ways and means it:',
+      'go still as a piling, and it goes on by.',
+    ],
+    done: (g) => g.stats.sharkSurvived >= 1,
+    reward: { money: 150, note: 'Marlow nods at you differently now.' },
+  },
+  {
+    key: 'close', from: 'sprout',
+    name: 'A heart alongside',
+    hint: 'Talk most days; gifts help; eight hearts',
+    brief: [
+      'The work fills the days, but not the evenings.',
+      'Keep showing up for somebody -- little gifts,',
+      'a chat most days -- and see what grows.',
+    ],
+    done: (g) => {
+      const f = g.friends || {};
+      for (const k in f) { if (f[k] && f[k].pts >= 200) return true; }
+      return false;
+    },
+    reward: { note: 'The stall quietly starts stocking keepsakes.' },
+  },
+  {
+    key: 'dream', from: 'letter',
+    name: 'The dream: save $5,000',
+    hint: 'A manor, a trophy, and a full coin purse',
+    brief: [
+      'The letter never said get rich.',
+      'It said fix the place up and sleep well.',
+      'Still. Five thousand would fix a lot of planks.',
+    ],
+    done: (g) => g.money >= 5000,
+    reward: { note: 'The pier is yours, properly. It always was.' },
+  },
 ];
-const GOAL_DONE = [
-  (g) => g.stats.scraped >= 5,
-  (g) => g.stats.sold >= 1,
-  (g) => g.stats.cracked >= 1,
-  (g) => g.gear.bag >= 1,
-  (g) => g.bridge >= 2,
-  (g) => g.stats.pearls >= 1,
-  (g) => g.stats.polished >= 1,
-  (g) => g.bridge >= 3,
-  (g) => g.stats.sharkSurvived >= 1,
-  (g) => g.money >= 5000,
-];
+
+// Derived views, kept because main.js (the banner, the advance hook, the help
+// line) and anything else that predates the questline reads these names.
+const GOALS = QUESTS;
+const GOAL_DONE = QUESTS.map((q) => q.done);
 
 const SAVE_KEY = 'ottoClamFarm.v1';
 
@@ -144,6 +334,8 @@ function defaultState() {
     stats: { scraped: 0, sharkSurvived: 0, deaths: 0, pearls: 0, cracked: 0, polished: 0, sold: 0 },
     goal: 0,
     flags: {},      // tutorial flags
+    qflags: {},     // quest progress flags (planted, petted, ...) -- see js/quest.js
+    partner: null,  // NPC key once a pearl band is accepted -- see js/npc.js gift()
     musicOn: true,
   };
 }

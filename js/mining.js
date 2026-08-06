@@ -468,7 +468,7 @@ const Mining = {
       return ok;
     }
     if (G.money < d.price) {
-      if (typeof Game !== 'undefined') Game.toast('Not enough sand dollars!');
+      if (typeof Game !== 'undefined') Game.toast('Not enough sand dollars.');
       this._snd('alarm');
       return false;
     }

@@ -18,7 +18,7 @@ const Bench = {
     SND.blip();
     if (!G.flags.seenBench) {
       G.flags.seenBench = true;
-      Game.toast('Crack shells for meat, polish treasures — worth way more!');
+      Game.toast('Crack shells for the meat; polish the precious ones. Both sell better.');
     }
   },
 

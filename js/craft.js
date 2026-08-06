@@ -536,7 +536,7 @@ const Craft = {
     SND.blip();
     if (!G.flags.seenCraft) {
       G.flags.seenCraft = true;
-      Game.toast('Craft tackle, cook supper, build on the dock!');
+      Game.toast('Tackle, supper, and things to put on the dock.');
     }
   },
 

@@ -26,6 +26,7 @@ const NPC_ITEM_NAMES = {
   crop_moon_seed: 'Moon Seeds',
   stock_puffer_p: 'Puffer Milk', stock_sunfish_p: 'Sunfish Roe',
   stock_hogfish_p: 'Hogfish Cut',
+  pearlband: 'Pearl Band',
 };
 
 const NPCs = {
@@ -66,37 +67,43 @@ const NPCs = {
       disliked: ['barnacle', 'roe'],
       lines: {
         first: [
-          'HI! Sprout! I do the growing! Kelp, gourds, moon blooms, anything that will hold still long enough!',
-          'Give me a seed and a wet patch of dock and I will give you dinner. Come find me when you want to plant something.',
+          "Oh -- hello. I'm Sprout. I do the growing around here. Kelp, gourds, moon blooms... anything that holds still long enough.",
+          'Give me a seed and a wet patch of sand and I can usually make dinner out of it. Come find me when you want to plant something.',
         ],
         low: [
-          'Seeds first, water second, patience third. That is the whole job, honest!',
-          'Everything out here grows in saltwater. Which is lucky, because saltwater is all we have got.',
-          'Moon blooms only open at night. I stayed up once to watch. Sleepy, but worth it.',
+          'Seeds first, water second, patience third. That really is the whole job.',
+          'Everything out here grows in saltwater. Lucky, since saltwater is all we have.',
+          'Moon blooms only open at night. I stayed up to watch once. Worth being sleepy for.',
         ],
         mid: [
-          'Your shell beds and my seed beds are the same beds, really. Mine just do not bite.',
-          'I tried planting a barnacle. Something happened. Not growing, but something.',
-          'The professor says I am unscientific. I say my gourds are enormous. We are both right!',
+          'Your shell beds and my seed beds are the same beds, really. Mine just do not pinch.',
+          'I planted a barnacle once, to see. Something happened. Not growing, exactly. Something.',
+          'The professor says I am unscientific. My gourds say otherwise. We have agreed to both be right.',
         ],
         high: [
-          'You know what? This is the best dock. Not just the best dock I have worked. The best one.',
-          'I saved you the biggest berry. It has been in my pocket a while. Still good. Probably.',
-          'When your farm is full and the crates are stacked to the roof, I am going to cry a bit. Fair warning.',
+          'I have worked a few docks. This one is my favourite. I do not really mean the dock.',
+          'I saved you the biggest berry. It has been in my pocket a while. It is... mostly fine.',
+          'Some evening, when the crates are stacked and the light goes low, remind me to just sit here a minute with you.',
         ],
         again: [
-          'Told you everything already! Twice would just be showing off.',
-          'Go plant something! Or dive! Either! Both!',
-          'Still me. Still happy about it.',
+          'I told you everything already. Twice would just be showing off.',
+          'Go plant something. Or dive. Either is good.',
+          'Still me. Still glad you stopped by.',
+        ],
+        partner: [
+          'There you are. The kelp missed you. Fine -- I missed you.',
+          'I made two cups of tea out of habit. It is a good habit. Come sit.',
+          'I was going to say something about the weather, but really I was just watching for you.',
         ],
       },
       react: {
-        adore: 'Oh! Oh that is my FAVOURITE!',
-        loved: 'AAAA! %s! That is the good stuff and you know it. You are the BEST.',
-        liked: '%s? Ooh, yes please. I will put it somewhere safe and forget where.',
-        neutral: '%s! Thank you! I keep everything, so it will be in excellent company.',
-        disliked: 'Oh. %s. That is... it is very grey. Thank you though! Truly!',
+        adore: 'Oh -- that is my favourite. You remembered.',
+        loved: '%s! That is the good stuff and you know it. Thank you.',
+        liked: '%s? Yes please. I will put it somewhere safe and forget where.',
+        neutral: '%s. Thank you. I keep everything, so it will be in good company.',
+        disliked: 'Oh. %s. It is... very grey. Thank you, though. Truly.',
       },
+      romance: true,
     },
     {
       key: 'prof', name: 'Fintan', full: 'Prof. Fintan Bellwether', role: 'whale scholar',
@@ -186,14 +193,20 @@ const NPCs = {
           'Twice? What is this, a survey?',
           'Go on. Tide is turning and it will not turn back for you.',
         ],
+        partner: [
+          'Evening, otter. Kept the good spot on the rail for you. Do not tell the gulls.',
+          'Caught nothing all day and found I did not mind. Knew you would be along.',
+          'You. Me. Two lines in the water and no talking for an hour. Best plan I have.',
+        ],
       },
       react: {
         adore: 'Well now. That is something.',
-        loved: '%s! Now THAT is bait. You have made my week, otter, and it was a poor week.',
+        loved: '%s! Now that is bait. You have made my week, otter, and it was a poor week.',
         liked: '%s. Aye, that will do nicely. Ta.',
         neutral: '%s. Hm. I will find a use. I generally do.',
         disliked: 'Cannot bait a hook with %s. Cannot eat it either. Thanks, I suppose.',
       },
+      romance: true,
     },
   ],
 
@@ -315,7 +328,10 @@ const NPCs = {
       r.met = true;
       said = n.lines.first.slice();
     } else {
-      const pool = spoke ? n.lines.again : (hz >= 7 ? n.lines.high : (hz >= 3 ? n.lines.mid : n.lines.low));
+      const partnered = G.partner === key && n.lines.partner;
+      const pool = spoke ? n.lines.again
+        : partnered ? n.lines.partner
+        : (hz >= 7 ? n.lines.high : (hz >= 3 ? n.lines.mid : n.lines.low));
       const v = pick(pool);
       said = Array.isArray(v) ? v.slice() : [v];
     }
@@ -397,6 +413,34 @@ const NPCs = {
     if (r.giftDay === G.day) {
       SND.alarm();
       return `${n.name} is still admiring today's gift. Come back tomorrow.`;
+    }
+    // ---- the pearl band -----------------------------------------------------
+    // The one gift that is a question. Handled before the tier machinery because
+    // none of it applies: a declined band is NOT consumed (nobody loses a
+    // keepsake for asking early), it never counts as the day's gift, and saying
+    // yes sets the only piece of state romance adds -- G.partner.
+    if (itemKey === 'pearlband') {
+      if (!n.romance) {
+        SND.click();
+        return `${n.name} turns it over gently and hands it back. "Keep this for the right someone. I mean that kindly."`;
+      }
+      if (G.partner === key) {
+        SND.click();
+        return 'One was enough. It still gets worn every day, mind.';
+      }
+      if (r.pts < 200) {
+        SND.click();
+        return `${n.name} goes very quiet, then smiles. "Not yet. Ask me again when we know each other properly."`;
+      }
+      G.storage.pearlband = (G.storage.pearlband || 0) - 1;
+      G.partner = key;
+      r.pts = NPC_MAX_PTS;
+      r.giftDay = G.day;
+      SND.chime();
+      Game.save();
+      return key === 'angler'
+        ? 'Marlow looks at the band a long time. "Aye," he says, and that is everything. He ties it into his line, where he can always see it.'
+        : 'Sprout holds the band up to the light, then presses it to her chest. "Yes. Obviously yes. I have been hoping you would ask."';
     }
     const tier = this.tierOf(key, itemKey);
     G.storage[itemKey] = (G.storage[itemKey] || 0) - 1;
@@ -649,7 +693,11 @@ const NPCs = {
     // ---- name + role -------------------------------------------------------------
     const tx = r.x + 84;
     text(c, n.full, tx, r.y + 5, { size: 9, color: '#4a3020', shadow: false });
-    text(c, n.role, tx + textWidth(c, n.full, 9) + 8, r.y + 7.5, { size: 6.5, color: '#a4805a', shadow: false });
+    // the pearl band, worn: partners get a small heart by their name instead of a
+    // title change -- the game does not need to say the word out loud
+    const partnered = G.partner === this.who;
+    if (partnered) drawHeart(c, tx + textWidth(c, n.full, 9) + 5, r.y + 5, 'full');
+    text(c, n.role, tx + textWidth(c, n.full, 9) + (partnered ? 16 : 8), r.y + 7.5, { size: 6.5, color: '#a4805a', shadow: false });
 
     // ---- heart row ---------------------------------------------------------------
     const pts = this.points(this.who);

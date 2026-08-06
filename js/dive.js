@@ -66,8 +66,8 @@ const DiveScene = {
     if (!G.flags.seenDive) {
       G.flags.seenDive = true;
       Game.toast('Scrape the crust off a shell... then HOLD on it to pry —');
-      Game.toast('release when the marker is in the GREEN!');
-      Game.toast('No magic resurfacing: swim UP yourself, and mind your O2!');
+      Game.toast('release when the marker is in the green.');
+      Game.toast('No magic resurfacing -- swim up yourself, and mind your air.');
     }
     if (this.p === 2 && !G.flags.seenDeep) {
       G.flags.seenDeep = true;

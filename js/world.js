@@ -72,8 +72,8 @@ const WorldScene = {
     if (!G.flags.seenWorld) {
       G.flags.seenWorld = true;
       Game.toast(TouchUI.enabled
-        ? 'Welcome home, Otto!  Arrows: walk  •  Paw button: interact'
-        : 'Welcome home, Otto!  A/D or arrows: walk  •  [E]: interact');
+        ? 'Home again. Arrows walk  •  paw button interacts'
+        : 'Home again. A/D or arrows walk  •  [E] interacts');
       Game.toast('Dive at the piling for clams, or jump in to explore the open sea.');
     }
   },

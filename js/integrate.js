@@ -16,7 +16,7 @@
   // Resolve them through a try so a missing module is just undefined.
   const M = {};
   for (const n of ['Farm', 'Hotbar', 'NPCs', 'Craft', 'Battle', 'Stock', 'DiveFX',
-                 'Ocean', 'Mining', 'Inv', 'Skills', 'Tame', 'Hood', 'MapChart']) {
+                 'Ocean', 'Mining', 'Inv', 'Skills', 'Tame', 'Hood', 'MapChart', 'Quests']) {
     try { M[n] = eval(n); } catch (e) { M[n] = undefined; }
   }
 
@@ -46,6 +46,9 @@
     if (typeof G === 'undefined' || !G) return null;
     if (G.day <= 2) return 'prof';
     if (G.clock < 0.16 || G.clock > 0.55) return null;   // home by dusk
+    // a partner is not a visitor: once the pearl band is accepted they come by
+    // every day, and the post is theirs. Everyone else keeps the old rota.
+    if (G.partner) return G.partner;
     const rota = ['farmer', 'angler', null, 'prof', null];  // gaps: some days nobody comes
     return rota[G.day % rota.length];
   };
@@ -85,6 +88,9 @@
     for (const k in M.Craft.SITES) M.Craft.SITES[k].x = -1;
   }
   if (M.Tame && M.Tame.SITE) M.Tame.SITE.x = 108;
+  // the journal's progress hooks (planting, petting) wrap Farm and Tame here,
+  // after every module exists
+  if (M.Quests && M.Quests.install) M.Quests.install();
 
   // ---- the deck's interaction list ---------------------------------------------
   // Every system that puts something on the dock contributes spots; the world
@@ -146,7 +152,8 @@
                         (M.Stock && M.Stock.open) || (M.Battle && M.Battle.active) ||
                         (M.Inv && M.Inv.open) || (M.Skills && M.Skills.open) ||
                         (M.Tame && M.Tame.open) || (M.Farm && M.Farm.open) ||
-                        (M.MapChart && M.MapChart.open);
+                        (M.MapChart && M.MapChart.open) ||
+                        (M.Quests && (M.Quests.open || M.Quests.letter));
 
   const gUpdate = Game.globalUpdate.bind(Game);
   Game.globalUpdate = function (dt) {

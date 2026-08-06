@@ -473,7 +473,7 @@ const Farm = {
     p.tilled = true;
     this.burst(p.x, this.bedY(p) - 1, 1, 12);
     SND.scrape();
-    Game.toast('Seabed turned. Plant a seed packet!');
+    Game.toast('Seabed turned. It could take a seed packet now.');
     Game.save();
     return true;
   },
@@ -622,7 +622,7 @@ const Farm = {
     if (!c) return false;
     n = Math.max(1, Math.round(n) || 1);
     const price = c.seedPrice * n;
-    if (G.money < price) { SND.alarm(); Game.toast('Not enough sand dollars!'); return false; }
+    if (G.money < price) { SND.alarm(); Game.toast('Not enough sand dollars.'); return false; }
     // reuse the canonical purchase helper so cash/toast/save behave identically
     Shop.buy(price, () => { G.farm.seeds[key] += n; }, `${c.seedName} x${n}`);
     return true;
