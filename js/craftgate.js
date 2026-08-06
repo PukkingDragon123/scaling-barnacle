@@ -1183,7 +1183,11 @@ const Forge = {
   // ==== icons ===============================================================
   // Rope has no art, so Inv would draw its parchment tag. Our own coil is nicer,
   // and a wrap on Inv.drawIcon means the bag and the cost bars get it too.
-  _own: { rope: 1 },
+  // Empty now: rope used to be forced onto a hand-coded coil here, which kept the
+  // uploaded ic_rope art from ever showing anywhere this menu drew it. The coded
+  // coil in _ownIcon stays as dead weight only until the next tidy -- nothing
+  // routes to it while this table is empty.
+  _own: {},
 
   icon: function (c, key, cx, cy, box) {
     if (this._own[key]) { this._ownIcon(c, key, cx, cy, box); return; }

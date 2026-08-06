@@ -692,7 +692,9 @@ const Craft = {
   },
 
   drawIcon(ctx, key, cx, cy, box) {
-    if (typeof ITEMS !== 'undefined' && ITEMS[key]) { drawItemIcon(ctx, key, cx, cy, box); return; }
+    // the shared painter resolves the full art chain and says whether it drew;
+    // the glyph is strictly the empty-chain fallback now
+    if (typeof drawItemIcon === 'function' && drawItemIcon(ctx, key, cx, cy, box)) return;
     const m = this.MATS[key];
     const art = (m && m.art) || (typeof Farm !== 'undefined' && Farm.PRODUCE && Farm.PRODUCE[key] ? Farm.PRODUCE[key].art : null);
     if (art && ASSETS[art] && ASSETS[art].width) {

@@ -611,7 +611,7 @@ const Mining = {
       w: def.w, h: 0,
       hp: def.hardness, max: def.hardness,
       flip: rng() < 0.5,
-      shakeT: 0, shakeA: 0, hitT: 0, hitX: 0, hitY: 0,
+      shakeT: 0, shakeA: 0, hitT: 0, hitL: 0.16, hitX: 0, hitY: 0,
       dead: false,
       cr: null
     };
@@ -951,7 +951,14 @@ const Mining = {
     n.hp -= dmg;
     n.shakeT = grade === 'perfect' ? 0.4 : 0.22;
     n.shakeA = (1.1 + dmg * 0.25) * (grade === 'perfect' ? 1.7 : 1);
-    n.hitT = grade === 'perfect' ? 0.3 : 0.16;
+    // hitL is the spark's WHOLE lifetime and the draw divides by it. These used to
+    // disagree: a perfect hit set hitT to 0.3 while the draw assumed 0.16, so for
+    // the first 0.14s of every perfect strike the spark's radius came out negative
+    // and ctx.arc THREW -- aborting the entire scene draw mid-frame. That was the
+    // "game bugs out when I mine": rewarding a well-timed swing with a burst of
+    // dropped, half-painted frames, worst for exactly the player who timed it best.
+    n.hitL = grade === 'perfect' ? 0.3 : 0.16;
+    n.hitT = n.hitL;
     // Where the blow lands, clamped INSIDE the rock: auto-targeting can leave the
     // cursor a long way off, and the spark and chips have to come off the node.
     n.hitX = clamp((this.aimX - n.x) * 0.4, -n.w * 0.34, n.w * 0.34);
@@ -1380,11 +1387,15 @@ const Mining = {
     // Impact spark: a bright ring at the strike point, which is cheap and reads
     // as contact without needing to tint the sprite.
     if (n.hitT > 0) {
-      ctx.globalAlpha = n.hitT / 0.16;
+      // normalised by the spark's own lifetime (n.hitL), never a hard-coded one --
+      // and the radius is clamped anyway, because ctx.arc on a negative radius
+      // does not degrade, it THROWS, and one throw kills the whole frame.
+      var hk = clamp(n.hitT / (n.hitL || 0.16), 0, 1);
+      ctx.globalAlpha = hk;
       ctx.strokeStyle = '#ffe66e';
       ctx.lineWidth = PIX * 2;
       ctx.beginPath();
-      ctx.arc(n.hitX, n.hitY, 2 + (1 - n.hitT / 0.16) * 5, 0, TAU);
+      ctx.arc(n.hitX, n.hitY, Math.max(0.1, 2 + (1 - hk) * 5), 0, TAU);
       ctx.stroke();
       ctx.globalAlpha = 1;
     }

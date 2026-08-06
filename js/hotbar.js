@@ -336,7 +336,10 @@ const Hotbar = {
       else this._glyph(ctx, s.key, cx, cy, box);
       return;
     }
-    if (typeof ITEMS !== 'undefined' && ITEMS[s.key]) { drawItemIcon(ctx, s.key, cx, cy, box); return; }
+    // drawItemIcon resolves through the full art chain now and reports whether it
+    // drew anything -- so it goes FIRST for every key, not only the ITEMS ones,
+    // and the coded glyph is what happens when the whole chain comes up empty.
+    if (typeof drawItemIcon === 'function' && drawItemIcon(ctx, s.key, cx, cy, box)) return;
     const art = this._itemArt(s.key);
     if (art) this._drawFit(ctx, art, cx, cy, box);
     else this._glyph(ctx, s.key, cx, cy, box);

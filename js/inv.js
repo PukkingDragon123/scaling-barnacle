@@ -1842,11 +1842,7 @@ const Inv = {
       drawAC(c, art, cx, cy, w);
       return;
     }
-    if (typeof ITEMS !== 'undefined' && ITEMS[key] && typeof drawItemIcon === 'function' &&
-        typeof ITEM_ART !== 'undefined' && ITEM_ART[key]) {
-      drawItemIcon(c, key, cx, cy, box);
-      return;
-    }
+    if (typeof drawItemIcon === 'function' && drawItemIcon(c, key, cx, cy, box)) return;
     var d = this.def(key);
     this._glyph(c, d && d.glyph ? d.glyph : key, cx, cy, box, d && d.tone ? d.tone : 0);
   },

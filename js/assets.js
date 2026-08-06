@@ -113,12 +113,32 @@ const NODE_ART = {
   clam: 'clam', mussel: 'mussel', barnacle: 'cockle', oyster: 'scallop', abalone: 'abalone',
 };
 
+// THE one item-icon painter. Hotbar, Craft, Shop and the bag all end up here (or
+// in Inv.drawIcon, which resolves through the same chain), so fixing resolution
+// HERE fixes every surface at once. It used to check only the little ITEM_ART
+// table above and silently draw NOTHING for any other key -- which is exactly why
+// "the icons still are not fixed" kept being true: each menu had its own painter,
+// and this one, the most shared, was the narrowest.
+//
+// Resolution order: Inv._artOf (the full chain -- Inv.ART_MAP, Farm produce and
+// seed packets, Tame produce, Craft entries, Mining resources, then the key as a
+// literal asset name), then the local ITEM_ART table, and only then nothing.
+// Callers that want a coded-glyph fallback draw it themselves when this returns
+// false.
 function drawItemIcon(ctx, key, cx, cy, s = 10) {
-  const a = ITEM_ART[key];
-  if (a && ASSETS[a] && ASSETS[a].width) {
-    const img = ASSETS[a];
-    const w = img.width >= img.height ? s : s * img.width / img.height;
-    const h = img.width >= img.height ? s * img.height / img.width : s;
-    ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+  let a = null;
+  if (typeof Inv !== 'undefined' && Inv && Inv._artOf) a = Inv._artOf(key);
+  if (!a) {
+    const t = ITEM_ART[key];
+    if (t && ASSETS[t] && ASSETS[t].width) a = t;
   }
+  if (!a) return false;
+  const img = ASSETS[a];
+  const w = img.width >= img.height ? s : s * img.width / img.height;
+  const h = img.width >= img.height ? s * img.height / img.width : s;
+  const sm = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;      // magnified pixel art: never bilinear
+  ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+  ctx.imageSmoothingEnabled = sm;
+  return true;
 }
