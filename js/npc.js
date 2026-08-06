@@ -52,8 +52,13 @@ const NPCs = {
   // spots at PILING_X. These three x's are the gaps left over.
   LIST: [
     {
-      key: 'farmer', name: 'Sprout', full: 'Sprout', role: 'otter farmhand',
-      art: 'farmer', x: 128, h: 31, flip: false,
+      key: 'farmer', name: 'Sprout', full: 'Sprout', role: 'dolphin farmhand',
+      // dfarm, NOT farmer. The 'farmer' sheet is the SEAL; Sprout is the pink
+      // dolphin with the basket of greens. Hood already drew her from dfarm out at
+      // sea, so the dock was the only place still showing the wrong species -- and
+      // the dialogue portrait is exactly where you notice. Both sheets are 4x4, so
+      // the frame map below carries over unchanged.
+      art: 'dfarm', x: 128, h: 31, flip: false,
       frames: { idle: [0, 1, 2, 3], talk: [9, 8], emote: [12, 9, 13], happy: [12, 13], sad: [14, 15] },
       adore: [],
       loved: ['crop_berry_p', 'crop_gourd_p', 'crop_moon_p', 'crop_curl_p', 'crop_blade_p'],

@@ -409,10 +409,76 @@ const Inv = {
     return !!(n && typeof ASSETS !== 'undefined' && ASSETS[n] && ASSETS[n].width);
   },
 
+  // ==== ICON MAP ============================================================
+  // Every key the bag can hold that no catalogue already names art for. Missing
+  // art is SILENT in this codebase -- drawIcon quietly falls back to a hand-coded
+  // glyph -- so a key with no art does not look broken, it looks like a different,
+  // blander game. Thirty-two of forty-two keys were drawing coded shapes while the
+  // real sprites for nearly all of them sat unused in assets/.
+  //
+  // The three shell families do most of the work here, and they map by MEANING:
+  //   shell_*  a whole shell, closed          -> the shell you collect
+  //   open_*   the same shell opened, meat in -> the meat you shuck out of it
+  //   crust_*  the same shell under barnacles -> barnacle
+  // so clamMeat is an open clam rather than a generic lump, and the polished goods
+  // get the opened, bright version of the shell they came from.
+  //
+  // dev/smoke-icons.js walks every catalogue and fails if ANY bag key still falls
+  // through to a glyph, so this table cannot silently rot as items are added.
+  ART_MAP: {
+    // shells, as collected
+    clam: 'shell_clam',
+    mussel: 'shell_mussel',
+    oyster: 'ic_oyster',
+    abalone: 'shell_abalone',
+    pearl: 'shell_pearl',
+    // shucked: the open shell with what is inside on show
+    clamMeat: 'open_clam',
+    musselMeat: 'open_mussel',
+    oysterMeat: 'open_scallop',
+    // polished: the bright inner faces, so they read as a step up from the raw shell
+    pearlPol: 'open_pearl',
+    abalonePol: 'open_abalone',
+    barnacle: 'crust_cockle',
+
+    // raw materials
+    charcoal: 'ore_coal',
+    iron: 'ore_scrap',
+    rope: 'ic_rope',
+    water: 'ic_barrel',
+    fertiliser: 'ic_coalsack',
+
+    // cooking. Two of these borrow an animal's product sprite, which is the right
+    // picture rather than a shortcut: roe IS the sunfish's roe cluster, and Moon
+    // Custard is a bottle of cream. Sharing art between two keys is fine -- what
+    // matters is that the icon shows the thing.
+    roe: 'stock_sunfish_p',
+    custard: 'stock_puffer_p',
+    chowder: 'ic_chowder',
+    grill: 'ic_grill',
+    rolls: 'ic_rolls',
+    skewer: 'ic_skewer',
+    tea: 'ic_tea',
+  },
+
   _artOf: function (key) {
     var d = this.def(key);
     if (d && this._hasArt(d.art)) return d.art;
+    if (this.ART_MAP[key] && this._hasArt(this.ART_MAP[key])) return this.ART_MAP[key];
     if (typeof Mining !== 'undefined' && Mining.RES && Mining.RES[key] && this._hasArt(Mining.RES[key].art)) return Mining.RES[key].art;
+    // Farm keys its produce by the PRODUCE BIN ('blade'), not by the crop or the
+    // sprite ('sea_kelp_p'), so nothing here could ever have guessed the asset name
+    // from the key. Same for its seed packets and for animal produce.
+    if (typeof Farm !== 'undefined' && Farm) {
+      if (Farm.PRODUCE && Farm.PRODUCE[key] && this._hasArt(Farm.PRODUCE[key].art)) return Farm.PRODUCE[key].art;
+      if (Farm.SEEDS && Farm.SEEDS[key] && this._hasArt(Farm.SEEDS[key].art)) return Farm.SEEDS[key].art;
+    }
+    if (typeof Tame !== 'undefined' && Tame && Tame.PRODUCE && Tame.PRODUCE[key] &&
+        this._hasArt(Tame.PRODUCE[key].art)) return Tame.PRODUCE[key].art;
+    if (typeof Craft !== 'undefined' && Craft) {
+      if (Craft.RES && Craft.RES[key] && this._hasArt(Craft.RES[key].art)) return Craft.RES[key].art;
+      if (Craft.ITEMS && Craft.ITEMS[key] && this._hasArt(Craft.ITEMS[key].art)) return Craft.ITEMS[key].art;
+    }
     if (this._hasArt(key)) return key;
     return null;
   },
