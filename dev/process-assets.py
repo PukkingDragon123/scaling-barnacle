@@ -666,8 +666,21 @@ for _i, _b in enumerate(_pboxes):
 # boxes into rows first (bucketing by centre-y against a row tolerance) and then
 # left-to-right inside each row. That is what makes the name lists below line up
 # with what you see when you open the file.
-def _sheet_objects(path, bg_tol, names, row_tol=90, min_area=1400, cap=None, dfbg=None):
-    im = key_bg(Image.open(os.path.join(ROOT, path)), tol=bg_tol)
+def _sheet_objects(path, bg_tol, names, row_tol=90, min_area=1400, cap=None, dfbg=None,
+                   punch_bg=None):
+    src = Image.open(os.path.join(ROOT, path))
+    im = key_bg(src, tol=bg_tol)
+    # punch_bg: also clear background TRAPPED INSIDE a shape, which a border flood
+    # fill can never reach -- the gaps between a ladder's rungs, the panes of a
+    # window, the space under an arch. Without it those come out as solid slabs of
+    # sheet grey and the sprite is unusable over anything. Pass the sheet's own
+    # background colour: by this point the corners are transparent, so letting
+    # global_key sample them would key against black and eat the outlines.
+    #
+    # This runs BEFORE components(), so the punched holes cannot merge two objects
+    # -- they only ever remove pixels that were background to begin with.
+    if punch_bg is not None:
+        im = global_key(im, tol=bg_tol, bg_col=punch_bg)
     if dfbg is not None:
         im = defringe(im, dfbg, tol=bg_tol + 24, passes=2)
     boxes = components(im, min_area=min_area)
@@ -731,11 +744,15 @@ _sheet_objects('B395B479-D087-4DA2-B444-2F4F08F6586B.png', 34, [
 ], row_tol=160, min_area=3000)
 
 # THE DOCK KIT: everything you can build out on the planks, including the barn.
+# punch_bg because almost every piece here is a FRAME with holes in it -- a ladder
+# is rungs around gaps, a rail and a fence are uprights around gaps, the barn has a
+# doorway. A border fill leaves all of those filled with sheet grey, which is why
+# kit_ladder was unusable: solid slabs between the rungs.
 _sheet_objects('CF64917A-4B5D-4D7A-8DE9-9BEC0F6EA47C.png', 30, [
     'kit_barn', 'kit_pavilion', 'kit_hoist',
     'kit_hayloft', 'kit_ropefence', 'kit_trough', 'kit_ramp',
     'kit_deck', 'kit_trestle', 'kit_ladder', 'kit_rail', 'kit_lamp', 'kit_mooring',
-], row_tol=150, min_area=3000)
+], row_tol=150, min_area=3000, punch_bg=(149, 159, 183))
 
 # ITEM ICONS, on magenta.
 _sheet_objects('27DA4A95-FE40-4173-B479-B244453D2273.png', 60, [

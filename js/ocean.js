@@ -195,17 +195,45 @@ const Ocean = {
   // The HUD is unaffected -- it is drawn after the world's restore(), in screen
   // space, so it keeps the full 480x270 and stays pixel-exact.
   //
-  // WHY EXACTLY 1.5, AND NOT A ROUNDER-SOUNDING 1.3. The zoom has to keep the art
-  // on whole device pixels or the whole scene goes soft, which would undo far more
-  // than the zoom gains. Sprites are authored at APIX (0.5 logical units per sprite
-  // texel) on a DPX of 4, so one sprite texel covers APIX * DPX * ZOOM = 2 * ZOOM
-  // device pixels. That is only an integer when ZOOM lands on a multiple of 0.5:
-  //   1.25 -> 2.5 device px per texel, every sprite half a pixel soft
-  //   1.5  -> 3   device px per texel, crisp
-  // 1.5 also puts the logical grid on 6 device pixels, so the pixel font and every
-  // fillRect-drawn UI element inside the world (the [E] prompt, the timing bar, the
-  // trust pips) stay exact too. It shows a 320x180 slice of the world.
-  ZOOM: 1.5,
+  // WHY A MULTIPLE OF 0.5. The zoom has to keep the art on whole device pixels or
+  // the scene goes soft, which would undo more than the zoom gains. Sprites are
+  // authored at APIX (0.5 logical units per texel) on a DPX of 4, so one sprite
+  // texel covers APIX * DPX * ZOOM = 2 * ZOOM device pixels -- an integer only when
+  // ZOOM is a multiple of 0.5. 1.25 would put every sprite on 2.5 device pixels and
+  // leave it half a pixel soft, so the usable settings are 1.0, 1.5, 2.0 and there
+  // is no fine adjustment between them.
+  //
+  // 1.5 framed 320x180 and that was a step too far in -- the open sea stopped
+  // feeling open. 1.25 backs off to a 384x216 slice, still a clear zoom over the
+  // dock's 480x270 but with room to see what is coming.
+  //
+  // 1.25 puts a sprite texel on 2.5 device pixels, which is OFF the whole-pixel
+  // grid: texels come out alternating 2 and 3 device pixels wide. That is uneven,
+  // but it is only BLURRY if the sampler interpolates -- so the ocean's world block
+  // now disables smoothing for every layer inside it (see draw()). Nearest sampling
+  // at 2.5x is crisp with slightly uneven texel widths, which at this size does not
+  // read; a bilinear tap at 2.5x would soften the entire scene.
+  ZOOM: 1.25,
+  // How tall the painted sand strip stands, in logical units: SAND_TILE_W scaled by
+  // the strip art's aspect (1447x83). The camera's floor cap is measured off this,
+  // so the two cannot drift apart.
+  // ---- CURRENTS ---------------------------------------------------------------
+  // Sprint is not a button any more. Some stretches of water are MOVING, and while
+  // you are in one you are carried -- that is the sprint, and it happens because of
+  // where you are rather than because you are holding a key. It gives the open
+  // ocean somewhere that is faster than everywhere else, which a flat sea did not
+  // have, and it means the touch pad can spend that slot on interact instead.
+  //
+  // Deterministic per chunk column, like everything else out here, so a stretch of
+  // water that pulled you east still pulls you east when you swim back.
+  CUR_EVERY: 3,            // roughly one column in three carries one
+  CUR_PUSH: 190,           // units/sec the water itself is moving
+  CUR_BAND: 120,           // how tall the moving band is
+  SAND_TILE_W: 340,
+  get SAND_STRIP_H() {
+    const s = typeof ASSETS !== 'undefined' && ASSETS['sandstrip_0'];
+    return s && s.width ? this.SAND_TILE_W * s.height / s.width : 20;
+  },
   get VW() { return W / this.ZOOM; },
   get VH() { return H / this.ZOOM; },
 
@@ -427,9 +455,10 @@ const Ocean = {
     if (!G.flags.seenOcean) {
       G.flags.seenOcean = true;
       Game.toast(TouchUI.enabled
-        ? 'Open water! Pads swim  --  paw: dash  --  swirl: spin roll'
-        : 'Open water! WASD/arrows swim  --  [Shift] dash  --  [Space] spin roll');
+        ? 'Open water! Pads swim  --  E: interact  --  swirl: spin roll'
+        : 'Open water! WASD/arrows swim  --  [E] interact  --  [Space] spin roll');
       Game.toast('The spin roll dodges anything and carries you a long way.');
+      Game.toast('Find a current and it will carry you -- that is your sprint.');
       Game.toast('Air runs out -- surface anywhere to breathe. Swim home to the pier ladder to climb out.');
     }
     this._save();
@@ -691,6 +720,29 @@ const Ocean = {
 
   // One chunk column's worth of seabed: the sampled profile plus every piece of
   // dressing that stands on it. Baked once, then it is pure lookup.
+  // How hard the water at (x, y) is moving, and which way. Zero almost everywhere.
+  //
+  // Derived straight from the column index rather than stored on the column: it is
+  // two hashes and a falloff, so caching it would cost more than recomputing, and
+  // it stays correct for columns that have not been generated yet (the camera and
+  // the animals both ask about water they have not reached).
+  _currentAt(x, y) {
+    const ci = Math.floor(x / this.CW);
+    if (((Math.imul(ci, 374761393) >>> 8) % this.CUR_EVERY) !== 0) return 0;
+    // never at the pier: being shoved off the ladder while trying to climb out is
+    // the one place a current would only ever be a nuisance
+    if (Math.abs(x - this.DOCK_X) < this.DOCK_R * 3) return 0;
+    const h = Math.imul(ci, 2654435761) >>> 0;
+    const dir = (h & 1) ? 1 : -1;
+    // the band sits at its own depth in the column, and fades at both edges so you
+    // swim into it rather than hitting a wall of moving water
+    const mid = 40 + ((h >>> 3) % 260);
+    const d = Math.abs(y - mid);
+    if (d > this.CUR_BAND) return 0;
+    const k = 1 - d / this.CUR_BAND;
+    return dir * k * k * this.CUR_PUSH;
+  },
+
   _col(ci) {
     const key = ci | 0;
     const had = this._cols.get(key);
@@ -1223,6 +1275,21 @@ const Ocean = {
       this.vy += this.GRAV_AIR * dt;
       this.vx *= Math.pow(0.6, dt);
     } else {
+      // THE CURRENT CARRIES YOU. Applied before the swim so it is water moving Otto
+      // rather than Otto swimming faster: it works whatever he is doing, including
+      // nothing, and it pushes him sideways while he holds still. `cur` is also
+      // what the sprint pose and the HUD pip read, so the sprint IS the current.
+      const cur = this._currentAt(this.px, this.py);
+      this.cur = cur;
+      if (cur !== 0) {
+        // pull his velocity TOWARD the water's, not add to it -- adding would let a
+        // long current accelerate him without limit
+        const want = cur;
+        this.vx += (want - this.vx) * clamp(dt * 1.7, 0, 1);
+        if (Math.random() < dt * 12) {
+          this._puff(this.px - Math.sign(cur) * 10, this.py + rand(-8, 8), 1, 16);
+        }
+      }
       if (this.dashT > 0) {
         this.dashT -= dt;
         this.vx += this.ddx * this.DASH_ACC * spMul * dt;
@@ -1575,8 +1642,14 @@ const Ocean = {
     // ABOVE the sky lift, and applying them in the wrong order would pin the camera to
     // the wrong one -- the same trap as the dock's clamp(v, 0, negative), which
     // returned the negative and slid the whole scene.
+    // The cap is measured from the SAND SPRITE, not from a fraction of the frame.
+    // The strip is seated 6 units above the floor line and stands SAND_STRIP_H tall,
+    // so stopping the camera with its bottom edge just past the strip's bottom puts
+    // the painted sand along the very bottom of the screen and shows none of the
+    // fill beneath it -- which is the whole point of having replaced the old
+    // stacked bands with one colour.
     let tyc = Math.max(ty + swy, -lift);
-    const bedCap = this.floorAt(this.px) - this.VH * 0.80;
+    const bedCap = this.floorAt(this.px) + this.SAND_STRIP_H - 6 - this.VH;
     if (bedCap > -lift) tyc = Math.min(tyc, bedCap);
     this.camY += (tyc - this.camY) * k;
   },
@@ -1591,6 +1664,10 @@ const Ocean = {
     else if (this.rollT > 0) a = 'roll';
     else if (this.mineT > 0) a = 'mine';
     else if (this.dashT > 0) a = 'dash';
+    // riding a current uses the same streamlined pose as a dash: being swept along
+    // fast should not look like an idle paddle
+    else if (Math.abs(this.cur || 0) > this.CUR_PUSH * 0.45 &&
+             this.cur * this.vx > 0 && this.speed() > 90) a = 'dash';
     else if (this.vy > 58 && Math.abs(this.vx) < 95) a = 'dive';
     else a = 'cruise';
     if (a !== this.anim) { this.anim = a; this.animT = 0; }
@@ -1883,6 +1960,14 @@ const Ocean = {
     // applied outside it on purpose, so a knock is the same distance on screen
     // whatever the zoom is.
     if (this.ZOOM !== 1) ctx.scale(this.ZOOM, this.ZOOM);
+    // NEAREST for the whole world block. Every layer in here is either pixel art or
+    // a baked soft image whose blur is already in the bake -- the rays, the
+    // caustics and the far band each say so at their own draw site, having each
+    // been measured as a filtered-blit cost. Setting it once at the top makes the
+    // zoom safe at 1.25 (see ZOOM) and retires several local save/restore pairs
+    // worth of the same flag. Restored by the matching restore() below.
+    const _worldSm = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
 
     // The four backdrop layers together cover roughly five screens of fill, and
     // on a software canvas at 1920x1080 that alone measured 110ms a frame. They
@@ -1930,6 +2015,7 @@ const Ocean = {
     this._drawWaterVeil(ctx);
     this._drawBokeh(ctx, t);
 
+    ctx.imageSmoothingEnabled = _worldSm;
     ctx.restore();
 
     if (this.flash > 0) {
@@ -2437,7 +2523,7 @@ const Ocean = {
       // unfiltered: a full-width near-1:1 blit, per-destination-pixel priced
       const _sm = ctx.imageSmoothingEnabled;
       ctx.imageSmoothingEnabled = false;
-      const TW = 340;                                    // logical width per tile
+      const TW = this.SAND_TILE_W;                       // logical width per tile
       const i0 = Math.floor(this.camX / TW);
       const i1 = Math.floor((this.camX + W) / TW);
       // ONE height for every tile on screen. Seating each tile on its own patch
@@ -2621,57 +2707,86 @@ const Ocean = {
   // out of the open ocean now, so it has to be VISIBLE from a distance and
   // obviously climbable: posts going up out of frame, cross-bracing, and a ladder
   // with real rungs running from the deck down past the waterline.
+  // THE REAL PIER, not a drawing of one. Every plank here used to be fillRect and
+  // stroke: three tapering posts, two crossed lines for bracing, two bars for the
+  // deck lip, and a ladder built from a loop of little rectangles. It was the most
+  // obviously code-drawn object in the game and it sat at the one spot every trip
+  // begins and ends at.
+  //
+  // It is the same art the dock scene stands on now -- dock_11 trestle modules at
+  // the same SEG_W, the hut on top, kit_ladder for the ladder -- so the structure
+  // you climb down from is recognisably the structure you were just standing on,
+  // and it runs the pier's full length instead of stopping after three posts.
+  PIER_SPAN: 300,          // world units of pier, matching world.js PIER_END
+  PIER_SEG: 88,            // dock_11 module width, matching world.js SEG_W
+
   _drawHome(ctx, t) {
     const sx = this.DOCK_X - this.camX;
-    if (sx < -140 || sx > W + 140) return;
     const surf = -this.camY;
-    if (surf > H + 90) return;                  // the whole thing is above the frame
+    if (surf > H + 120) return;                 // the whole thing is above the frame
+    // The pier runs LANDWARD from the ladder, which is -x: the ladder is at the
+    // seaward end, the way it is on the dock, where you jump in off the last plank.
+    const x0 = sx - this.PIER_SPAN, x1 = sx + 40;
+    if (x1 < -40 || x0 > W + 40) return;
 
-    const postW = 7;
-    const bot = surf + 96;
+    const seg = ASSETS['dock_11'];
     ctx.save();
-    // the posts, in flat bands so they fade into the water without a gradient
-    ctx.fillStyle = '#7a4a2e';
-    for (let p = -1; p <= 1; p++) {
-      const px = sx + p * 34;
-      for (let b = 0; b < 5; b++) {
-        const y0 = surf - 30 + (bot - surf + 30) * (b / 5);
-        const y1 = surf - 30 + (bot - surf + 30) * ((b + 1) / 5);
-        ctx.globalAlpha = 0.92 * (1 - b / 5.6);
-        ctx.fillRect(px - postW / 2, y0, postW, y1 - y0 + 0.5);
+    // pixel art at a fixed scale: nearest, always
+    const sm = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+
+    if (seg && seg.width) {
+      const segH = this.PIER_SEG * seg.height / seg.width;
+      // seated so the DECK sits on the waterline; the trestle hangs below it
+      const top = surf - segH * 0.30;
+      for (let x = x0; x < x1; x += this.PIER_SEG) {
+        if (x > W + 8 || x + this.PIER_SEG < -8) continue;
+        ctx.drawImage(seg, x, top, this.PIER_SEG, segH);
       }
+      // The hut, on the deck at the landward end -- visible whenever the camera
+      // lifts toward the surface, which is exactly when you are looking for home.
+      const hut = ASSETS['hut_full'];
+      if (hut && hut.width && top > -160) {
+        const hw = 132, hh = hw * hut.height / hut.width;
+        ctx.drawImage(hut, x0 + 12, top - hh + 6, hw, hh);
+      }
+    } else {
+      // no art: a plain bar at the waterline, so the exit still exists
+      ctx.fillStyle = '#8a5a34';
+      ctx.fillRect(x0, surf - 6, x1 - x0, 8);
     }
-    ctx.globalAlpha = 0.8;
-    ctx.strokeStyle = '#7a4a2e';
-    ctx.lineWidth = 2.4;
-    ctx.beginPath();
-    ctx.moveTo(sx - 34, surf + 18); ctx.lineTo(sx + 34, surf + 40);
-    ctx.moveTo(sx + 34, surf + 18); ctx.lineTo(sx - 34, surf + 40);
-    ctx.stroke();
 
-    // the underside of the deck, a solid lip at the water line
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = '#8a5a34';
-    ctx.fillRect(sx - 58, surf - 34, 116, 7);
-    ctx.fillStyle = '#c9a271';
-    ctx.fillRect(sx - 58, surf - 36, 116, 2.4);
-
-    // THE LADDER: the affordance and the hit box are the same object.
+    // THE LADDER: the affordance and the hit box are the same object, so it is
+    // drawn from the ladder art at the exact reach the dock check uses.
     const lx = sx + 18;
-    const lTop = surf - 32, lBot = surf + this.DOCK_TOP;
-    ctx.fillStyle = '#a4805a';
-    ctx.fillRect(lx - 6, lTop, 2, lBot - lTop);
-    ctx.fillRect(lx + 4, lTop, 2, lBot - lTop);
-    ctx.fillStyle = this.atDock ? '#ffd66e' : '#c9a271';
-    for (let ry = lTop + 5; ry < lBot; ry += 7) ctx.fillRect(lx - 6, ry, 12, 1.8);
+    const lTop = surf - 30, lBot = surf + this.DOCK_TOP;
+    const lad = ASSETS['kit_ladder'];
+    if (lad && lad.width) {
+      const lw = 15;
+      // tiled down its own length rather than stretched, so the rungs keep their
+      // spacing however deep the ladder has to reach
+      const lh = lw * lad.height / lad.width;
+      for (let y = lTop; y < lBot; y += lh) {
+        const cut = Math.min(lh, lBot - y);
+        ctx.drawImage(lad, 0, 0, lad.width, lad.height * (cut / lh),
+          lx - lw / 2, y, lw, cut);
+      }
+    } else {
+      ctx.fillStyle = '#a4805a';
+      ctx.fillRect(lx - 6, lTop, 2, lBot - lTop);
+      ctx.fillRect(lx + 4, lTop, 2, lBot - lTop);
+      ctx.fillStyle = this.atDock ? '#ffd66e' : '#c9a271';
+      for (let ry = lTop + 5; ry < lBot; ry += 7) ctx.fillRect(lx - 6, ry, 12, 1.8);
+    }
 
     // a soft glow on it while he is in reach, so the exit is never lost
     if (this.atDock) {
       ctx.globalAlpha = 0.18 + 0.1 * Math.sin(t * 4);
       ctx.fillStyle = '#ffe6b0';
       ctx.fillRect(lx - 12, lTop - 4, 24, lBot - lTop + 8);
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
+    ctx.imageSmoothingEnabled = sm;
     ctx.restore();
   },
 
@@ -3223,9 +3338,12 @@ const Ocean = {
         { x: 52, y: H - 52, w: 40, h: 40, key: 'ArrowRight', icon: 'right' },
         { x: W - 46, y: H - 98, w: 40, h: 40, key: 'ArrowUp', icon: 'up' },
         { x: W - 46, y: H - 52, w: 40, h: 40, key: 'ArrowDown', icon: 'down' },
-        // a held key for the dash so the same edge detection serves both inputs,
-        // and a tap for the roll so it fires exactly once per press
-        { x: W - 92, y: H - 52, w: 40, h: 40, key: 'ShiftLeft', icon: 'act' },
+        // INTERACT, where the sprint button used to be. Sprint is not a button any
+        // more -- currents carry you (see _currentAt) -- and [E] had no touch
+        // control at all, so the ladder, the farm beds and now taking up a rock to
+        // mine were all unreachable without a keyboard. This is the better use of
+        // the slot by a distance.
+        { x: W - 92, y: H - 52, w: 40, h: 40, tap: 'KeyE', icon: 'act' },
         { x: W - 92, y: H - 98, w: 40, h: 40, tap: 'Space', icon: 'oroll' },
         // same help tab the dock has, in the same place
         { x: W - 26, y: 24, w: 20, h: 18, tap: 'KeyH', icon: 'help' },
@@ -3254,7 +3372,8 @@ const Ocean = {
           c.moveTo(cx + 8, cy - 5); c.lineTo(cx + 3.5, cy - 7.5); c.lineTo(cx + 9.5, cy - 9.5);
           c.closePath(); c.fill();
         } else {
-          text(c, '>>', cx, cy - 4, { size: 8, color: 'rgba(255,235,190,0.9)', align: 'center' });
+          // 'E', not '>>': this slot is interact now, not sprint
+          text(c, 'E', cx, cy - 4, { size: 9, color: 'rgba(255,235,190,0.9)', align: 'center' });
         }
       }
     };

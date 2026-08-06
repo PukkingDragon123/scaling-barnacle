@@ -611,7 +611,6 @@ const NPCs = {
 
     // ---- portrait ----------------------------------------------------------------
     const bx = r.x + 8, by = r.y + 8, bw = 68, bh = r.h - 16;
-    rrect(c, bx, by, bw, bh, 'rgba(122,74,48,0.10)', 'rgba(122,74,48,0.40)');
     const talking = this.mode === 'talk' && this.shown < this._pageLen();
     const pool = talking ? n.frames.talk : n.frames.idle;
     const fi = Math.floor(this.animT * (talking ? 7 : 2.1)) % pool.length;
@@ -619,8 +618,33 @@ const NPCs = {
     const bob = Math.sin(this.animT * 2.4) * 0.8;
     c.save();
     c.beginPath(); c.rect(bx, by, bw, bh); c.clip();
+    // THE SEA BEHIND THEM, not a flat brown rectangle. This is the uploaded ocean
+    // loop the dock and the house already stand in front of; running it here puts
+    // the character somewhere instead of on a swatch, and it is the same twelve
+    // frames on the same global clock, so it costs one blit and no new state.
+    //
+    // Cover-fit, anchored on the horizon: the frames are 2:1 and this box is
+    // portrait, so fitting by width would leave sky above and below. Scaling by
+    // HEIGHT and centring horizontally keeps the waterline across the middle,
+    // which is where a standing character wants it.
+    const ocf = `ocean${Math.floor((typeof Game !== 'undefined' ? Game.time : this.animT) * 8) % 12}`;
+    const oim = typeof ASSETS !== 'undefined' && ASSETS[ocf];
+    if (oim && oim.width) {
+      const ow = bh * oim.width / oim.height;
+      c.globalAlpha = 0.85;                    // sits back so the sprite reads first
+      c.drawImage(oim, bx + (bw - ow) / 2, by, ow, bh);
+      c.globalAlpha = 1;
+      // a warm scrim so the panel's wood still owns the frame
+      c.fillStyle = 'rgba(122,74,48,0.16)';
+      c.fillRect(bx, by, bw, bh);
+    } else {
+      c.fillStyle = 'rgba(122,74,48,0.10)';
+      c.fillRect(bx, by, bw, bh);
+    }
     drawAC(c, art, bx + bw / 2, by + bh / 2 + bob, Math.min(bw - 6, bh - 4));
     c.restore();
+    // the frame goes on AFTER the clip is released, so its stroke is not clipped
+    rrect(c, bx, by, bw, bh, 'rgba(0,0,0,0)', 'rgba(122,74,48,0.40)');
 
     // ---- name + role -------------------------------------------------------------
     const tx = r.x + 84;
