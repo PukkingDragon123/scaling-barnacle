@@ -37,9 +37,20 @@ function weightedPick(pairs, r) {
   return pairs[pairs.length - 1][0];
 }
 
+// All text goes through here, in the game's pixel face (js/font.js). VT323 runs
+// narrower and lighter than the bold Courier this used to set, so the size is
+// scaled up ~1.35x INSIDE the helper: every call site keeps its old numbers and
+// its old layout math, and textWidth measures with the same scaling so nothing
+// drifts. `bold` is accepted and ignored -- a pixel font has one weight.
+const FONT_SCALE = 1.35;
+function _fontFor(size) {
+  const fam = typeof FONT_FAMILY !== 'undefined' ? `'${FONT_FAMILY}', ` : '';
+  return `${Math.round(size * FONT_SCALE * 2) / 2}px ${fam}"Courier New", monospace`;
+}
+
 function text(ctx, str, x, y, opts = {}) {
-  const { size = 8, color = '#fff', align = 'left', shadow = true, bold = true } = opts;
-  ctx.font = `${bold ? 'bold ' : ''}${size}px "Courier New", monospace`;
+  const { size = 8, color = '#fff', align = 'left', shadow = true } = opts;
+  ctx.font = _fontFor(size);
   ctx.textAlign = align;
   ctx.textBaseline = 'top';
   if (shadow) {
@@ -50,8 +61,8 @@ function text(ctx, str, x, y, opts = {}) {
   ctx.fillText(str, x, y);
 }
 
-function textWidth(ctx, str, size = 8, bold = true) {
-  ctx.font = `${bold ? 'bold ' : ''}${size}px "Courier New", monospace`;
+function textWidth(ctx, str, size = 8) {
+  ctx.font = _fontFor(size);
   return ctx.measureText(str).width;
 }
 
@@ -99,66 +110,82 @@ function drawSpr(ctx, img, x, y) {
   ctx.drawImage(img, Math.round(x * DPX) / DPX, Math.round(y * DPX) / DPX, img.width * APIX, img.height * APIX);
 }
 
-// THE UI PANEL, and the whole reason every menu in the game looks like one
-// family. This used to be a roundRect with an anti-aliased 1.2px stroke -- which
-// is exactly the thing that made the UI read as web chrome floating over pixel
-// art: soft corners and hairline borders belong to CSS, not to a game whose
-// world is drawn in fat texels.
+// THE UI PANEL -- one painter, every menu, drawn with Stardew Valley's actual
+// frame anatomy rather than a rectangle with a border colour:
 //
-// It is a Stardew-style frame now, built from fillRect strips on the logical
-// pixel grid: parchment (or dark driftwood) fill, a thick two-tone wooden
-// border, stepped corners instead of rounded ones, and a one-texel outer
-// outline to seat it on any background. Nothing here is anti-aliased and
-// nothing lands off-grid -- coordinates are snapped to APIX so the frame's
-// texels agree with the art's.
+//   * a THICK bevelled wooden border: sun side up-left, shadow side down-right,
+//     so the frame reads as carved wood, not as a stroke
+//   * one-texel dark outlines on BOTH sides of the border (outside seats it on
+//     any background, inside separates wood from parchment)
+//   * round corner KNOBS overlapping each corner -- the signature detail that
+//     makes a frame read as furniture -- each with its own brass pin
+//   * parchment with a shadowed bottom edge, so the page has thickness
+//
+// Everything is fillRect on the art's own texel grid (APIX): no strokes, no
+// anti-aliasing, no fractional coordinates. Weathered oak and brass, because
+// this game's furniture is a pier's.
 function uiPanel(ctx, x, y, w, h, alpha = 0.92, light = false) {
-  const S = APIX;                                  // one art texel, logical units
+  const S = APIX;
   const snap = (v) => Math.round(v / S) * S;
-  x = snap(x); y = snap(y); w = Math.max(6 * S, snap(w)); h = Math.max(6 * S, snap(h));
-  const B = 2 * S;                                 // border thickness: two texels
-  const C = 2 * S;                                 // corner step size
+  x = snap(x); y = snap(y); w = Math.max(10 * S, snap(w)); h = Math.max(10 * S, snap(h));
+  const B = 3 * S;                       // border: three texels of wood
 
-  const P = light
-    ? { fill: '246,230,196', edge: '138,84,52', edge2: '186,128,82', line: '90,52,30', shine: '255,248,228' }
-    : { fill: '56,38,26', edge: '32,20,12', edge2: '110,70,44', line: '20,12,7', shine: '140,96,60' };
+  const P = light ? {
+    fill: '#f2dfae', fill2: '#e3cc95', out: '#2c170b',
+    wood: '#9c5b32', lit: '#c98a50', dim: '#6b3a1d',
+    knob: '#8a4f2a', knobLit: '#c98a50', pin: '#e9b455',
+  } : {
+    fill: '#3a2617', fill2: '#301d10', out: '#140b05',
+    wood: '#59371f', lit: '#7e5433', dim: '#241207',
+    knob: '#4e3018', knobLit: '#7e5433', pin: '#b98a3e',
+  };
 
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  // the body, with the corner steps knocked out
-  ctx.fillStyle = `rgb(${P.fill})`;
-  ctx.fillRect(x + C, y, w - C * 2, h);
-  ctx.fillRect(x, y + C, w, h - C * 2);
-  ctx.fillRect(x + S, y + S, w - S * 2, h - S * 2);
+  // outer outline, then the wooden ring, then the inner outline, then the page
+  ctx.fillStyle = P.out;
+  ctx.fillRect(x - S, y - S, w + S * 2, h + S * 2);
+  ctx.fillStyle = P.wood;
+  ctx.fillRect(x, y, w, h);
+  // bevel: lit on the sun side, dim on the shadow side
+  ctx.fillStyle = P.lit;
+  ctx.fillRect(x, y, w, S);
+  ctx.fillRect(x, y, S, h);
+  ctx.fillStyle = P.dim;
+  ctx.fillRect(x, y + h - S, w, S);
+  ctx.fillRect(x + w - S, y, S, h);
+  ctx.fillStyle = P.out;
+  ctx.fillRect(x + B, y + B, w - B * 2, h - B * 2);
+  ctx.fillStyle = P.fill;
+  ctx.fillRect(x + B + S, y + B + S, w - (B + S) * 2, h - (B + S) * 2);
+  // the page's own shadowed bottom edge
+  ctx.fillStyle = P.fill2;
+  ctx.fillRect(x + B + S, y + h - B - S * 3, w - (B + S) * 2, S * 2);
 
-  // one-texel dark outline, drawn as strips that follow the stepped corner
-  ctx.fillStyle = `rgb(${P.line})`;
-  ctx.fillRect(x + C, y - S, w - C * 2, S);              // top
-  ctx.fillRect(x + C, y + h, w - C * 2, S);              // bottom
-  ctx.fillRect(x - S, y + C, S, h - C * 2);              // left
-  ctx.fillRect(x + w, y + C, S, h - C * 2);              // right
-  ctx.fillRect(x + S, y, C - S, S); ctx.fillRect(x, y + S, S, C - S);                     // TL step
-  ctx.fillRect(x + w - C, y, C - S, S); ctx.fillRect(x + w - S, y + S, S, C - S);          // TR
-  ctx.fillRect(x + S, y + h - S, C - S, S); ctx.fillRect(x, y + h - C, S, C - S);          // BL
-  ctx.fillRect(x + w - C, y + h - S, C - S, S); ctx.fillRect(x + w - S, y + h - C, S, C - S); // BR
-
-  // the wooden border: dark rim outside, warm wood inside it
-  ctx.fillStyle = `rgb(${P.edge})`;
-  ctx.fillRect(x + C, y, w - C * 2, B);
-  ctx.fillRect(x + C, y + h - B, w - C * 2, B);
-  ctx.fillRect(x, y + C, B, h - C * 2);
-  ctx.fillRect(x + w - B, y + C, B, h - C * 2);
-  ctx.fillRect(x + S, y + S, C, C); ctx.fillRect(x + w - S - C, y + S, C, C);
-  ctx.fillRect(x + S, y + h - S - C, C, C); ctx.fillRect(x + w - S - C, y + h - S - C, C, C);
-  ctx.fillStyle = `rgb(${P.edge2})`;
-  ctx.fillRect(x + C, y + S, w - C * 2, S);
-  ctx.fillRect(x + C, y + h - B, w - C * 2, S);
-  ctx.fillRect(x + S, y + C, S, h - C * 2);
-  ctx.fillRect(x + w - B, y + C, S, h - C * 2);
-
-  // parchment shine along the top inside edge
-  ctx.fillStyle = `rgb(${P.shine})`;
-  ctx.fillRect(x + C + S, y + B, w - C * 2 - S * 2, S);
+  // ---- corner knobs -------------------------------------------------------
+  // a 5x5-texel rounded cap centred on each corner, one texel proud of the
+  // outline, with a brass pin -- drawn texel by texel from a tiny map
+  const KNOB = [
+    ' ooo ',
+    'oLKKo',
+    'oKPKo',
+    'oKKDo',
+    ' ooo ',
+  ];
+  const KC = { o: P.out, K: P.knob, L: P.knobLit, D: P.dim, P: P.pin };
+  const knob = (kx, ky) => {
+    for (let r = 0; r < 5; r++) {
+      for (let cN = 0; cN < 5; cN++) {
+        const ch = KNOB[r][cN];
+        if (ch === ' ') continue;
+        ctx.fillStyle = KC[ch];
+        ctx.fillRect(kx + (cN - 2) * S, ky + (r - 2) * S, S, S);
+      }
+    }
+  };
+  knob(x + S, y + S); knob(x + w - S, y + S);
+  knob(x + S, y + h - S); knob(x + w - S, y + h - S);
 
   ctx.restore();
 }

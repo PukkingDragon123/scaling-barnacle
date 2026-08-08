@@ -605,11 +605,11 @@ const TitleScene = {
     // the name of the place. Kept hand-set: it is the one piece of lettering the
     // game owns.
     const wob = Math.sin(this.time * 1.6) * 1.5;
-    text(c, "MR. OTTO'S", W / 2 + 2, 44 + wob + 2, { size: 24, color: 'rgba(30,12,24,0.75)', align: 'center', shadow: false });
+    text(c, "MR. OTTO'S", W / 2 + 1.5, 44 + wob + 1.5, { size: 24, color: 'rgba(30,12,24,0.75)', align: 'center', shadow: false });
     text(c, "MR. OTTO'S", W / 2, 44 + wob, { size: 24, color: '#ffe6b0', align: 'center', shadow: false });
-    text(c, 'CLAM FARM', W / 2 + 3, 72 - wob + 3, { size: 30, color: 'rgba(20,30,50,0.8)', align: 'center', shadow: false });
+    text(c, 'CLAM FARM', W / 2 + 2, 72 - wob + 2, { size: 30, color: 'rgba(20,30,50,0.8)', align: 'center', shadow: false });
     text(c, 'CLAM FARM', W / 2, 72 - wob, { size: 30, color: '#5ad2f0', align: 'center', shadow: false });
-    text(c, 'a little life on the water', W / 2, 104, { size: 8, color: '#f4d4a8', align: 'center' });
+    text(c, 'a little life on the water', W / 2, 120, { size: 8, color: '#f4d4a8', align: 'center' });
 
     // the menu
     const rows = this._rows();
@@ -773,8 +773,16 @@ loadAssets(() => {
   // the codebase (and every test harness) treats "G exists" as "the game is up",
   // and the title is just the front porch. Continue re-loads over this; New Tide
   // replaces it. Nothing is lost either way because nothing has happened yet.
-  if (Game.hasSave()) Game.load(); else Game.newGame();
-  Game.scene = TitleScene;
-  TitleScene.enter();
-  requestAnimationFrame(frame);
+  //
+  // The pixel font finishes loading first, or the opening frames render in
+  // fallback Courier and visibly swap a beat later. Both paths of the promise
+  // boot -- a font is never worth a black screen.
+  const boot = () => {
+    if (Game.hasSave()) Game.load(); else Game.newGame();
+    Game.scene = TitleScene;
+    TitleScene.enter();
+    requestAnimationFrame(frame);
+  };
+  if (typeof FONT_READY !== 'undefined' && FONT_READY && FONT_READY.then) FONT_READY.then(boot, boot);
+  else boot();
 });
