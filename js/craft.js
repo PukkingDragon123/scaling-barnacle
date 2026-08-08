@@ -534,10 +534,7 @@ const Craft = {
     this.sel = -1;
     this._say('');
     SND.blip();
-    if (!G.flags.seenCraft) {
-      G.flags.seenCraft = true;
-      Game.toast('Tackle, supper, and things to put on the dock.');
-    }
+    // (the old first-visit toast stack lived here; the journal teaches now)
   },
 
   close() { this.open = false; this.sel = -1; SND.click(); },

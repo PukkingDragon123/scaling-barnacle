@@ -16,10 +16,7 @@ const Bench = {
     this.mode = 'menu';
     this.result = null;
     SND.blip();
-    if (!G.flags.seenBench) {
-      G.flags.seenBench = true;
-      Game.toast('Crack shells for the meat; polish the precious ones. Both sell better.');
-    }
+    // (the old first-visit toast stack lived here; the journal teaches now)
   },
 
   close() { this.open = false; SND.click(); },

@@ -452,15 +452,7 @@ const Ocean = {
     if (typeof SND !== 'undefined') { SND.setScene('dive'); SND.splash(); }
     this._puff(this.px, this.py, 12, 60);
     this._ring(this.px, 2, 3, 160);
-    if (!G.flags.seenOcean) {
-      G.flags.seenOcean = true;
-      Game.toast(TouchUI.enabled
-        ? 'Open water! Pads swim  --  E: interact  --  swirl: spin roll'
-        : 'Open water! WASD/arrows swim  --  [E] interact  --  [Space] spin roll');
-      Game.toast('The spin roll dodges anything and carries you a long way.');
-      Game.toast('Find a current and it will carry you -- that is your sprint.');
-      Game.toast('Air runs out -- surface anywhere to breathe. Swim home to the pier ladder to climb out.');
-    }
+    // (the old first-visit toast stack lived here; the journal teaches now)
     this._save();
   },
 

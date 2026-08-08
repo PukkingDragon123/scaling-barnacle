@@ -279,10 +279,18 @@ const Game = {
     }
   },
 
+  // ONE line at a time. Toasts used to stack four deep and sit for 4.5 seconds
+  // each, so any scene change built a wall of pills across the play field --
+  // which is most of what made the screen read as noise. Now a single chip
+  // shows for a couple of seconds and the rest wait their turn in a short
+  // queue; anything beyond the queue is dropped, because if three messages are
+  // fighting for the same two seconds none of them was important.
   toast(msg) {
-    this.toasts.push({ msg, t: 4.5 });
-    if (this.toasts.length > 4) this.toasts.shift();
+    if (this.toasts.some(t => t.msg === msg) || this._toastQ.some(m => m === msg)) return;
+    if (this.toasts.length === 0) this.toasts.push({ msg, t: 2.6 });
+    else if (this._toastQ.length < 2) this._toastQ.push(msg);
   },
+  _toastQ: [],
 
   hasSave() {
     try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; }
@@ -361,6 +369,7 @@ const Game = {
     if (this.plunge !== null) this.plunge += this.plunge >= 0 ? dt : -dt;
     for (const t of this.toasts) t.t -= dt;
     this.toasts = this.toasts.filter(t => t.t > 0);
+    if (this.toasts.length === 0 && this._toastQ.length) this.toasts.push({ msg: this._toastQ.shift(), t: 2.6 });
   },
 
   drawHUD(c) {
@@ -386,7 +395,7 @@ const Game = {
     c.fillStyle = day ? '#e8a93c' : '#8a9ab8';
     c.beginPath(); c.arc(dx + Math.cos(a) * dr, dy + Math.sin(a) * dr, 2.4, 0, TAU); c.fill();
     if (this.scene !== DiveScene && !TouchUI.enabled)
-      text(c, '[H] help', W - 12, 29, { size: 6.5, color: 'rgba(255,255,255,0.75)', align: 'right' });
+      text(c, '[H] help  [J] journal', W - 12, 29, { size: 5.5, color: 'rgba(74,48,32,0.8)', align: 'right', shadow: false });
 
     // centre: the current chapter. Clicking it (or [J]) opens the journal, and it
     // glows for a moment when a chapter has just finished.
@@ -413,16 +422,18 @@ const Game = {
   },
 
   drawToasts(c) {
-    for (let i = 0; i < this.toasts.length; i++) {
-      const t = this.toasts[this.toasts.length - 1 - i];
-      const a = clamp(t.t, 0, 1);
-      const y = H - 18 - i * 14;
-      c.globalAlpha = a;
-      const w = textWidth(c, t.msg, 7) + 14;
-      uiPanel(c, W / 2 - w / 2, y - 3, w, 13, 0.96, true);
-      text(c, t.msg, W / 2, y, { size: 7, color: '#4a3020', align: 'center', shadow: false });
-      c.globalAlpha = 1;
-    }
+    // a single chip, low and out of the play field's way; it slides up as it
+    // arrives and fades as it goes
+    const t = this.toasts[0];
+    if (!t) return;
+    const a = clamp(t.t / 0.4, 0, 1);
+    const rise = (1 - clamp((2.6 - t.t) / 0.25, 0, 1)) * 4;
+    c.globalAlpha = a;
+    const w = textWidth(c, t.msg, 7) + 16;
+    // seated ABOVE the hotbar row, which owns the bottom strip of the screen
+    uiPanel(c, W / 2 - w / 2, H - 36 + rise, w, 14, 0.96, true);
+    text(c, t.msg, W / 2, H - 32.5 + rise, { size: 7, color: '#4a3020', align: 'center', shadow: false });
+    c.globalAlpha = 1;
   },
 
   drawHelp(c) {

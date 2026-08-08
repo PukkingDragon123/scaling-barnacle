@@ -69,13 +69,7 @@ const WorldScene = {
       for (let i = 0; i < 70; i++) this.stars.push({ x: rng() * W, y: rng() * 120, p: rng() * TAU, big: rng() < 0.2 });
     }
     SND.setScene('surface');
-    if (!G.flags.seenWorld) {
-      G.flags.seenWorld = true;
-      Game.toast(TouchUI.enabled
-        ? 'Home again. Arrows walk  •  paw button interacts'
-        : 'Home again. A/D or arrows walk  •  [E] interacts');
-      Game.toast('Dive at the piling for clams, or jump in to explore the open sea.');
-    }
+    // (the old first-visit toast stack lived here; the journal teaches now)
   },
 
   spots() {

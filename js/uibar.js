@@ -211,18 +211,20 @@ const UIBar = {
       const si = b.key === 'skills' ? 0 : 1;
       c.drawImage(cv, si * S * q, 0, S * q, S * q, b.x + 3, y + 3, S, S);
 
-      // the badge: what is waiting inside
+      // the badge: what is waiting inside. A SQUARE tag on the pixel grid, not a
+      // pulsing anti-aliased circle -- the circle was the one piece of web
+      // chrome left on the HUD and it read as a notification dot from a phone.
       const n = b.key === 'skills' ? pts : fresh;
       if (n > 0) {
-        const pulse = 1 + 0.14 * Math.sin(this.time * TAU);
-        const r = 5 * pulse;
-        const bx = b.x + this.BW - 2.5, by = y + 2.5;
-        c.fillStyle = b.key === 'skills' ? '#ffd66e' : '#7de08a';
-        c.beginPath(); c.arc(bx, by, r, 0, TAU); c.fill();
-        c.strokeStyle = 'rgba(20,16,8,0.65)';
-        c.lineWidth = PIX * 2;
-        c.beginPath(); c.arc(bx, by, r, 0, TAU); c.stroke();
-        text(c, String(Math.min(n, 9)), bx, by - 3.4, { size: 7, color: '#3a2808', align: 'center', shadow: false });
+        const bw = 9, bh = 9;
+        const bx = b.x + this.BW - bw + 2, by = y - 2;
+        c.fillStyle = 'rgba(20,12,7,0.9)';
+        c.fillRect(bx - PIX * 2, by - PIX * 2, bw + PIX * 4, bh + PIX * 4);
+        c.fillStyle = b.key === 'skills' ? '#ffd66e' : '#a8d878';
+        c.fillRect(bx, by, bw, bh);
+        c.fillStyle = 'rgba(255,255,255,0.35)';
+        c.fillRect(bx, by, bw, PIX * 2);
+        text(c, String(Math.min(n, 9)), bx + bw / 2, by + 1.4, { size: 7, color: '#3a2808', align: 'center', shadow: false });
       }
     }
   },

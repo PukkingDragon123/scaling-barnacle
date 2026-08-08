@@ -1026,10 +1026,7 @@ const Farm = {
       if (this.seedCount(this.SEEDS[s].key) > 0) { this.sel = s; break; }
     }
     SND.blip();
-    if (!G.flags.seenFarm) {
-      G.flags.seenFarm = true;
-      Game.toast('Fan a current over a crop every day, or the silt smothers it in two.');
-    }
+    // (the old first-visit toast stack lived here; the journal teaches now)
   },
 
   closePicker() { this.open = false; SND.click(); },

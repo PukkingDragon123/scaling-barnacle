@@ -63,12 +63,7 @@ const DiveScene = {
     for (let i = 0; i < 40; i++) this.snow.push({ x: rand(W), y: rand(H), v: rand(3, 9), drift: rand(TAU) });
     SND.setScene('dive');
     SND.splash();
-    if (!G.flags.seenDive) {
-      G.flags.seenDive = true;
-      Game.toast('Scrape the crust off a shell... then HOLD on it to pry —');
-      Game.toast('release when the marker is in the green.');
-      Game.toast('No magic resurfacing -- swim up yourself, and mind your air.');
-    }
+    // (the old first-visit toast stack lived here; the journal teaches now)
     if (this.p === 2 && !G.flags.seenDeep) {
       G.flags.seenDeep = true;
       Game.toast('It\'s dark down here. And very quiet...');

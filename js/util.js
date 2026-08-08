@@ -99,23 +99,67 @@ function drawSpr(ctx, img, x, y) {
   ctx.drawImage(img, Math.round(x * DPX) / DPX, Math.round(y * DPX) / DPX, img.width * APIX, img.height * APIX);
 }
 
-// Rounded UI panel. Dark driftwood by default; light=true gives warm parchment
-// (dark text) that sits nicely on the painted world.
+// THE UI PANEL, and the whole reason every menu in the game looks like one
+// family. This used to be a roundRect with an anti-aliased 1.2px stroke -- which
+// is exactly the thing that made the UI read as web chrome floating over pixel
+// art: soft corners and hairline borders belong to CSS, not to a game whose
+// world is drawn in fat texels.
+//
+// It is a Stardew-style frame now, built from fillRect strips on the logical
+// pixel grid: parchment (or dark driftwood) fill, a thick two-tone wooden
+// border, stepped corners instead of rounded ones, and a one-texel outer
+// outline to seat it on any background. Nothing here is anti-aliased and
+// nothing lands off-grid -- coordinates are snapped to APIX so the frame's
+// texels agree with the art's.
 function uiPanel(ctx, x, y, w, h, alpha = 0.92, light = false) {
+  const S = APIX;                                  // one art texel, logical units
+  const snap = (v) => Math.round(v / S) * S;
+  x = snap(x); y = snap(y); w = Math.max(6 * S, snap(w)); h = Math.max(6 * S, snap(h));
+  const B = 2 * S;                                 // border thickness: two texels
+  const C = 2 * S;                                 // corner step size
+
+  const P = light
+    ? { fill: '246,230,196', edge: '138,84,52', edge2: '186,128,82', line: '90,52,30', shine: '255,248,228' }
+    : { fill: '56,38,26', edge: '32,20,12', edge2: '110,70,44', line: '20,12,7', shine: '140,96,60' };
+
   ctx.save();
-  ctx.beginPath();
-  if (ctx.roundRect) ctx.roundRect(x, y, w, h, 3.5);
-  else ctx.rect(x, y, w, h);
-  ctx.fillStyle = light ? `rgba(246,232,201,${alpha})` : `rgba(50,35,23,${alpha})`;
-  ctx.fill();
-  ctx.strokeStyle = light ? 'rgba(122,74,48,0.9)' : 'rgba(226,200,150,0.5)';
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
-  ctx.strokeStyle = light ? 'rgba(255,250,235,0.8)' : 'rgba(255,235,190,0.14)';
-  ctx.lineWidth = PIX;
-  ctx.beginPath();
-  ctx.moveTo(x + 3, y + 1.4); ctx.lineTo(x + w - 3, y + 1.4);
-  ctx.stroke();
+  ctx.globalAlpha = alpha;
+
+  // the body, with the corner steps knocked out
+  ctx.fillStyle = `rgb(${P.fill})`;
+  ctx.fillRect(x + C, y, w - C * 2, h);
+  ctx.fillRect(x, y + C, w, h - C * 2);
+  ctx.fillRect(x + S, y + S, w - S * 2, h - S * 2);
+
+  // one-texel dark outline, drawn as strips that follow the stepped corner
+  ctx.fillStyle = `rgb(${P.line})`;
+  ctx.fillRect(x + C, y - S, w - C * 2, S);              // top
+  ctx.fillRect(x + C, y + h, w - C * 2, S);              // bottom
+  ctx.fillRect(x - S, y + C, S, h - C * 2);              // left
+  ctx.fillRect(x + w, y + C, S, h - C * 2);              // right
+  ctx.fillRect(x + S, y, C - S, S); ctx.fillRect(x, y + S, S, C - S);                     // TL step
+  ctx.fillRect(x + w - C, y, C - S, S); ctx.fillRect(x + w - S, y + S, S, C - S);          // TR
+  ctx.fillRect(x + S, y + h - S, C - S, S); ctx.fillRect(x, y + h - C, S, C - S);          // BL
+  ctx.fillRect(x + w - C, y + h - S, C - S, S); ctx.fillRect(x + w - S, y + h - C, S, C - S); // BR
+
+  // the wooden border: dark rim outside, warm wood inside it
+  ctx.fillStyle = `rgb(${P.edge})`;
+  ctx.fillRect(x + C, y, w - C * 2, B);
+  ctx.fillRect(x + C, y + h - B, w - C * 2, B);
+  ctx.fillRect(x, y + C, B, h - C * 2);
+  ctx.fillRect(x + w - B, y + C, B, h - C * 2);
+  ctx.fillRect(x + S, y + S, C, C); ctx.fillRect(x + w - S - C, y + S, C, C);
+  ctx.fillRect(x + S, y + h - S - C, C, C); ctx.fillRect(x + w - S - C, y + h - S - C, C, C);
+  ctx.fillStyle = `rgb(${P.edge2})`;
+  ctx.fillRect(x + C, y + S, w - C * 2, S);
+  ctx.fillRect(x + C, y + h - B, w - C * 2, S);
+  ctx.fillRect(x + S, y + C, S, h - C * 2);
+  ctx.fillRect(x + w - B, y + C, S, h - C * 2);
+
+  // parchment shine along the top inside edge
+  ctx.fillStyle = `rgb(${P.shine})`;
+  ctx.fillRect(x + C + S, y + B, w - C * 2 - S * 2, S);
+
   ctx.restore();
 }
 

@@ -28,6 +28,9 @@ const fails = [];
   const onTitle = await page.evaluate(() => Game.scene === TitleScene);
   if (!onTitle) fails.push('boot did not land on the title menu');
   await page.screenshot({ path: OUT + '/q-title.png' });
+  // wait out the boot fade first: endFrame clears pressed every frame, and the
+  // title's update is gated on fadeDir === 0, so an early press is swallowed
+  await page.waitForFunction(() => Game.fadeDir === 0 && Game.fade === 0, null, { timeout: 30000 });
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => Game.fadeDir === 0 && Game.fade === 0, null, { timeout: 30000 });
   await page.waitForTimeout(300);

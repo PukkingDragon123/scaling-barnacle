@@ -255,12 +255,7 @@ const Battle = {
 
     SND.setScene('shark');        // gloomy pad + heartbeat: the boss ambience
     this._say(`WAVE ${this.wave}  —  THE CRAB PUNK`, 2.4, '#e8434c');
-    if (!G.flags.seenBattle) {
-      G.flags.seenBattle = true;
-      Game.toast(TouchUI.enabled
-        ? 'Drag to aim, hold to charge, let go to FIRE. Arrows dodge.'
-        : 'Aim with the mouse, HOLD to charge, release to FIRE. A/D dodge.');
-    }
+    // (the old first-visit toast stack lived here; the journal teaches now)
   },
 
   _say(msg, life, col) {
