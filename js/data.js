@@ -131,6 +131,7 @@ const QUESTS = [
       'and climb back up before your air runs thin.',
     ],
     done: (g) => g.stats.scraped >= 5,
+    prog: (g) => ({ n: Math.min(5, g.stats.scraped), of: 5 }),
     reward: { money: 40 },
   },
   {
@@ -182,6 +183,12 @@ const QUESTS = [
       const f = g.friends || {};
       return !!(f.farmer && f.farmer.met && f.prof && f.prof.met && f.angler && f.angler.met);
     },
+    prog: (g) => {
+      const f = g.friends || {};
+      let n = 0;
+      for (const k of ['farmer', 'prof', 'angler']) if (f[k] && f[k].met) n++;
+      return { n, of: 3 };
+    },
     reward: { money: 40, note: 'It is a small bay. Now everyone knows your name.' },
   },
   {
@@ -230,6 +237,7 @@ const QUESTS = [
       'Five good chunks will do to start.',
     ],
     done: (g) => !!(g.mining && g.mining.mined >= 5),
+    prog: (g) => ({ n: Math.min(5, (g.mining && g.mining.mined) || 0), of: 5 }),
     reward: { money: 60 },
   },
   {
@@ -306,6 +314,7 @@ const QUESTS = [
       'Still. Five thousand would fix a lot of planks.',
     ],
     done: (g) => g.money >= 5000,
+    prog: (g) => ({ n: Math.min(5000, g.money), of: 5000 }),
     reward: { note: 'The pier is yours, properly. It always was.' },
   },
 ];

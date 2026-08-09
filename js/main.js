@@ -394,31 +394,55 @@ const Game = {
     const a = Math.PI + tt * Math.PI;
     c.fillStyle = day ? '#e8a93c' : '#8a9ab8';
     c.beginPath(); c.arc(dx + Math.cos(a) * dr, dy + Math.sin(a) * dr, 2.4, 0, TAU); c.fill();
-    if (this.scene !== DiveScene && !TouchUI.enabled)
-      text(c, '[H] help  [J] journal', W - 12, 29, { size: 5.5, color: 'rgba(74,48,32,0.8)', align: 'right', shadow: false });
+    // (the [H]/[J] hint used to live here; the tracker below is the affordance
+    // now, and the help screen itself lists the keys)
 
-    // centre: the current chapter. Clicking it (or [J]) opens the journal, and it
-    // glows for a moment when a chapter has just finished.
-    const goalTxt = G.goal < GOALS.length ? GOALS[G.goal].name : 'The pier, at ease';
-    const gw = textWidth(c, goalTxt, 7) + 28;
-    this._goalRect = { x: W / 2 - gw / 2, y: 6, w: gw, h: 15 };
-    if (typeof Quests !== 'undefined' && Quests._pulse > 0) {
-      c.globalAlpha = 0.25 + 0.2 * Math.sin(this.time * 6);
-      c.fillStyle = '#ffe6b0';
-      c.fillRect(W / 2 - gw / 2 - 2, 4, gw + 4, 19);
-      c.globalAlpha = 1;
+    // ---- the chapter tracker, on the RIGHT side like a proper quest log tab.
+    // It used to be a banner parked dead centre over the play field; now it
+    // hangs under the day panel, shows the chapter, its live progress when the
+    // chapter is countable, and the current hint -- and clicking it (or [J])
+    // opens the journal.
+    {
+      const q = G.goal < GOALS.length ? GOALS[G.goal] : null;
+      const name = q ? q.name : 'The pier, at ease';
+      const hint = q ? q.hint : '';
+      const p = q && q.prog ? q.prog(G) : null;
+      const tw = 118;
+      const th = p ? 40 : 34;
+      const tx = W - tw - 6, ty = 68;   // below the day panel and the icon buttons
+      this._goalRect = { x: tx, y: ty, w: tw, h: th };
+      if (typeof Quests !== 'undefined' && Quests._pulse > 0) {
+        c.globalAlpha = 0.3 + 0.2 * Math.sin(this.time * 6);
+        c.fillStyle = '#ffe6b0';
+        c.fillRect(tx - 2, ty - 2, tw + 4, th + 4);
+        c.globalAlpha = 1;
+      }
+      uiPanel(c, tx, ty, tw, th, 0.94, true);
+      // the little star, then the chapter name, clipped to the panel
+      c.save();
+      c.beginPath(); c.rect(tx + 4, ty + 3, tw - 8, th - 6); c.clip();
+      c.fillStyle = '#e8a93c';
+      c.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const ang = -Math.PI / 2 + i * TAU / 5;
+        const ang2 = ang + TAU / 10;
+        c.lineTo(tx + 10 + Math.cos(ang) * 3.5, ty + 9 + Math.sin(ang) * 3.5);
+        c.lineTo(tx + 10 + Math.cos(ang2) * 1.6, ty + 9 + Math.sin(ang2) * 1.6);
+      }
+      c.closePath(); c.fill();
+      text(c, name, tx + 17, ty + 5.5, { size: 6.5, color: '#4a3020', shadow: false });
+      text(c, hint, tx + 7, ty + 16, { size: 5.5, color: '#8a6a48', shadow: false });
+      if (p) {
+        // the progress bar, with the count on it
+        const bw = tw - 14, bx = tx + 7, by2 = ty + 26;
+        c.fillStyle = 'rgba(90,52,30,0.30)';
+        c.fillRect(bx, by2, bw, 6);
+        c.fillStyle = '#5f9e4a';
+        c.fillRect(bx, by2, bw * clamp(p.n / p.of, 0, 1), 6);
+        text(c, `${p.n}/${p.of}`, bx + bw / 2, by2 - 0.5, { size: 5.5, color: '#f6e8c9', align: 'center', shadow: false });
+      }
+      c.restore();
     }
-    uiPanel(c, W / 2 - gw / 2, 6, gw, 15, 0.92, true);
-    c.fillStyle = '#e8a93c';
-    c.beginPath();
-    for (let i = 0; i < 5; i++) {
-      const ang = -Math.PI / 2 + i * TAU / 5;
-      const ang2 = ang + TAU / 10;
-      c.lineTo(W / 2 - gw / 2 + 11 + Math.cos(ang) * 4, 13.5 + Math.sin(ang) * 4);
-      c.lineTo(W / 2 - gw / 2 + 11 + Math.cos(ang2) * 1.8, 13.5 + Math.sin(ang2) * 1.8);
-    }
-    c.closePath(); c.fill();
-    text(c, goalTxt, W / 2 + 6, 9.5, { size: 7, color: '#6a4420', align: 'center', shadow: false });
   },
 
   drawToasts(c) {
@@ -604,7 +628,7 @@ const TitleScene = {
 
     // the name of the place. Kept hand-set: it is the one piece of lettering the
     // game owns.
-    const wob = Math.sin(this.time * 1.6) * 1.5;
+    const wob = 0;   // the logo used to bob on a sine; a sign hangs still
     text(c, "MR. OTTO'S", W / 2 + 1.5, 44 + wob + 1.5, { size: 24, color: 'rgba(30,12,24,0.75)', align: 'center', shadow: false });
     text(c, "MR. OTTO'S", W / 2, 44 + wob, { size: 24, color: '#ffe6b0', align: 'center', shadow: false });
     text(c, 'CLAM FARM', W / 2 + 2, 72 - wob + 2, { size: 30, color: 'rgba(20,30,50,0.8)', align: 'center', shadow: false });

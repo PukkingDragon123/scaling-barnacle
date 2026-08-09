@@ -266,6 +266,9 @@ const Mining = {
     if (!isFinite(p)) p = 0;
     s.pick = p < 0 ? 0 : (p > this.PICKS.length - 1 ? this.PICKS.length - 1 : p);
 
+    // hasPick: mining is gated on actually OWNING a pick now -- the story hands
+    // one over (js/integrate.js). Old saves that have already mined keep theirs.
+    if (typeof s.hasPick !== 'boolean') s.hasPick = (s.mined || 0) > 0 || (s.swings || 0) > 0;
     if (!s.broken || typeof s.broken !== 'object') s.broken = {};
     if (typeof s.swings !== 'number' || !isFinite(s.swings)) s.swings = 0;
     if (typeof s.mined !== 'number' || !isFinite(s.mined)) s.mined = 0;
@@ -764,6 +767,16 @@ const Mining = {
   // to confirm that would be pedantry.
   engage: function (n) {
     if (!n || n.dead) return false;
+    // no pick, no mining -- the rock stays a thing you look at until the story
+    // (or the workbench) puts a tool in your paw
+    if (this.ensure() && !G.mining.hasPick) {
+      this.note = 'you need a pick. Marlow might have a spare.';
+      this.noteT = 2.2;
+      this.noteX = n.x;
+      this.noteY = n.y - n.h * 0.5 - 24;
+      if (typeof this.snd === 'function') this.snd('blip');
+      return false;
+    }
     if (this.target === n) { this.disengage(); return false; }
     this.target = n;
     this.sweepFor = null;                  // restart the sweep from the left
@@ -874,7 +887,8 @@ const Mining = {
     if (typeof text !== 'function' || typeof uiPanel !== 'function') return;
     var bob = Math.sin((this.time || 0) * 4) * 0.8;
     var y = n.y - n.h * 0.5 - 13 + bob;
-    var label = '[E] mine';
+    var noPick = this.ensure() && !G.mining.hasPick;
+    var label = noPick ? 'needs a pick' : '[E] mine';
     var tw = textWidth(ctx, label, 7) + 9;
     uiPanel(ctx, n.x - tw * 0.5, y - 10, tw, 13, 0.86, false);
     text(ctx, label, n.x, y - 7, { size: 7, color: '#ffe6b0', align: 'center' });

@@ -16,7 +16,7 @@ const fails=[];
   await page.goto('file://' + require('path').resolve(__dirname, '..', 'index.html'));
   await page.waitForFunction(() => typeof G !== 'undefined' && G && ASSETS.dock_11 && ASSETS.dock_11.width, null, {timeout:60000});
   await page.waitForFunction(() => Game.fadeDir === 0 && Game.fade === 0, null, {timeout:30000});
-  await page.evaluate(() => { if (typeof TitleScene !== 'undefined' && Game.scene === TitleScene) { Game.scene = WorldScene; WorldScene.enter({}); } if (G && G.flags) G.flags.letter = true; if (typeof Quests !== 'undefined') Quests.letter = false; }); // tests skip the title menu, like the old boot
+  await page.evaluate(() => { if (typeof TitleScene !== 'undefined' && Game.scene === TitleScene) { Game.scene = WorldScene; WorldScene.enter({}); } if (G && G.flags) G.flags.letter = true; if (typeof Quests !== 'undefined') Quests.letter = false; Mining.ensure(); G.mining.hasPick = true; }); // tests skip the title menu, like the old boot
   await page.evaluate(() => Game.go(Ocean));
   // Wait for chunk generation rather than a fixed sleep: nodes are spawned as the
   // camera reaches new chunks, so a timeout raced it and reported NO NODES.

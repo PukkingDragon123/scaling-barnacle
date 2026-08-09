@@ -75,8 +75,12 @@ const Tame = {
   NOTICE_R: 152,           // it knows you are there
   OFFER_R: 46,             // how close you must be to hand food over
   STANDOFF: 30,            // how close a curious animal will come on its own
-  CALM_SPEED: 44,          // swim slower than this and it settles
-  SPOOK_SPEED: 116,        // faster than this inside NOTICE_R and it bolts
+  // Friendlier water. These used to be 44/116 and animals read as terrified of
+  // you: a normal cruise past one inside its notice ring sent it bolting, and
+  // "move slowly" meant "hover". A curious reef should let you swim up at an
+  // ordinary pace and only bolt when you charge or barge.
+  CALM_SPEED: 62,          // swim slower than this and it settles
+  SPOOK_SPEED: 175,        // faster than this inside NOTICE_R and it bolts
   BUMP_R: 14,              // barging into one always spooks it
   EASE_UP: 0.62,
   EASE_DOWN: 0.85,
@@ -1766,7 +1770,7 @@ const Tame = {
           G.flags.seenTame = 1;
           this._toast('something is curious about you. move slowly -- speed spooks them.');
           this._toast(this._touch() ? 'swim up and tap it to pet it -- food is faster, but not needed.'
-            : 'swim up and press [T] to pet it -- food is faster, but not needed.');
+            : 'swim up and press [E] to pet it -- food is faster, but not needed.');
           this._save();
         }
       }
@@ -2174,7 +2178,7 @@ const Tame = {
       var canFeed = this._offerable === o && this._hasAnyFoodFor(o);
       var label = this._touch()
         ? (canFeed ? 'tap to offer food' : 'tap to pet')
-        : (canFeed ? '[T] offer food' : '[T] pet');
+        : (canFeed ? '[T] offer food' : '[E] pet');
       var tw = textWidth(ctx, label, 7) + 10;
       uiPanel(ctx, o.x - tw / 2, oy - 2, tw, 12, 0.86);
       text(ctx, label, o.x, oy + 1, { size: 7, color: '#ffe6b0', align: 'center' });

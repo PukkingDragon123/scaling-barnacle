@@ -195,18 +195,36 @@
   // the shop, and the shop is the ClamNet terminal inside the house now. One
   // storefront, indoors, instead of a laptop and a cart nailed to the planks.)
 
-  // ---- what you start the game holding --------------------------------------------------
-  // Once per save, not per boot: the flag lives in G so a player who rearranges or
-  // spends their starting kit does not get it silently handed back.
+  // ---- what you start the game holding: NOTHING -------------------------------
+  // The starting kit used to be handed over silently on frame one. It comes from
+  // people now: Fintan brings Almar's old scraper and pry bar when you say hello
+  // (chapter one), and Sprout brings the watering can and hoe with the planting
+  // chapter. Owning a story means the story gets to hand you things.
   if (M.Hotbar) {
     const wu2 = WorldScene.update.bind(WorldScene);
     WorldScene.update = function (dt) {
-      if (G && G.flags && !G.flags.kitted) {
+      if (G && G.flags && !G.flags.kitted && G.goal >= 1) {
+        // chapter one done: Fintan's gift
         G.flags.kitted = true;
         M.Hotbar.give('tool', 'scraper', 1);
         M.Hotbar.give('tool', 'pry', 1);
-        M.Hotbar.give('tool', 'can', 1);      // the watering can
+        Game.toast("Fintan leaves Almar's old scraper and pry bar on the post.");
+        Game.save();
+      }
+      if (G && G.flags && !G.flags.kitted2 && G.goal >= 7) {
+        // the planting chapter opens: Sprout's gift
+        G.flags.kitted2 = true;
+        M.Hotbar.give('tool', 'can', 1);
         M.Hotbar.give('tool', 'hoe', 1);
+        Game.toast('Sprout drops off a watering can and a hoe. "For the sand," she says.');
+        Game.save();
+      }
+      if (G && G.flags && !G.flags.kitted3 && G.goal >= 9 && M.Mining && M.Mining.ensure) {
+        // the mining chapter opens: Marlow's spare pick
+        G.flags.kitted3 = true;
+        M.Mining.ensure();
+        G.mining.hasPick = true;
+        Game.toast('Marlow leaves his spare shell pick by the ladder. "Mind your thumbs."');
         Game.save();
       }
       wu2(dt);
@@ -265,9 +283,14 @@
         // at worst make the first press after you swim off a bed do nothing.
         const busyE = O.atDock || O.over || O.leaving ||
           (M.Hood && M.Hood._reach) || (M.Farm && M.Farm.reach);
-        M.Mining.keyOwned = !busyE;          // the prompt reads this, so UI matches behaviour
-        if (M.Mining.engage && !busyE && typeof Input !== 'undefined' && Input.p('KeyE')) {
-          if (M.Mining.candidate) M.Mining.engage(M.Mining.candidate);
+        // Animals join the [E] chain ABOVE rocks: a living thing you have swum
+        // up to always outranks scenery. [T] still works -- it prefers feeding --
+        // but "everything interacts on one key" is what makes a pad playable.
+        const pettableNow = !busyE && M.Tame && M.Tame.pettable && M.Tame.pettable();
+        M.Mining.keyOwned = !busyE && !pettableNow;
+        if (!busyE && typeof Input !== 'undefined' && Input.p('KeyE')) {
+          if (pettableNow) M.Tame.pet(pettableNow);
+          else if (M.Mining.candidate) M.Mining.engage(M.Mining.candidate);
           else if (M.Mining.target) M.Mining.disengage();
         }
       }

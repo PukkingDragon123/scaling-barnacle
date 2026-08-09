@@ -1615,9 +1615,9 @@ const Ocean = {
     // and vanishes entirely at speed. Hovering, the frame breathes like the water
     // it is looking through; swimming, the camera is all business. Applied to the
     // TARGET, not the camera, so the ease above keeps smoothing it.
-    const calm = clamp(1 - this.speed() / 70, 0, 1) * (1 - this._sky);
-    const swx = Math.sin(this.time * 0.31) * 2.6 * calm;
-    const swy = Math.sin(this.time * 0.47 + 1.7) * 1.8 * calm;
+    // The idle "current" sway is gone: a camera that drifts on its own reads as
+    // the picture wobbling, not as water. The camera moves only when Otto does.
+    const swx = 0, swy = 0;
     this.camX += (tx + swx - this.camX) * k;
 
     // ---- the floor clamp -------------------------------------------------------
@@ -2735,13 +2735,23 @@ const Ocean = {
         if (x > W + 8 || x + this.PIER_SEG < -8) continue;
         ctx.drawImage(seg, x, top, this.PIER_SEG, segH);
       }
-      // The hut, on the deck at the landward end -- visible whenever the camera
-      // lifts toward the surface, which is exactly when you are looking for home.
-      const hut = ASSETS['hut_full'];
+      // THE SAME DOCK, from the water. This used to put hut_full up here -- a
+      // different building entirely from the house_body the dock scene stands
+      // you in front of, so climbing out teleported you to somewhere you had
+      // never seen. Same art, same proportions, same relative position now:
+      // world x maps to ocean x by (wx - PIER_END), so the house at world 34
+      // lands at ocean -266, exactly where the deck above your head says it is.
+      const hut = ASSETS['house_body'];
       if (hut && hut.width && top > -160) {
-        const hw = 132, hh = hw * hut.height / hut.width;
-        ctx.drawImage(hut, x0 + 12, top - hh + 6, hw, hh);
+        const hw = 86, hh = hw * hut.height / hut.width;
+        ctx.drawImage(hut, x0 + 34, top - hh + 2 * APIX, hw, hh);
       }
+      // and the pier's deck lip, in the dock scene's own plank colours, so the
+      // waterline edge reads as the same boards you walk on up top
+      ctx.fillStyle = '#8a5a34';
+      ctx.fillRect(x0, top - 3, x1 - x0, 4);
+      ctx.fillStyle = '#c9a271';
+      ctx.fillRect(x0, top - 4.5, x1 - x0, 1.5);
     } else {
       // no art: a plain bar at the waterline, so the exit still exists
       ctx.fillStyle = '#8a5a34';
