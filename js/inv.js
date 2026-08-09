@@ -456,6 +456,7 @@ const Inv = {
     custard: 'stock_puffer_p',
     chowder: 'ic_chowder',
     pearlband: 'open_pearl',   // the keepsake: a pearl in an open shell reads as a ring box
+    planter: 'bed_1',
     grill: 'ic_grill',
     rolls: 'ic_rolls',
     skewer: 'ic_skewer',

@@ -216,7 +216,8 @@
         G.flags.kitted2 = true;
         M.Hotbar.give('tool', 'can', 1);
         M.Hotbar.give('tool', 'hoe', 1);
-        Game.toast('Sprout drops off a watering can and a hoe. "For the sand," she says.');
+        G.storage.planter = (G.storage.planter || 0) + 1;
+        Game.toast('Sprout drops off a watering can, a hoe, and one sea planter. "For the sand."');
         Game.save();
       }
       if (G && G.flags && !G.flags.kitted3 && G.goal >= 9 && M.Mining && M.Mining.ensure) {

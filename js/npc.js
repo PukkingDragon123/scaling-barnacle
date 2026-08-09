@@ -27,6 +27,7 @@ const NPC_ITEM_NAMES = {
   stock_puffer_p: 'Puffer Milk', stock_sunfish_p: 'Sunfish Roe',
   stock_hogfish_p: 'Hogfish Cut',
   pearlband: 'Pearl Band',
+  planter: 'Sea Planter',
 };
 
 const NPCs = {

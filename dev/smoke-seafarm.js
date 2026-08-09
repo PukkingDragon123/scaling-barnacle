@@ -118,7 +118,7 @@ async function standOnBed(page, i) {
   if (geo.ys.some(y => y >= 1000)) fails.push('a bed cached the FLOOR_DEEP fallback height — floorAt ran before Ocean.ensure()');
 
   // ---- 4. seeds via the debug path, then into the water ----------------------
-  await page.evaluate(() => { Farm.ensure(); G.farm.seeds.kelp = 3; Game.save(); });
+  await page.evaluate(() => { Farm.ensure(); G.farm.placed = Farm.PLOT_DEF.length; G.farm.seeds.kelp = 3; Game.save(); });
   await page.evaluate(() => { Game.go(Ocean, { from: 'dock' }); });
   await page.waitForFunction(() => Game.scene === Ocean && Game.fadeDir === 0 && Game.fade === 0, null, { timeout: 20000 });
   await page.waitForTimeout(400);

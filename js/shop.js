@@ -77,6 +77,24 @@ const Shop = {
       // Both catalogues are owned by their own module; this just renders them.
       const F = typeof Farm !== 'undefined' ? Farm : null;
       const S = typeof Stock !== 'undefined' ? Stock : null;
+      if (F && F.PLOT_DEF) {
+        const placed = (G.farm && G.farm.placed) || 0;
+        const left = F.PLOT_DEF.length - placed;
+        const held = (G.storage && G.storage.planter) || 0;
+        push({ info: `GARDEN — beds go where you put them (${placed}/${F.PLOT_DEF.length} placed)` });
+        push({
+          gart: 'bed_1', label: 'Sea Planter',
+          sub: 'Set it on the sand by the pier. Seeds go in after.' + (held ? `   (holding ${held})` : ''),
+          btn: left > held ? '$40' : 'ENOUGH', price: 40,
+          act: left > held ? () => {
+            if (G.money < 40) { SND.alarm(); return; }
+            G.money -= 40;
+            G.storage.planter = held + 1;
+            SND.chime();
+            Game.save();
+          } : null,
+        });
+      }
       if (F && F.SEEDS) {
         push({ info: 'SEEDS — plant on a tilled bed, water it daily' });
         for (const sd of F.SEEDS) {

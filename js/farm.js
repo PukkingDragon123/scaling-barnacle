@@ -197,6 +197,12 @@ const Farm = {
       if (!p.crop) { p.dead = false; p.watered = false; p.days = 0; p.dry = 0; p.stage = 0; }
     }
     f.plots.length = this.PLOT_DEF.length;
+    // PLACED PLANTERS. Beds do not exist until a Sea Planter is set down on the
+    // sand -- planting starts with placing now, not with finding furniture that
+    // was always there. Old saves that were already farming keep every bed.
+    let placed = Math.max(0, Math.round(f.placed) || 0);
+    if (placed === 0 && f.plots.some((p) => p.tilled || p.crop)) placed = this.PLOT_DEF.length;
+    f.placed = Math.min(this.PLOT_DEF.length, placed);
     if (!f.seeds || typeof f.seeds !== 'object') f.seeds = {};
     if (!f.crops || typeof f.crops !== 'object') f.crops = {};
     for (const k of this.ORDER) {
@@ -383,7 +389,8 @@ const Farm = {
   available(p) {
     if (!p) return false;
     const def = this.PLOT_DEF[p.i];
-    return !!def && (G.bridge || 1) >= def.b;
+    if (!def || (G.bridge || 1) < def.b) return false;
+    return p.i < (G.farm.placed || 0);          // a bed exists once its planter is down
   },
 
   ready(p) { return !!(p && p.crop && !p.dead && p.stage >= this.STAGES - 1); },
@@ -745,7 +752,18 @@ const Farm = {
     if (Ocean.over || Ocean.leaving) return;
 
     const p = this.atPoint(Ocean.px, Ocean.py);
-    if (!p) return;
+    // no bed here -- but maybe a planter could go here
+    this.reachPlace = null;
+    if (!p) {
+      const slot = this.placeSlot(Ocean.px, Ocean.py);
+      if (slot !== -1) {
+        this.reachPlace = slot;
+        if (Game.fadeDir === 0 && !this._peerOpen() &&
+            !(typeof Hood !== 'undefined' && Hood && Hood._reach) &&
+            Input.p('KeyE')) this.place(slot);
+      }
+      return;
+    }
     this.reach = p;
 
     if (Game.fadeDir !== 0 || this._peerOpen()) return;
@@ -753,6 +771,36 @@ const Farm = {
     // ours (its globalUpdate wrap is inner), so defer rather than double-fire.
     if (typeof Hood !== 'undefined' && Hood && Hood._reach) return;
     if (Input.p('KeyE')) this.act(p.i);
+  },
+
+  // The next unplaced slot within reach, IF he is carrying a planter. Slots fill
+  // left to right, so the garden grows outward from the pier the way a real one
+  // would -- no leapfrogging a gap to plant at the far end.
+  placeSlot(x, y) {
+    if (!this.ensure()) return -1;
+    if (((G.storage && G.storage.planter) || 0) <= 0) return -1;
+    const i = G.farm.placed || 0;
+    const def = this.PLOT_DEF[i];
+    if (!def || (G.bridge || 1) < def.b) return -1;
+    if (Math.abs(def.x - x) >= this.REACH) return -1;
+    const fake = { i, x: def.x };
+    const dy = this.bedY(fake) - y;
+    if (dy > this.REACH_Y || dy < -this.REACH_UNDER) return -1;
+    return i;
+  },
+
+  place(i) {
+    if (!this.ensure()) return false;
+    if (i !== (G.farm.placed || 0)) return false;
+    if (((G.storage && G.storage.planter) || 0) <= 0) return false;
+    G.storage.planter--;
+    G.farm.placed = i + 1;
+    const p = G.farm.plots[i];
+    if (p) { p.popT = 0.45; this._burst && this._burst(p); }
+    if (typeof SND !== 'undefined') SND.chime();
+    if (typeof Game !== 'undefined' && Game.toast) Game.toast('The planter settles into the sand.');
+    Game.save();
+    return true;
   },
 
   // ---- drawing ----------------------------------------------------------------------------
@@ -950,6 +998,22 @@ const Farm = {
 
   // a ring around whatever [E] is pointed at, so the prompt has a referent
   _drawReachMark(ctx) {
+    // holding a planter near the next open slot: a ghost of the bed, breathing
+    if (this.reachPlace !== null && this.reachPlace !== undefined && this.reachPlace !== -1) {
+      const def = this.PLOT_DEF[this.reachPlace];
+      if (def) {
+        const fake = { i: this.reachPlace, x: def.x };
+        const by = this.bedY(fake);
+        const img = ASSETS['bed_1'];
+        ctx.globalAlpha = 0.35 + 0.15 * Math.sin(this.time * 3);
+        if (img && img.width) {
+          const bw = this.BED_W + 12, bh = bw * img.height / img.width;
+          ctx.drawImage(img, def.x - bw / 2, by - bh + 3, bw, bh);
+        }
+        ctx.globalAlpha = 1;
+        text(ctx, '[E] set the planter down', def.x, by - 30, { size: 7, color: '#ffe6b0', align: 'center' });
+      }
+    }
     const p = this.reach;
     if (!p) return;
     const by = this.bedY(p);

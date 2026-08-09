@@ -103,6 +103,7 @@ const TouchUI = {
   layout() {
     const b = [];
     if (!G || !Game.scene || Game.scene === TitleScene) return b;
+    if (typeof IntroScene !== 'undefined' && Game.scene === IntroScene) return b;
     if (Game.helpOpen || Shop.open || Bench.open) return b;
     const sc = Game.scene;
     if (sc === WorldScene || sc === HouseScene) {
@@ -553,8 +554,10 @@ const TitleScene = {
       if (Game.hasSave() && !this.confirm) { this.confirm = true; SND.blip(); return; }
       this.confirm = false;
       Game.newGame();
-      Game.go(WorldScene, {});
-      this._armLetter();
+      // the opening: Otto swims home. It arms the letter itself, and every key
+      // skips it, so the worst case is two seconds of nice water.
+      if (typeof IntroScene !== 'undefined') Game.go(IntroScene, {});
+      else { Game.go(WorldScene, {}); this._armLetter(); }
     } else if (row.key === 'sound') {
       SND.toggleMute();
       SND.blip();
@@ -612,7 +615,7 @@ const TitleScene = {
       }
     }
     // Otto on the planks, waving
-    const oimg = ASSETS.o2_10;
+    const oimg = ASSETS.o4_1;   // o2_10 never existed; the wave was an empty if
     if (oimg && oimg.width) {
       const oh = 26, ow = oh * oimg.width / oimg.height;
       c.drawImage(oimg, W - 52 - ow / 2, 176 - oh + 3 + bob, ow, oh);
@@ -765,11 +768,12 @@ function frame(now) {
     ctx.restore();
   }
   // the HUD goes under the modals — a full-screen panel would collide with it
-  if (G && Game.scene !== TitleScene && !Shop.open && !Bench.open) Game.drawHUD(ctx);
+  const cine = typeof IntroScene !== 'undefined' && Game.scene === IntroScene;
+  if (G && Game.scene !== TitleScene && !cine && !Shop.open && !Bench.open) Game.drawHUD(ctx);
   if (Shop.open) Shop.draw(ctx);
   if (Bench.open) Bench.draw(ctx);
   // the journal and the opening letter sit above the HUD, below the touch pads
-  if (G && Game.scene !== TitleScene && typeof Quests !== 'undefined') Quests.draw(ctx);
+  if (G && Game.scene !== TitleScene && !cine && typeof Quests !== 'undefined') Quests.draw(ctx);
   TouchUI.draw(ctx);
   Game.drawToasts(ctx);
   if (Game.helpOpen) Game.drawHelp(ctx);

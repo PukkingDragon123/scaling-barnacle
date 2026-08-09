@@ -194,11 +194,11 @@ const QUESTS = [
   {
     key: 'planted', from: 'sprout',
     name: 'Something planted',
-    hint: 'Buy a packet at the stall, plant it on a seabed bed',
+    hint: 'Set the planter on the sand, then a packet in it',
     brief: [
-      'Sprout will not stop mentioning it,',
-      'so: buy a packet of seeds, swim down,',
-      'and put something in the sand to wait for.',
+      'Sprout left you a planter and will not stop',
+      'mentioning it. Set it down on the seabed by the',
+      'pier, buy a packet, and give the sand a job.',
     ],
     done: (g) => !!(g.qflags && g.qflags.planted),
     reward: { money: 60 },
