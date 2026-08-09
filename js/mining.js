@@ -767,9 +767,12 @@ const Mining = {
   // to confirm that would be pedantry.
   engage: function (n) {
     if (!n || n.dead) return false;
-    // no pick, no mining -- the rock stays a thing you look at until the story
-    // (or the workbench) puts a tool in your paw
-    if (this.ensure() && !G.mining.hasPick) {
+    // The pick gates the ORES. Timber and loose stone come free by hand -- they
+    // have to, because the first workbench is built FROM them, and the pick that
+    // would otherwise dig them up is a gift that arrives five chapters later.
+    // (Found by playing the story to the end: chapter three was a hard deadlock,
+    // needing driftwood that needed a pick that needed chapter nine.)
+    if (this.ensure() && !G.mining.hasPick && n.kind !== 'wood' && n.kind !== 'stone') {
       this.note = 'you need a pick. Marlow might have a spare.';
       this.noteT = 2.2;
       this.noteX = n.x;
@@ -887,7 +890,7 @@ const Mining = {
     if (typeof text !== 'function' || typeof uiPanel !== 'function') return;
     var bob = Math.sin((this.time || 0) * 4) * 0.8;
     var y = n.y - n.h * 0.5 - 13 + bob;
-    var noPick = this.ensure() && !G.mining.hasPick;
+    var noPick = this.ensure() && !G.mining.hasPick && n.kind !== 'wood' && n.kind !== 'stone';
     var label = noPick ? 'needs a pick' : '[E] mine';
     var tw = textWidth(ctx, label, 7) + 9;
     uiPanel(ctx, n.x - tw * 0.5, y - 10, tw, 13, 0.86, false);

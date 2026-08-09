@@ -119,6 +119,12 @@ const Quests = {
     if (this.open) {
       const total = QUESTS.length;
       if (Input.p('Escape') || Input.p('KeyJ')) { this.open = false; SND.blip(); return; }
+      if (Input.mouse.clicked && this._xRect) {
+        const r = this._xRect, m = Input.mouse;
+        if (m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y && m.y <= r.y + r.h) {
+          this.open = false; SND.click(); return;
+        }
+      }
       if (Input.p('ArrowDown') || Input.p('KeyS')) this.scroll = Math.min(total - this.ROWS, this.scroll + 1);
       if (Input.p('ArrowUp') || Input.p('KeyW')) this.scroll = Math.max(0, this.scroll - 1);
       if (Input.wheelDelta) this.scroll = clamp(this.scroll + Math.sign(Input.wheelDelta), 0, Math.max(0, total - this.ROWS));
@@ -178,12 +184,29 @@ const Quests = {
     c.fillStyle = 'rgba(6,10,16,0.6)';
     c.fillRect(0, 0, W, H);
     const w = 380, h = 216, x = (W - w) / 2, y = (H - h) / 2;
-    uiPanel(c, x, y, w, h, 0.97, true);
-    text(c, "OTTO'S JOURNAL", x + 12, y + 8, { size: 10, color: '#4a3020', shadow: false });
-    const doneN = Math.min(G.goal || 0, QUESTS.length);
-    text(c, `${doneN}/${QUESTS.length} chapters`, x + w - 12, y + 10, { size: 7, color: '#a4805a', align: 'right', shadow: false });
+    uiPanel(c, x, y, w, h, 0.98, true);
 
-    const rowH = 26, listY = y + 24;
+    // header: the star, the name, the count, and a real close box
+    c.fillStyle = '#e8a93c';
+    c.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const ang = -Math.PI / 2 + i * TAU / 5;
+      const ang2 = ang + TAU / 10;
+      c.lineTo(x + 17 + Math.cos(ang) * 4.5, y + 12 + Math.sin(ang) * 4.5);
+      c.lineTo(x + 17 + Math.cos(ang2) * 2, y + 12 + Math.sin(ang2) * 2);
+    }
+    c.closePath(); c.fill();
+    text(c, "OTTO'S JOURNAL", x + 26, y + 8, { size: 10, color: '#4a3020', shadow: false });
+    const doneN = Math.min(G.goal || 0, QUESTS.length);
+    text(c, `${doneN}/${QUESTS.length}`, x + w - 34, y + 10, { size: 7, color: '#a4805a', align: 'right', shadow: false });
+    const xr = { x: x + w - 26, y: y + 6, w: 17, h: 14 };
+    this._xRect = xr;
+    const hovX = Input.mouse.x >= xr.x && Input.mouse.x <= xr.x + xr.w &&
+      Input.mouse.y >= xr.y && Input.mouse.y <= xr.y + xr.h;
+    uiPanel(c, xr.x, xr.y, xr.w, xr.h, hovX ? 1 : 0.85, !hovX);
+    text(c, 'X', xr.x + xr.w / 2, y + 8.5, { size: 8, color: hovX ? '#f6e8c9' : '#5a3a22', align: 'center', shadow: false });
+
+    const rowH = 26, listY = y + 26;
     const cur = G.goal || 0;
     for (let i = 0; i < this.ROWS; i++) {
       const qi = this.scroll + i;
@@ -191,40 +214,76 @@ const Quests = {
       const q = QUESTS[qi];
       const ry = listY + i * rowH;
       const done = qi < cur, active = qi === cur;
-      // chapters you have not reached stay folded -- the story is not a menu
       const known = qi <= cur;
 
       if (active) {
-        c.fillStyle = 'rgba(232,169,60,0.14)';
+        c.fillStyle = 'rgba(232,169,60,0.16)';
         c.fillRect(x + 8, ry - 2, w - 16, rowH - 2);
       }
-      // tick / dot / blank
-      c.fillStyle = done ? '#3f9a58' : (active ? '#e8a93c' : 'rgba(122,74,48,0.35)');
-      if (done) {
-        text(c, 'x', x + 16, ry + 2, { size: 8, color: '#3f9a58', shadow: false });
-      } else {
-        c.fillRect(x + 15, ry + 4, 4, 4);
+
+      // who the chapter is for: a small portrait chip, greyed until reached
+      const art = known && this.GIVER_ART[q.from];
+      if (art && ASSETS[art] && ASSETS[art].width) {
+        c.save();
+        if (!done && !active) c.globalAlpha = 0.4;
+        const img = ASSETS[art];
+        const ph = 18, pw = ph * img.width / img.height;
+        const sm = c.imageSmoothingEnabled;
+        c.imageSmoothingEnabled = false;
+        c.drawImage(img, x + 13 + (18 - pw) / 2, ry + 1, pw, ph);
+        c.imageSmoothingEnabled = sm;
+        c.restore();
+      } else if (known) {
+        // the letter's chapters: a little folded note. Unreached rows get
+        // nothing -- a placeholder chip on a folded chapter reads as a dash.
+        c.fillStyle = '#e9dcb5';
+        c.fillRect(x + 16, ry + 5, 11, 8);
+        c.fillStyle = '#a4805a';
+        c.fillRect(x + 16, ry + 5, 11, 1);
       }
+
+      // state mark: a drawn tick, a star, or a dot
+      if (done) {
+        c.fillStyle = '#3f9a58';
+        c.fillRect(x + 34, ry + 8, 2, 4);
+        c.fillRect(x + 36, ry + 10, 2, 2);
+        c.fillRect(x + 38, ry + 6, 2, 4);
+        c.fillRect(x + 40, ry + 4, 2, 2);
+      } else if (active) {
+        c.fillStyle = '#e8a93c';
+        c.fillRect(x + 36, ry + 5, 4, 4);
+        c.fillRect(x + 34, ry + 7, 8, 1);
+      } else {
+        c.fillStyle = 'rgba(122,74,48,0.35)';
+        c.fillRect(x + 36, ry + 6, 4, 4);
+      }
+
       const nm = known ? q.name : '. . .';
-      text(c, `${qi + 1}. ${nm}`, x + 28, ry, {
+      text(c, nm, x + 48, ry, {
         size: 8, shadow: false,
         color: done ? '#8a7458' : (active ? '#4a3020' : '#a4805a'),
       });
       if (active) {
-        // the current chapter shows its story lines; finished ones just their hint
         const lines = q.brief || [];
         for (let l = 0; l < Math.min(2, lines.length); l++) {
-          text(c, lines[l], x + 34, ry + 9 + l * 7, { size: 6.5, color: '#7a5c3c', shadow: false });
+          text(c, lines[l], x + 54, ry + 9 + l * 7, { size: 6.5, color: '#7a5c3c', shadow: false });
         }
+        // what finishing it brings, when it brings anything countable
+        const rw = q.reward || {};
+        if (rw.money) {
+          text(c, `reward  $${rw.money}`, x + w - 16, ry, { size: 6.5, color: '#3f9a58', align: 'right', shadow: false });
+        }
+        const p = q.prog ? q.prog(G) : null;
+        if (p) text(c, `${p.n}/${p.of}`, x + w - 16, ry + 9, { size: 6.5, color: '#a4805a', align: 'right', shadow: false });
       } else if (done && q.from) {
-        text(c, `for ${this.GIVER_NAMES[q.from] || q.from}`, x + 34, ry + 9, { size: 6.5, color: '#b09878', shadow: false });
+        text(c, `for ${this.GIVER_NAMES[q.from] || q.from}`, x + 54, ry + 9, { size: 6.5, color: '#b09878', shadow: false });
       }
     }
 
-    // scroll hints
     if (this.scroll > 0) text(c, '^', x + w - 14, listY, { size: 8, color: '#a4805a', shadow: false });
     if (this.scroll + this.ROWS < QUESTS.length)
       text(c, 'v', x + w - 14, listY + this.ROWS * rowH - 12, { size: 8, color: '#a4805a', shadow: false });
     text(c, '[J] close   arrows scroll', x + 12, y + h - 12, { size: 6.5, color: '#a4805a', shadow: false });
   },
+
 };

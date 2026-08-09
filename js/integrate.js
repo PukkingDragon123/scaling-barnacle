@@ -211,7 +211,10 @@
         Game.toast("Fintan leaves Almar's old scraper and pry bar on the post.");
         Game.save();
       }
-      if (G && G.flags && !G.flags.kitted2 && G.goal >= 7) {
+      if (G && G.flags && !G.flags.kitted2 && G.goal >= 6) {
+        // >= 6, NOT 7: 'planted' is chapter index 6, and the hoe, can and
+        // planter are FOR that chapter -- an off-by-one here handed them over
+        // after the player had already scraped through it unaided
         // the planting chapter opens: Sprout's gift
         G.flags.kitted2 = true;
         M.Hotbar.give('tool', 'can', 1);
