@@ -602,23 +602,59 @@ const TitleScene = {
     if (oc && oc.width) c.drawImage(oc, 0, 0, W, H);
     else { c.fillStyle = '#3aa7c9'; c.fillRect(0, 0, W, H); }
 
-    // home, out on the right: real pier art with the hut on it, bobbing a shade
-    const bob = Math.sin(this.time * 1.1) * 1.2;
-    const seg = ASSETS.dock_11, hut = ASSETS.hut_full;
+    // HOME, exactly as the game draws it: dock_11 trestles with house_body on
+    // the deck -- the same composition WorldScene stands you in front of, not a
+    // stand-in hut. And Otto LIVES on it: he walks the planks, leaps off the
+    // pier end, splashes, and climbs back for another go. The menu is the game,
+    // idling.
+    const deckY = 176;
+    const seg = ASSETS.dock_11, house = ASSETS.house_body;
     if (seg && seg.width) {
       const sw = 92, sh = sw * seg.height / seg.width;
-      c.drawImage(seg, W - 150, 176 + bob, sw, sh);
-      c.drawImage(seg, W - 62, 176 + bob, sw, sh);
-      if (hut && hut.width) {
-        const hw = 96, hh = hw * hut.height / hut.width;
-        c.drawImage(hut, W - 138, 176 - hh + 8 + bob, hw, hh);
+      c.drawImage(seg, W - 160, deckY, sw, sh);
+      c.drawImage(seg, W - 70, deckY, sw, sh);
+      if (house && house.width) {
+        const hw = 86, hh = hw * house.height / house.width;
+        c.drawImage(house, W - 90, deckY - hh + 2, hw, hh);
       }
     }
-    // Otto on the planks, waving
-    const oimg = ASSETS.o4_1;   // o2_10 never existed; the wave was an empty if
-    if (oimg && oimg.width) {
-      const oh = 26, ow = oh * oimg.width / oimg.height;
-      c.drawImage(oimg, W - 52 - ow / 2, 176 - oh + 3 + bob, ow, oh);
+    // Otto's loop: walk out (0..2.4s) -> leap (2.4..3.1) -> splash -> under
+    const CYC = 6.5;
+    const ot = this.time % CYC;
+    const tipX = W - 154, homeX = W - 44, oy0 = deckY - 10;
+    if (ot < 2.4) {
+      const k = ot / 2.4;
+      const ox = lerp(homeX, tipX, k);
+      const fr = ASSETS[`o4_${4 + (Math.floor(ot * 8) % 4)}`];
+      if (fr && fr.width) {
+        const oh = 24, ow = oh * fr.width / fr.height;
+        c.save(); c.translate(ox, oy0); c.scale(-1, 1);   // walking left
+        c.drawImage(fr, -ow / 2, -oh / 2, ow, oh);
+        c.restore();
+      }
+    } else if (ot < 3.1) {
+      const k = (ot - 2.4) / 0.7;
+      const ox = tipX - k * 34;
+      const oyj = oy0 - 22 * Math.sin(k * Math.PI * 0.85) + k * k * 44;
+      const fr = ASSETS.o4_dive && ASSETS.o4_dive.width ? ASSETS.o4_dive : ASSETS.o4_5;
+      if (fr && fr.width) {
+        const oh = 24, ow = oh * fr.width / fr.height;
+        c.save(); c.translate(ox, oyj); c.scale(-1, 1); c.rotate(-k * 0.9);
+        c.drawImage(fr, -ow / 2, -oh / 2, ow, oh);
+        c.restore();
+      }
+    } else if (ot < 3.9) {
+      // the splash where he went in
+      const k = (ot - 3.1) / 0.8;
+      const sx = tipX - 34, sy = 206;
+      c.globalAlpha = (1 - k) * 0.8;
+      c.fillStyle = '#eafaff';
+      for (let i = 0; i < 5; i++) {
+        const a2 = (i / 4 - 0.5) * 1.6;
+        c.fillRect(sx + Math.sin(a2) * 10 * k - 1, sy - Math.cos(a2) * 12 * k, 2, 2);
+      }
+      c.fillRect(sx - 8 * k, sy - 1, 16 * k, 1.5);
+      c.globalAlpha = 1;
     }
     c.imageSmoothingEnabled = sm;
 

@@ -113,6 +113,7 @@ const QUESTS = [
     key: 'hello', from: 'prof',
     name: 'Say hello at the post',
     hint: 'Someone is waiting on the deck',
+    how: 'walk right with [D], press [E] at the visitor post',
     brief: [
       'The letter said the neighbours were good folk.',
       'One of them is already standing at the visitor post,',
@@ -125,6 +126,7 @@ const QUESTS = [
     key: 'shells', from: 'prof',
     name: 'Five shells for the pantry',
     hint: 'Dive at the piling and scrape',
+    how: '[E] at the piling to dive; hold to scrape, release in the green to pry',
     brief: [
       'Start the way everyone here started:',
       'dive at the piling, scrape five shells loose,',
@@ -138,6 +140,7 @@ const QUESTS = [
     key: 'crate', from: 'prof',
     name: 'Send the first crate',
     hint: 'Sell on the house laptop; the drone pays on pickup',
+    how: '[E] at the house, open the laptop, SELL tab',
     brief: [
       'The laptop in the house reaches the market.',
       'List what you scraped. A drone comes for the crate',
@@ -150,6 +153,7 @@ const QUESTS = [
     key: 'knife', from: 'angler',
     name: 'The knack of the knife',
     hint: 'Crack a shell at the workbench, tap on the centre',
+    how: '[C] opens crafting: make a Shell Workbench, place it, then [E] it',
     brief: [
       'Marlow says a shell opens for timing, not force.',
       'Crack one at the workbench. Wait for the middle.',
@@ -162,6 +166,7 @@ const QUESTS = [
     key: 'bag', from: 'sprout',
     name: 'A bag that fits',
     hint: 'Workbench: rope and driftwood',
+    how: 'hand-craft a Crude Workbench ([C]), place it, craft the Mesh Bag there',
     brief: [
       'Pockets only go so far.',
       'Twist some rope, save some driftwood,',
@@ -174,6 +179,7 @@ const QUESTS = [
     key: 'neighbours', from: 'sprout',
     name: 'Meet the neighbours',
     hint: 'All three of them, wherever you find them',
+    how: 'swim out ([E] at pier edge) -- their houses are east; [E] to talk',
     brief: [
       'Three of them live out on the water.',
       'Sprout grows things, Fintan measures things,',
@@ -195,6 +201,7 @@ const QUESTS = [
     key: 'planted', from: 'sprout',
     name: 'Something planted',
     hint: 'Set the planter on the sand, then a packet in it',
+    how: '[E] on the sand by the pier to set the planter, [E] again to till and plant',
     brief: [
       'Sprout left you a planter and will not stop',
       'mentioning it. Set it down on the seabed by the',
@@ -207,6 +214,7 @@ const QUESTS = [
     key: 'midbed', from: 'prof',
     name: 'Room to grow',
     hint: 'BUILD tab: rate the piling for the mid bed',
+    how: 'laptop, BEDS tab',
     brief: [
       'The shallows are honest work, but the oysters',
       'live a little further down. Rate the piling',
@@ -219,6 +227,7 @@ const QUESTS = [
     key: 'petted', from: 'sprout',
     name: 'A gentle touch',
     hint: 'Swim up slowly and press [T]',
+    how: 'swim close and slow, [E] starts the petting game, [E] again in the heart',
     brief: [
       'The animals out there are curious about you.',
       'Move slowly, let one look you over,',
@@ -231,6 +240,7 @@ const QUESTS = [
     key: 'mined', from: 'angler',
     name: 'Stone and spark',
     hint: 'Take up a rock with [E] and mind the timing bar',
+    how: '[E] a rock to take it up, then time your swings to the bar',
     brief: [
       'The seabed keeps stone, coal and old iron.',
       'Take a rock up with [E] and swing on the beat.',
@@ -244,6 +254,7 @@ const QUESTS = [
     key: 'pearl', from: 'prof',
     name: 'A pearl of your own',
     hint: 'Crack oysters; clean cracks find more',
+    how: 'crack oysters at the shell bench -- clean timing finds more',
     brief: [
       'An irritation, wrapped in patience, until it shines.',
       'Fintan has a whole lecture about it.',
@@ -256,6 +267,7 @@ const QUESTS = [
     key: 'polish', from: 'prof',
     name: 'Polish and pride',
     hint: 'Pearls and abalone gleam at the workbench',
+    how: 'the polish tab at the shell bench: pearls and abalone',
     brief: [
       'Anything worth keeping is worth the buffing wheel.',
       'Polish something precious and see what the',
@@ -268,6 +280,7 @@ const QUESTS = [
     key: 'deepbed', from: 'angler',
     name: 'The deep bed',
     hint: 'BUILD tab; bring a headlamp',
+    how: 'laptop, BEDS tab -- craft a headlamp first',
     brief: [
       'Below the mid bed the light gives up.',
       'Marlow fishes down there and says it is fine,',
@@ -280,6 +293,7 @@ const QUESTS = [
     key: 'still', from: 'angler',
     name: 'Hold steady',
     hint: 'When the water goes quiet, stop moving',
+    how: 'when the water goes quiet, release every key and wait',
     brief: [
       'Sooner or later the gray one drifts past.',
       'Marlow has said it a dozen ways and means it:',
@@ -292,6 +306,7 @@ const QUESTS = [
     key: 'close', from: 'sprout',
     name: 'A heart alongside',
     hint: 'Talk most days; gifts help; eight hearts',
+    how: 'talk daily, gift often ([E] them, then GIFT)',
     brief: [
       'The work fills the days, but not the evenings.',
       'Keep showing up for somebody -- little gifts,',
@@ -308,6 +323,7 @@ const QUESTS = [
     key: 'dream', from: 'letter',
     name: 'The dream: save $5,000',
     hint: 'A manor, a trophy, and a full coin purse',
+    how: 'sell, grow, polish -- the ledger does the rest',
     brief: [
       'The letter never said get rich.',
       'It said fix the place up and sleep well.',

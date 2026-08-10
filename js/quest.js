@@ -264,10 +264,11 @@ const Quests = {
         color: done ? '#8a7458' : (active ? '#4a3020' : '#a4805a'),
       });
       if (active) {
+        // one line of story, then HOW in gold: the journal doubles as the
+        // tutorial, and the how-line carries the actual keys
         const lines = q.brief || [];
-        for (let l = 0; l < Math.min(2, lines.length); l++) {
-          text(c, lines[l], x + 54, ry + 9 + l * 7, { size: 6.5, color: '#7a5c3c', shadow: false });
-        }
+        if (lines.length) text(c, lines[0], x + 54, ry + 9, { size: 6.5, color: '#7a5c3c', shadow: false });
+        if (q.how) text(c, q.how, x + 54, ry + 16, { size: 6.5, color: '#a8742a', shadow: false });
         // what finishing it brings, when it brings anything countable
         const rw = q.reward || {};
         if (rw.money) {
