@@ -5,7 +5,11 @@ const Shop = {
   open: false,
   tab: 0,
   scroll: 0,
-  TABS: ['SELL', 'STALL', 'GEAR', 'BUILD', 'DECOR'],
+  // DECOR is gone and so are the house upgrades -- ClamNet sells what the sea
+  // needs: your hauls out, seeds and stock in, and the piling ratings that open
+  // deeper beds. BEDS keeps BUILD's old index because dev/smoke-net.js (and the
+  // digit keys) address tabs by position.
+  TABS: ['SELL', 'SHOP', 'GEAR', 'BEDS'],
   STALL_TAB: 1,          // Sprout's counter: seeds and livestock
 
   WX: 40, WY: 22, WW: 400, WH: 226,
@@ -168,21 +172,12 @@ const Shop = {
         push({ gart: singleArt[key], label: it.name, sub: G.gear[key] ? 'Owned.' : 'craft at the workbench' });
       }
     } else if (this.tab === 3) {
-      // BUILD
+      // BEDS: the piling ratings, and nothing else -- the house keeps itself
+      push({ info: 'DIVE BEDS -- a rated piling opens a deeper bed' });
       if (G.bridge < 3) {
         const b = G.bridge === 1 ? BUILDS.bridge2 : BUILDS.bridge3;
-        push({ label: b.name, sub: b.desc, btn: `$${b.price}`, price: b.price, act: () => this.buy(b.price, () => { G.bridge++; }, b.name) });
+        push({ gart: 'dock_15', label: b.name, sub: b.desc, btn: `$${b.price}`, price: b.price, act: () => this.buy(b.price, () => { G.bridge++; }, b.name) });
       } else push({ info: 'The piling is rated for the deepest bed there is.' });
-      if (G.house < 3) {
-        const h = G.house === 1 ? BUILDS.house2 : BUILDS.house3;
-        push({ label: h.name, sub: h.desc, btn: `$${h.price}`, price: h.price, act: () => this.buy(h.price, () => { G.house++; }, h.name) });
-      } else push({ info: 'Your house is the finest on the sea.' });
-    } else {
-      // DECOR
-      for (const d of DECOR) {
-        if (G.decor[d.id]) push({ label: d.name, sub: d.desc, btn: 'OWNED' });
-        else push({ label: d.name, sub: d.desc, btn: `$${d.price}`, price: d.price, act: () => this.buy(d.price, () => { G.decor[d.id] = true; }, d.name) });
-      }
     }
     return rows;
   },
@@ -232,48 +227,62 @@ const Shop = {
   },
 
   draw(ctx) {
-    // Same geometry as ever -- update() hit-tests against these exact rects --
-    // but drawn in the game's own parchment-and-wood family. This used to be a
-    // green CRT terminal: charming in isolation, and the single most jarring
-    // screen in the game, because nothing else looks within a decade of it.
-    // The laptop fiction survives in the title line; the pixels now match the
-    // world the laptop sits in.
+    // A WEBSITE, because it is one: ClamNet runs on the house laptop, and the
+    // one screen in the game that is literally a computer should read as a slick
+    // little storefront, not as furniture. Dark glass, cyan accents, an address
+    // bar, product rows with thumbnails and a bright BUY chip -- pixel-art
+    // e-commerce. Every hit rect is IDENTICAL to before (update() owns them);
+    // only the paint changed.
     const X = this.WX, Y = this.WY, WW = this.WW, HH = this.WH;
     const mx = Input.mouse.x, my = Input.mouse.y;
-    ctx.fillStyle = 'rgba(6,10,16,0.6)';
+    const t = Game.time;
+    ctx.fillStyle = 'rgba(4,8,14,0.72)';
     ctx.fillRect(0, 0, W, H);
-    uiPanel(ctx, X, Y, WW, HH, 0.98, true);
 
-    // ---- title bar ----
-    text(ctx, 'CLAMNET', X + 12, Y + 7, { size: 9, color: '#4a3020', shadow: false });
-    text(ctx, "the reef's little market", X + 62, Y + 9, { size: 6.5, color: '#a4805a', shadow: false });
-    // close box, same hit rect as before
+    ctx.fillStyle = '#05070c';
+    ctx.fillRect(X - 2, Y - 2, WW + 4, HH + 4);
+    ctx.fillStyle = '#0d1622';
+    ctx.fillRect(X, Y, WW, HH);
+    ctx.fillStyle = 'rgba(120,220,255,0.05)';
+    ctx.fillRect(X, Y, WW, 34);
+
+    // ---- browser chrome: address bar + wallet + close --------------------------
+    ctx.fillStyle = '#101c2c';
+    ctx.fillRect(X, Y, WW, 20);
+    ctx.fillStyle = '#39e6ff';
+    ctx.fillRect(X, Y + 19.5, WW, PIX * 2);
+    for (let i = 0; i < 4; i++) ctx.fillRect(X + 9 + i * 3, Y + 8 + ((i % 2) ? 2 : 0), 2, 4);
+    text(ctx, 'CLAMNET', X + 24, Y + 5.5, { size: 8.5, color: '#e8fbff', shadow: false });
+    ctx.fillStyle = '#0a1420';
+    ctx.fillRect(X + 78, Y + 4, 150, 12);
+    ctx.fillStyle = 'rgba(57,230,255,0.35)';
+    ctx.fillRect(X + 78, Y + 4, 150, PIX * 2);
+    text(ctx, 'https://reef.net/shop', X + 84, Y + 6.5, { size: 6, color: '#6fa8bc', shadow: false });
+    if (Math.sin(t * 4) > 0) text(ctx, '_', X + 84 + textWidth(ctx, 'https://reef.net/shop', 6), Y + 6.5, { size: 6, color: '#39e6ff', shadow: false });
+    ctx.fillStyle = '#0a1420';
+    ctx.fillRect(X + WW - 96, Y + 4, 62, 12);
+    drawAC(ctx, 'shell_pearl', X + WW - 88, Y + 10, 8);
+    text(ctx, `$${G.money}`, X + WW - 80, Y + 6, { size: 7.5, color: '#7dffb0', shadow: false });
     const cHov = mx > X + WW - 28 && mx < X + WW - 4 && my > Y + 2 && my < Y + 22;
-    uiPanel(ctx, X + WW - 24, Y + 6, 15, 13, cHov ? 1 : 0.85, !cHov);
-    text(ctx, 'X', X + WW - 16.5, Y + 8.5, { size: 8, color: cHov ? '#f6e8c9' : '#5a3a22', align: 'center', shadow: false });
+    ctx.fillStyle = cHov ? '#ff4a5e' : '#16283c';
+    ctx.fillRect(X + WW - 24, Y + 5, 15, 11);
+    text(ctx, 'X', X + WW - 16.5, Y + 6.5, { size: 7.5, color: cHov ? '#fff' : '#7ca2b8', align: 'center', shadow: false });
 
-    // ---- balance ----
-    drawAC(ctx, 'shell_pearl', X + WW - 106, Y + 32, 10);
-    text(ctx, `${G.money}`, X + WW - 98, Y + 27.5, { size: 9, color: '#4a3020', shadow: false });
-
-    // ---- tabs ----
+    // ---- nav tabs (same rects) --------------------------------------------------
     for (let i = 0; i < this.TABS.length; i++) {
       const tx = X + 12 + i * 50, ty = Y + 26, tw = 46, th = 16;
       const sel = i === this.tab;
       const hov = mx > tx && mx < tx + tw && my > ty && my < ty + th;
-      if (sel) {
-        uiPanel(ctx, tx, ty, tw, th, 1, false);
-      } else {
-        ctx.fillStyle = hov ? 'rgba(138,84,52,0.25)' : 'rgba(138,84,52,0.12)';
-        ctx.fillRect(tx + 1, ty + 1, tw - 2, th - 2);
-      }
+      ctx.fillStyle = sel ? '#39e6ff' : (hov ? '#1c3350' : '#142639');
+      ctx.fillRect(tx, ty, tw, th);
+      if (sel) { ctx.fillStyle = '#0d1622'; ctx.fillRect(tx, ty + th - PIX * 2, tw, PIX * 2); }
       text(ctx, this.TABS[i], tx + tw / 2, ty + 4.5, {
         size: 6.5, align: 'center', shadow: false,
-        color: sel ? '#f6e8c9' : (hov ? '#4a3020' : '#8a6a48'),
+        color: sel ? '#06222c' : (hov ? '#c8ecf8' : '#6fa8bc'),
       });
     }
 
-    // ---- rows ----
+    // ---- product rows (same rects) ------------------------------------------------
     const y0 = Y + 48, RH = 25;
     const vis = this._vis || 7;
     for (let i = 0; i < vis; i++) {
@@ -281,32 +290,36 @@ const Shop = {
       if (!r) break;
       const ry = y0 + i * RH;
       if (r.info) {
-        text(ctx, r.info, X + 16, ry + 8, { size: 6.5, color: '#8a6a48', shadow: false });
+        ctx.fillStyle = '#39e6ff';
+        ctx.fillRect(X + 14, ry + 8, 3, 3);
+        text(ctx, r.info.toUpperCase(), X + 21, ry + 6, { size: 6, color: '#6fa8bc', shadow: false });
         continue;
       }
       const btnX = X + WW - 96, btnW = 84, btnH = 18;
       const hov = !!r.act && mx > btnX && mx < btnX + btnW && my > ry + 2 && my < ry + 2 + btnH;
-      // a soft parchment-shade band per row, darker under the pointer
-      ctx.fillStyle = hov ? 'rgba(138,84,52,0.16)' : 'rgba(138,84,52,0.07)';
+      ctx.fillStyle = hov ? '#1a2c42' : '#142334';
       ctx.fillRect(X + 12, ry, WW - 24, RH - 3);
+      ctx.fillStyle = 'rgba(57,230,255,0.18)';
+      ctx.fillRect(X + 12, ry, WW - 24, PIX * 2);
       let lx = X + 20;
       if (r.art || r.gart) {
-        ctx.fillStyle = 'rgba(90,52,30,0.14)';
-        ctx.fillRect(lx - 1, ry + 2, 19, 18);
-        if (r.art) drawItemIcon(ctx, r.art, lx + 9, ry + 11, 15);
-        else drawAC(ctx, r.gart, lx + 9, ry + 11, 15);
+        ctx.fillStyle = '#0d1826';
+        ctx.fillRect(lx - 2, ry + 2, 20, 19);
+        if (r.art) drawItemIcon(ctx, r.art, lx + 8, ry + 11.5, 15);
+        else drawAC(ctx, r.gart, lx + 8, ry + 11.5, 15);
         lx += 24;
       }
-      text(ctx, r.label, lx, ry + 3.5, { size: 8, color: '#4a3020', shadow: false });
-      if (r.sub) text(ctx, r.sub, lx, ry + 13, { size: 6.5, color: '#8a6a48', shadow: false });
+      text(ctx, r.label, lx, ry + 3, { size: 8, color: '#e8fbff', shadow: false });
+      if (r.sub) text(ctx, r.sub, lx, ry + 13, { size: 6.5, color: '#6fa8bc', shadow: false });
       if (r.btn) {
         const canAfford = r.price === undefined || G.money >= r.price;
         const active = !!r.act;
-        if (active) uiPanel(ctx, btnX, ry + 2, btnW, btnH, hov ? 1 : 0.9, !canAfford);
-        else { ctx.fillStyle = 'rgba(138,84,52,0.12)'; ctx.fillRect(btnX, ry + 2, btnW, btnH); }
+        ctx.fillStyle = !active ? '#16283c' : (canAfford ? (hov ? '#7dffcf' : '#39e6ff') : '#3c1c28');
+        ctx.fillRect(btnX, ry + 2, btnW, btnH);
+        if (active && canAfford) { ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(btnX, ry + 2, btnW, PIX * 2); }
         text(ctx, r.btn, btnX + btnW / 2, ry + 7, {
           size: 7.5, align: 'center', shadow: false,
-          color: !active ? '#a4805a' : (canAfford ? '#f6e8c9' : '#b0483c'),
+          color: !active ? '#4a687c' : (canAfford ? '#06222c' : '#ff8a96'),
         });
       }
     }
@@ -314,17 +327,18 @@ const Shop = {
     if (this._rows.length > vis) {
       const maxScroll = this._rows.length - vis;
       const ax = X + WW - 58, ay = y0 + vis * RH + 2;
-      text(ctx, `${this.scroll + 1}-${this.scroll + vis} of ${this._rows.length}`, X + WW / 2, Y + HH - 15,
-        { size: 6.5, color: '#a4805a', align: 'center', shadow: false });
+      text(ctx, `${this.scroll + 1}-${Math.min(this.scroll + vis, this._rows.length)} of ${this._rows.length}`,
+        X + WW / 2, Y + HH - 15, { size: 6.5, color: '#6fa8bc', align: 'center', shadow: false });
       for (let i = 0; i < 2; i++) {
         const canGo = i === 0 ? this.scroll > 0 : this.scroll < maxScroll;
-        uiPanel(ctx, ax + i * 24, ay, 20, 16, canGo ? 0.95 : 0.5, false);
+        ctx.fillStyle = canGo ? '#1c3350' : '#111e2e';
+        ctx.fillRect(ax + i * 24, ay, 20, 16);
         text(ctx, i === 0 ? '^' : 'v', ax + i * 24 + 10, ay + 4, {
           size: 8, align: 'center', shadow: false,
-          color: canGo ? '#f6e8c9' : 'rgba(246,232,201,0.4)' });
+          color: canGo ? '#39e6ff' : '#31506a' });
       }
     }
-    text(ctx, TouchUI.enabled ? 'tap X to close' : '[1-5] tabs   [Esc] close',
-      X + 12, Y + HH - 13, { size: 6, color: '#a4805a', shadow: false });
+    text(ctx, TouchUI.enabled ? 'tap X to close' : '[1-4] tabs   [Esc] close',
+      X + 12, Y + HH - 13, { size: 6, color: '#39536a', shadow: false });
   },
 };

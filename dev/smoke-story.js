@@ -114,6 +114,45 @@ const fails = [];
   console.log(`\nthe story: ${end.goal}/${end.chapters} chapters complete`);
   if (end.goal !== end.chapters) fails.push('the story did not reach the last page');
 
+  // ---- the tame layer, pinned ------------------------------------------------
+  // Feature work in tame.js was once lost to a container rollback BETWEEN
+  // editing and committing, and nothing failed because nothing asserted it.
+  // These are the tripwire: if tame.js regresses, this suite goes red.
+  const tame = await page.evaluate(async () => {
+    const out = {
+      calm: Tame.CALM_SPEED, wakeMax: Tame.WAKE_MAX || 0,
+      hasWakeDraw: typeof Tame._drawWake === 'function',
+      hasPetGame: typeof Tame._drawPetGame === 'function',
+    };
+    Game.go(Ocean);
+    await new Promise(r => setTimeout(r, 1200));
+    const m = Tame.mobs.find(v => v.live);
+    if (m) {
+      m.vx = 80; m.vy = 0; m.alpha = 1;
+      await new Promise(r => setTimeout(r, 900));
+      out.wakeLive = Tame.wake.filter(p => p.t > 0).length;
+      m.trust = 0; m.state = 0; m.ease = 1;
+      Ocean.px = m.x - 10; Ocean.py = m.y;
+      const t0 = m.trust;
+      Tame.pet(m);
+      out.gameStarted = !!Tame.petGame;
+      if (Tame.petGame) {
+        Tame.petGame.sweep = 0.5;
+        Tame.pet();
+        out.gameGraded = !Tame.petGame;
+        out.trustGain = Math.round((m.trust - t0) * 10) / 10;
+      }
+    } else out.noMob = true;
+    return out;
+  });
+  console.log('tame layer:', JSON.stringify(tame));
+  if (tame.calm <= 44) fails.push('CALM_SPEED regressed: animals spook at a normal pace again');
+  if (!tame.hasWakeDraw || tame.wakeMax <= 0) fails.push('the wake system is missing from tame.js');
+  if (!tame.hasPetGame) fails.push('the petting game is missing from tame.js');
+  if (!tame.noMob && !(tame.wakeLive > 0)) fails.push('a moving animal sheds no wake');
+  if (!tame.noMob && !tame.gameStarted) fails.push('[E] did not start the petting game');
+  if (!tame.noMob && tame.gameStarted && !(tame.trustGain > 0)) fails.push('a perfect pet gained no trust');
+
   await b.close();
   if (fails.length) { console.log('\nFAILS:'); fails.forEach(f => console.log('  ' + f)); process.exit(1); }
   console.log('STORY PASS: playable start to finish');

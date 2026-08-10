@@ -1123,15 +1123,49 @@ const Tame = {
     return dx * dx + dy * dy <= this.OFFER_R * this.OFFER_R;
   },
 
+  // ---- the petting game -------------------------------------------------------
+  // [E] on an animal starts a short sweep over its head. [E] again stops it: in
+  // the heart zone the pet lands PERFECT (double trust, a burst of hearts);
+  // anywhere else it is still a pet. Let it run out and the animal gets a plain
+  // pat. Three seconds, no fail state: the game is a chance at a bonus, never a
+  // way to lose the moment.
+  petGame: null,
+
   pet: function (animal) {
+    var res = { ok: false, react: '', delta: 0, trust: 0, tamed: false };
+    if (!this.ensure()) return res;
+    if (this.petGame) {
+      var g = this.petGame;
+      var perfect = Math.abs(g.sweep - 0.5) < 0.14;
+      this.petGame = null;
+      return this._petApply(g.m, perfect ? 2 : 1, perfect);
+    }
+    var m = this._resolve(animal);
+    if (!m) return res;
+    if (this.canPet(m)) {
+      m.state = 3; m.stateT = 3.4;
+      m.vx *= 0.3; m.vy *= 0.3;
+      this.petGame = { m: m, t: 0, sweep: rand(1), dir: 1 };
+      this._snd('blip');
+      res.ok = true;
+      return res;
+    }
+    return this._petRefuse(m, res);
+  },
+
+  _petRefuse: function (m, res) {
+    res.react = m.state === 2 ? this._who(m) + ' will not let you close.' : 'get closer, and slower.';
+    this._snd('blip'); this._say(res.react);
+    return res;
+  },
+
+  _petApply: function (animal, mult, perfect) {
     var res = { ok: false, react: '', delta: 0, trust: 0, tamed: false };
     if (!this.ensure()) return res;
     var m = this._resolve(animal);
     if (!m) return res;
     if (!this.canPet(m)) {
-      res.react = m.state === 2 ? this._who(m) + ' will not let you close.' : 'get closer, and slower.';
-      this._snd('blip'); this._say(res.react);
-      return res;
+      return this._petRefuse(m, res);
     }
     var sp = m.spr;
     res.trust = m.trust;
@@ -1161,7 +1195,7 @@ const Tame = {
     }
 
     var settle = 0.45 + 0.55 * clamp(m.ease, 0, 1);
-    var delta = Math.round(this.PET_GAIN * (1 - sp.wary * 0.5) * settle *
+    var delta = Math.round(this.PET_GAIN * (mult || 1) * (1 - sp.wary * 0.5) * settle *
                            this._buff('tameChance', 1) * 10) / 10;
     m.trust = clamp(m.trust + delta, 0, this.TRUST_MAX);
     m.ease = clamp(m.ease + 0.34, 0, 1);
@@ -1170,9 +1204,9 @@ const Tame = {
     m.state = 3; m.stateT = this.FEED_T;
     m.vx *= 0.3; m.vy *= 0.3;
 
-    this._hearts(m, 2);
-    this._fly(m.x, m.y - sp.box * 0.5, '+' + delta + ' trust', 0);
-    this._snd('pop', 1.05);
+    this._hearts(m, perfect ? 5 : 2);
+    this._fly(m.x, m.y - sp.box * 0.5, (perfect ? 'perfect!  ' : '') + '+' + delta + ' trust', 0);
+    this._snd(perfect ? 'chime' : 'pop', 1.05);
     this._buzz(10);
     this._xp('taming', 2);
     res.ok = true;
@@ -1692,6 +1726,24 @@ const Tame = {
     this._ai(dt, px, py);
     this._updatePuffs(dt);
     this._updateWake(dt);
+
+    // the petting sweep: ping-pong needle, three-second patience, and it lets go
+    // if the animal breaks or the player drifts off
+    if (this.petGame) {
+      var pg = this.petGame;
+      pg.t += dt;
+      pg.sweep += pg.dir * dt * 1.5;
+      if (pg.sweep > 1) { pg.sweep = 1; pg.dir = -1; }
+      if (pg.sweep < 0) { pg.sweep = 0; pg.dir = 1; }
+      var pm = pg.m;
+      var gone = !pm || !pm.live || pm.state === 2;
+      if (!gone && typeof Ocean !== 'undefined') {
+        var pdx = pm.x - Ocean.px, pdy = pm.y - Ocean.py;
+        gone = (pdx * pdx + pdy * pdy) > 60 * 60;
+      }
+      if (gone) this.petGame = null;
+      else if (pg.t >= 3) { this.petGame = null; this._petApply(pm, 1, false); }
+    }
     this._updateFlys(dt);
     this._pickOfferable(px, py);
     this._verbInput();
@@ -2058,6 +2110,7 @@ const Tame = {
     }
     this._drawPuffs(ctx, camX, camY);
     this._drawTags(ctx, camX, camY);
+    this._drawPetGame(ctx);
     this._drawFlys(ctx, camX, camY);
   },
 
@@ -2108,6 +2161,32 @@ const Tame = {
     if (alpha < 1) ctx.globalAlpha = clamp(alpha, 0, 1);
     ctx.drawImage(img, -w / 2, -h / 2, w, h);
     ctx.restore();
+  },
+
+  // The petting sweep, over the animal's head: dark track, a heart-red centre
+  // zone, a bright needle. Opaque like the mining bar, for the same reason -- a
+  // timing game you cannot read is a coin flip.
+  _drawPetGame: function (ctx) {
+    var g = this.petGame;
+    if (!g || !g.m || !g.m.live) return;
+    var m = g.m;
+    var w = 46, h = 6;
+    var x = m.x - w / 2, y = m.y - (m.spr ? m.spr.box * 0.5 : 14) - 16;
+    ctx.fillStyle = '#0a1018';
+    ctx.fillRect(x - 1.5, y - 1.5, w + 3, h + 3);
+    ctx.fillStyle = '#3d4a66';
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#e8637a';
+    ctx.fillRect(x + w * 0.36, y, w * 0.28, h);
+    ctx.fillStyle = '#ffd4dc';
+    ctx.fillRect(x + w * 0.47, y, w * 0.06, h);
+    var nx = x + g.sweep * w;
+    ctx.fillStyle = '#0a1018';
+    ctx.fillRect(nx - 1.4, y - 2.5, 2.8, h + 5);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(nx - 0.7, y - 2, 1.4, h + 4);
+    drawHeart(ctx, x + w / 2 - 3.5, y - 10, 'full');
+    text(ctx, '[E]', x + w + 5, y - 1, { size: 6, color: '#ffe6b0', shadow: false });
   },
 
   // Two fillStyle writes for the whole bubble field; alpha varies per particle.
