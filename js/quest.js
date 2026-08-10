@@ -205,8 +205,15 @@ const Quests = {
       Input.mouse.y >= xr.y && Input.mouse.y <= xr.y + xr.h;
     uiPanel(c, xr.x, xr.y, xr.w, xr.h, hovX ? 1 : 0.85, !hovX);
     text(c, 'X', xr.x + xr.w / 2, y + 8.5, { size: 8, color: hovX ? '#f6e8c9' : '#5a3a22', align: 'center', shadow: false });
+    // a rope divider under the header: two-tone dashes, the pier's own line
+    for (let dx2 = x + 12; dx2 < x + w - 12; dx2 += 6) {
+      c.fillStyle = '#b08a5c';
+      c.fillRect(dx2, y + 22, 4, 1.5);
+      c.fillStyle = '#8a6a44';
+      c.fillRect(dx2 + 1, y + 23.5, 4, 1);
+    }
 
-    const rowH = 26, listY = y + 26;
+    const rowH = 26, listY = y + 29;
     const cur = G.goal || 0;
     for (let i = 0; i < this.ROWS; i++) {
       const qi = this.scroll + i;
@@ -221,41 +228,26 @@ const Quests = {
         c.fillRect(x + 8, ry - 2, w - 16, rowH - 2);
       }
 
-      // who the chapter is for: a small portrait chip, greyed until reached
-      const art = known && this.GIVER_ART[q.from];
-      if (art && ASSETS[art] && ASSETS[art].width) {
-        c.save();
-        if (!done && !active) c.globalAlpha = 0.4;
-        const img = ASSETS[art];
-        const ph = 18, pw = ph * img.width / img.height;
-        const sm = c.imageSmoothingEnabled;
-        c.imageSmoothingEnabled = false;
-        c.drawImage(img, x + 13 + (18 - pw) / 2, ry + 1, pw, ph);
-        c.imageSmoothingEnabled = sm;
-        c.restore();
-      } else if (known) {
-        // the letter's chapters: a little folded note. Unreached rows get
-        // nothing -- a placeholder chip on a folded chapter reads as a dash.
-        c.fillStyle = '#e9dcb5';
-        c.fillRect(x + 16, ry + 5, 11, 8);
-        c.fillStyle = '#a4805a';
-        c.fillRect(x + 16, ry + 5, 11, 1);
-      }
+      // the chapter number in a small stamp -- the portraits that used to sit
+      // here made every row read as a chat log instead of a quest list
+      c.fillStyle = active ? 'rgba(232,169,60,0.28)' : 'rgba(122,74,48,0.14)';
+      c.fillRect(x + 14, ry + 1, 15, 12);
+      text(c, String(qi + 1), x + 21.5, ry + 2.5, {
+        size: 7, align: 'center', shadow: false,
+        color: done ? '#8a7458' : (active ? '#7a4c14' : '#a4805a'),
+      });
 
       // state mark: a drawn tick, a star, or a dot
       if (done) {
         c.fillStyle = '#3f9a58';
-        c.fillRect(x + 34, ry + 8, 2, 4);
-        c.fillRect(x + 36, ry + 10, 2, 2);
-        c.fillRect(x + 38, ry + 6, 2, 4);
-        c.fillRect(x + 40, ry + 4, 2, 2);
+        c.fillRect(x + 34, ry + 6, 2, 4);
+        c.fillRect(x + 36, ry + 8, 2, 2);
+        c.fillRect(x + 38, ry + 4, 2, 4);
+        c.fillRect(x + 40, ry + 2, 2, 2);
       } else if (active) {
         c.fillStyle = '#e8a93c';
-        c.fillRect(x + 36, ry + 5, 4, 4);
-        c.fillRect(x + 34, ry + 7, 8, 1);
-      } else {
-        c.fillStyle = 'rgba(122,74,48,0.35)';
-        c.fillRect(x + 36, ry + 6, 4, 4);
+        c.fillRect(x + 36, ry + 3, 4, 4);
+        c.fillRect(x + 34, ry + 5, 8, 1);
       }
 
       const nm = known ? q.name : '. . .';

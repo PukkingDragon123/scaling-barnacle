@@ -110,6 +110,9 @@ const TouchUI = {
       b.push({ x: 8, y: H - 52, w: 44, h: 44, key: 'ArrowLeft', icon: 'left' });
       b.push({ x: 58, y: H - 52, w: 44, h: 44, key: 'ArrowRight', icon: 'right' });
       b.push({ x: W - 52, y: H - 52, w: 44, h: 44, tap: 'KeyE', icon: 'act' });
+      // crafting on a pad: [C] had no touch control at all, so the whole
+      // workbench chain was keyboard-only on a phone
+      b.push({ x: W - 52, y: H - 102, w: 44, h: 44, tap: 'KeyC', icon: 'craft' });
       b.push({ x: W - 26, y: 24, w: 20, h: 18, tap: 'KeyH', icon: 'help' });
     } else if (sc === DiveScene) {
       b.push({ x: W - 46, y: H - 122, w: 40, h: 40, key: 'KeyW', icon: 'up' });
@@ -149,6 +152,11 @@ const TouchUI = {
         c.beginPath();
         c.moveTo(cx, cy + 6 * d); c.lineTo(cx - 7, cy - 4 * d); c.lineTo(cx + 7, cy - 4 * d);
         c.closePath(); c.fill();
+      } else if (b.icon === 'craft') {
+        // a hammer: head, claw, handle -- fillRects on the pad's own grid
+        c.fillRect(cx - 7, cy - 6, 10, 5);
+        c.fillRect(cx + 3, cy - 5, 3, 3);
+        c.fillRect(cx - 2, cy - 1, 3, 9);
       } else if (b.icon === 'act') {
         // paw print
         c.beginPath(); c.ellipse(cx, cy + 3, 6, 4.5, 0, 0, TAU); c.fill();
