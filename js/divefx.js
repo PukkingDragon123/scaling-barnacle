@@ -322,7 +322,10 @@ const DiveFX = {
         const front = rng() < 0.42;
         plants.push({
           art,
-          x: rng() < 0.5 ? rand(6, 108) : rand(W - 118, W - 8),
+          // ROOTED ON THE PILING, not hanging in open water: growth clings to
+          // the pole's two edges (the wall is at WALL_X-14 .. +194), leaning out
+          x: rng() < 0.5 ? (typeof DiveScene !== 'undefined' ? DiveScene.WALL_X - 14 : 130) + rand(-4, 8)
+                         : (typeof DiveScene !== 'undefined' ? DiveScene.WALL_X + 194 : 330) + rand(-8, 4),
           y: y + rng() * 26,
           h: (front ? 26 : 15) + rng() * (front ? 22 : 14),
           front,

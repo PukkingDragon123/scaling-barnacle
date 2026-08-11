@@ -213,7 +213,9 @@ const Ocean = {
   // now disables smoothing for every layer inside it (see draw()). Nearest sampling
   // at 2.5x is crisp with slightly uneven texel widths, which at this size does not
   // read; a bilinear tap at 2.5x would soften the entire scene.
-  ZOOM: 1.25,
+  // back to 1.5 by request: tighter on Otto, and it is the crisp setting (a
+  // sprite texel lands on exactly 3 device pixels)
+  ZOOM: 1.5,
   // How tall the painted sand strip stands, in logical units: SAND_TILE_W scaled by
   // the strip art's aspect (1447x83). The camera's floor cap is measured off this,
   // so the two cannot drift apart.
@@ -783,9 +785,9 @@ const Ocean = {
     // odd one -- a near-plane that only exists in busy places reads as a bug.
     const fg = [];
     {
-      const nf = kind === 'thicket' ? 4 + ((rng() * 3) | 0)
-        : kind === 'garden' ? 2 + ((rng() * 3) | 0)
-        : rng() < 0.4 ? 1 : 0;
+      const nf = kind === 'thicket' ? 2 + ((rng() * 2) | 0)
+        : kind === 'garden' ? 1 + ((rng() * 2) | 0)
+        : rng() < 0.25 ? 1 : 0;
       for (let i = 0; i < nf; i++) {
         fg.push({
           x: x0 + rng() * this.CW,
@@ -895,8 +897,11 @@ const Ocean = {
     // LUSH. Densities roughly doubled across the board: the sand should read as
     // a meadow with clearings, not a desert with the odd plant. Sparse columns
     // stay genuinely sparse so the busy ones have something to contrast with.
-    const dens = kind === 'garden' ? 2.1 : kind === 'thicket' ? 1.9
-      : kind === 'ridge' ? 0.9 : kind === 'rubble' ? 0.85 : 0.4;
+    // Two zooms tighter than when these were tuned, the doubled densities read
+    // as clutter -- every screen was FULL of plants. Trimmed back toward gardens
+    // with clearings; the lush mix itself is unchanged.
+    const dens = kind === 'garden' ? 1.3 : kind === 'thicket' ? 1.15
+      : kind === 'ridge' ? 0.6 : kind === 'rubble' ? 0.55 : 0.3;
     const shellCh = kind === 'rubble' ? 0.3 : kind === 'sparse' ? 0.2 : 0.1;
     const nBack = Math.round((5 + rng() * 8) * dens);
     const nFront = Math.round((3 + rng() * 4) * dens);

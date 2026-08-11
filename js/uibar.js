@@ -25,11 +25,15 @@ const UIBar = {
   _wasCraftOpen: false,
 
   buttons() {
-    const x1 = W - 6 - this.BW;                    // satchel, outer
-    const x0 = x1 - this.GAP - this.BW;            // trophy, inner
+    // three now: skills, CRAFTING, bag -- crafting sits with its siblings on the
+    // rail instead of hiding behind a key nobody is told about
+    const x2 = W - 6 - this.BW;
+    const x1 = x2 - this.GAP - this.BW;
+    const x0 = x1 - this.GAP - this.BW;
     return [
       { x: x0, y: this.BY, key: 'skills' },
-      { x: x1, y: this.BY, key: 'bag' },
+      { x: x1, y: this.BY, key: 'craft' },
+      { x: x2, y: this.BY, key: 'bag' },
     ];
   },
 
@@ -186,6 +190,7 @@ const UIBar = {
       if (m.x < b.x || m.x > b.x + this.BW || m.y < b.y || m.y > b.y + this.BH) continue;
       Input.mouse.clicked = false;                 // consumed: the scene must not also act
       if (b.key === 'skills') { if (typeof Skills !== 'undefined' && Skills.openUI) Skills.openUI(); }
+      else if (b.key === 'craft') { Input.pressed.add('KeyC'); }   // the gate listens for [C]
       else if (typeof Inv !== 'undefined' && Inv.toggleBag) Inv.toggleBag();
       if (typeof SND !== 'undefined') SND.click();
       return;
@@ -203,18 +208,29 @@ const UIBar = {
     for (const b of this.buttons()) {
       const hot = !TouchUI.enabled && m.x >= b.x && m.x <= b.x + this.BW && m.y >= b.y && m.y <= b.y + this.BH;
       const y = b.y - (hot ? 1 : 0);
-      c.fillStyle = 'rgba(16,22,34,0.85)';
-      c.fillRect(b.x, y, this.BW, this.BH);
-      c.strokeStyle = hot ? '#ffd66e' : '#6a5030';
-      c.lineWidth = PIX * 2;
-      c.strokeRect(b.x + PIX, y + PIX, this.BW - PIX * 2, this.BH - PIX * 2);
-      const si = b.key === 'skills' ? 0 : 1;
-      c.drawImage(cv, si * S * q, 0, S * q, S * q, b.x + 3, y + 3, S, S);
+      // the UPLOADED button art -- skill tree, anvil, backpack -- frames baked in,
+      // so no coded box behind them; hover lifts and brightens
+      const art = b.key === 'skills' ? 'ui_skills' : (b.key === 'craft' ? 'ui_craft' : 'ui_bag');
+      const img = ASSETS[art];
+      if (img && img.width) {
+        const sm2 = c.imageSmoothingEnabled;
+        c.imageSmoothingEnabled = false;
+        if (hot) { c.globalAlpha = 1; } else c.globalAlpha = 0.92;
+        c.drawImage(img, b.x, y, this.BW, this.BH);
+        c.globalAlpha = 1;
+        c.imageSmoothingEnabled = sm2;
+      } else {
+        // fallback: the old coded pair (craft borrows the bag cell)
+        c.fillStyle = 'rgba(16,22,34,0.85)';
+        c.fillRect(b.x, y, this.BW, this.BH);
+        const si = b.key === 'skills' ? 0 : 1;
+        c.drawImage(cv, si * S * q, 0, S * q, S * q, b.x + 3, y + 3, S, S);
+      }
 
       // the badge: what is waiting inside. A SQUARE tag on the pixel grid, not a
       // pulsing anti-aliased circle -- the circle was the one piece of web
       // chrome left on the HUD and it read as a notification dot from a phone.
-      const n = b.key === 'skills' ? pts : fresh;
+      const n = b.key === 'skills' ? pts : (b.key === 'bag' ? fresh : 0);
       if (n > 0) {
         const bw = 9, bh = 9;
         const bx = b.x + this.BW - bw + 2, by = y - 2;

@@ -31,16 +31,17 @@ const Quests = {
   LETTER: [
     'Otto --',
     '',
-    'The pier is yours now. Mind the third plank; it complains.',
+    'Your uncle Almar has left the pier to you. It stands',
+    'a little east of my study, and it stands empty, which',
+    'suits neither of us.',
     '',
-    'The sea out front is generous if you are patient with it,',
-    'and the neighbours are good folk, even the one who',
-    'pretends not to be.',
+    'Come and see it. The sea out front is generous if you',
+    'are patient with it, and the neighbours are good folk,',
+    'even the one who pretends not to be.',
     '',
-    'Scrape a few shells. Fix the place up. Sleep when the',
-    'light goes soft. That is the whole of it, really.',
+    'I will be at the visitor post most mornings.',
     '',
-    '                                        -- Uncle Almar',
+    '                                -- Prof. F. Bellwether',
   ],
 
   GIVER_NAMES: { prof: 'Fintan', sprout: 'Sprout', angler: 'Marlow', farmer: 'Sprout', letter: 'the letter' },
@@ -88,10 +89,10 @@ const Quests = {
       G.money += r.money;
       if (typeof SND !== 'undefined') SND.chime();
     }
-    if (typeof Game !== 'undefined' && Game.toast) {
-      Game.toast(`journal: "${q.name}" -- done.` + (r.money ? `  +$${r.money}` : ''));
-      if (r.note) Game.toast(r.note);
-    }
+    // the cinematic beat: letterbox bars slide in, the chapter's name gets its
+    // tick, the reward reads under it, and the frame hands back. ~2.4s, skippable
+    // by anything.
+    this._card = { name: q.name, money: r.money || 0, note: r.note || '', t: 2.4 };
     this._pulse = 3;
   },
 
@@ -99,6 +100,11 @@ const Quests = {
   update(dt) {
     if (!this.ensure()) return;
     if (this._pulse > 0) this._pulse -= dt;
+    if (this._card) {
+      this._card.t -= dt;
+      if (this._card.t <= 0 || (typeof Input !== 'undefined' &&
+          (Input.p('KeyE') || Input.p('Escape') || Input.mouse.clicked))) this._card = null;
+    }
 
     // the letter owns every key while it is up; folding it away starts chapter one
     if (this.letter) {
@@ -125,7 +131,7 @@ const Quests = {
           this.open = false; SND.click(); return;
         }
       }
-      if (Input.p('ArrowDown') || Input.p('KeyS')) this.scroll = Math.min(total - this.ROWS, this.scroll + 1);
+      if (Input.p('ArrowDown') || Input.p('KeyS')) this.scroll = Math.min(Math.max(0, Math.min(G.goal || 0, total - 1) - this.ROWS + 1), this.scroll + 1);
       if (Input.p('ArrowUp') || Input.p('KeyW')) this.scroll = Math.max(0, this.scroll - 1);
       if (Input.wheelDelta) this.scroll = clamp(this.scroll + Math.sign(Input.wheelDelta), 0, Math.max(0, total - this.ROWS));
       return;
@@ -153,7 +159,32 @@ const Quests = {
   // ---- drawing -------------------------------------------------------------------
   draw(c) {
     if (this.letter) { this._drawLetter(c); return; }
-    if (this.open) this._drawJournal(c);
+    if (this.open) { this._drawJournal(c); return; }
+    if (this._card) this._drawCard(c);
+  },
+
+  // the letterboxed chapter card: bars ease in, the name and its tick sit centre
+  _drawCard(c) {
+    const k = this._card.t;
+    const inK = clamp((2.4 - k) / 0.3, 0, 1);
+    const outK = clamp(k / 0.4, 0, 1);
+    const a = Math.min(inK, outK);
+    const bar = 22 * a;
+    c.fillStyle = 'rgba(8,8,10,0.92)';
+    c.fillRect(0, 0, W, bar);
+    c.fillRect(0, H - bar, W, bar);
+    c.globalAlpha = a;
+    const cy = H / 2 - 70;
+    // the tick, big, drawn in pixels
+    c.fillStyle = '#3f9a58';
+    c.fillRect(W / 2 - 12, cy + 5, 3, 5);
+    c.fillRect(W / 2 - 9, cy + 8, 3, 3);
+    c.fillRect(W / 2 - 6, cy + 2, 3, 6);
+    c.fillRect(W / 2 - 3, cy - 2, 3, 4);
+    text(c, this._card.name, W / 2 + 10, cy, { size: 11, color: '#ffe6b0', align: 'left' });
+    if (this._card.money) text(c, `+$${this._card.money}`, W / 2, cy + 16, { size: 8, color: '#7dffb0', align: 'center' });
+    if (this._card.note) text(c, this._card.note, W / 2, cy + 27, { size: 7, color: '#c8d8dc', align: 'center' });
+    c.globalAlpha = 1;
   },
 
   _drawLetter(c) {
@@ -197,8 +228,7 @@ const Quests = {
     }
     c.closePath(); c.fill();
     text(c, "OTTO'S JOURNAL", x + 26, y + 8, { size: 10, color: '#4a3020', shadow: false });
-    const doneN = Math.min(G.goal || 0, QUESTS.length);
-    text(c, `${doneN}/${QUESTS.length}`, x + w - 34, y + 10, { size: 7, color: '#a4805a', align: 'right', shadow: false });
+    // no total: a notebook does not know how long the story is going to be
     const xr = { x: x + w - 26, y: y + 6, w: 17, h: 14 };
     this._xRect = xr;
     const hovX = Input.mouse.x >= xr.x && Input.mouse.x <= xr.x + xr.w &&
@@ -218,6 +248,9 @@ const Quests = {
     for (let i = 0; i < this.ROWS; i++) {
       const qi = this.scroll + i;
       if (qi >= QUESTS.length) break;
+      // a notebook does not list what has not happened yet: nothing is written
+      // past the line you are on
+      if (qi > cur) break;
       const q = QUESTS[qi];
       const ry = listY + i * rowH;
       const done = qi < cur, active = qi === cur;
@@ -228,30 +261,23 @@ const Quests = {
         c.fillRect(x + 8, ry - 2, w - 16, rowH - 2);
       }
 
-      // the chapter number in a small stamp -- the portraits that used to sit
-      // here made every row read as a chat log instead of a quest list
-      c.fillStyle = active ? 'rgba(232,169,60,0.28)' : 'rgba(122,74,48,0.14)';
-      c.fillRect(x + 14, ry + 1, 15, 12);
-      text(c, String(qi + 1), x + 21.5, ry + 2.5, {
-        size: 7, align: 'center', shadow: false,
-        color: done ? '#8a7458' : (active ? '#7a4c14' : '#a4805a'),
-      });
-
-      // state mark: a drawn tick, a star, or a dot
+      // a CHECKBOX, because this page is a to-do list: inked square, ticked in
+      // green when the chapter is done
+      c.fillStyle = '#5a3c22';
+      c.fillRect(x + 15, ry + 1, 11, 11);
+      c.fillStyle = '#f2dfae';
+      c.fillRect(x + 16.5, ry + 2.5, 8, 8);
       if (done) {
         c.fillStyle = '#3f9a58';
-        c.fillRect(x + 34, ry + 6, 2, 4);
-        c.fillRect(x + 36, ry + 8, 2, 2);
-        c.fillRect(x + 38, ry + 4, 2, 4);
-        c.fillRect(x + 40, ry + 2, 2, 2);
-      } else if (active) {
-        c.fillStyle = '#e8a93c';
-        c.fillRect(x + 36, ry + 3, 4, 4);
-        c.fillRect(x + 34, ry + 5, 8, 1);
+        c.fillRect(x + 17.5, ry + 6, 2, 3);
+        c.fillRect(x + 19.5, ry + 7.5, 2, 2);
+        c.fillRect(x + 21.5, ry + 4.5, 2, 4);
+        c.fillRect(x + 23, ry + 3, 1.5, 2);
       }
 
+      // state mark: a drawn tick, a star, or a dot
       const nm = known ? q.name : '. . .';
-      text(c, nm, x + 48, ry, {
+      text(c, nm, x + 34, ry, {
         size: 8, shadow: false,
         color: done ? '#8a7458' : (active ? '#4a3020' : '#a4805a'),
       });
@@ -259,8 +285,8 @@ const Quests = {
         // one line of story, then HOW in gold: the journal doubles as the
         // tutorial, and the how-line carries the actual keys
         const lines = q.brief || [];
-        if (lines.length) text(c, lines[0], x + 54, ry + 9, { size: 6.5, color: '#7a5c3c', shadow: false });
-        if (q.how) text(c, q.how, x + 54, ry + 16, { size: 6.5, color: '#a8742a', shadow: false });
+        if (lines.length) text(c, lines[0], x + 40, ry + 9, { size: 6.5, color: '#7a5c3c', shadow: false });
+        if (q.how) text(c, q.how, x + 40, ry + 16, { size: 6.5, color: '#a8742a', shadow: false });
         // what finishing it brings, when it brings anything countable
         const rw = q.reward || {};
         if (rw.money) {
@@ -269,7 +295,7 @@ const Quests = {
         const p = q.prog ? q.prog(G) : null;
         if (p) text(c, `${p.n}/${p.of}`, x + w - 16, ry + 9, { size: 6.5, color: '#a4805a', align: 'right', shadow: false });
       } else if (done && q.from) {
-        text(c, `for ${this.GIVER_NAMES[q.from] || q.from}`, x + 54, ry + 9, { size: 6.5, color: '#b09878', shadow: false });
+        text(c, `for ${this.GIVER_NAMES[q.from] || q.from}`, x + 40, ry + 9, { size: 6.5, color: '#b09878', shadow: false });
       }
     }
 

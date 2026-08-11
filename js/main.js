@@ -454,20 +454,12 @@ const Game = {
     }
   },
 
-  drawToasts(c) {
-    // a single chip, low and out of the play field's way; it slides up as it
-    // arrives and fades as it goes
-    const t = this.toasts[0];
-    if (!t) return;
-    const a = clamp(t.t / 0.4, 0, 1);
-    const rise = (1 - clamp((2.6 - t.t) / 0.25, 0, 1)) * 4;
-    c.globalAlpha = a;
-    const w = textWidth(c, t.msg, 7) + 16;
-    // seated ABOVE the hotbar row, which owns the bottom strip of the screen
-    uiPanel(c, W / 2 - w / 2, H - 36 + rise, w, 14, 0.96, true);
-    text(c, t.msg, W / 2, H - 32.5 + rise, { size: 7, color: '#4a3020', align: 'center', shadow: false });
-    c.globalAlpha = 1;
-  },
+  // Toasts no longer render. The queue machinery stays (systems still call
+  // Game.toast and some tests read it) but nothing is painted: the tracker, the
+  // journal, the prompts and the world itself carry the information now, and
+  // the little bottom chip was the last notification left to remove.
+  drawToasts(c) {},
+
 
   drawHelp(c) {
     c.fillStyle = 'rgba(4,7,11,0.8)';

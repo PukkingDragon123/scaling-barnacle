@@ -252,8 +252,8 @@ const WorldScene = {
     if (walking) {
       frameN = Math.floor(this.walkT * 0.8) % OTTER_WALK.length;
       const ph = this.walkT * 2.2;
-      hop = Math.abs(Math.sin(ph)) * 1.6;
-      sqy = 1 + Math.cos(ph * 2) * 0.045;
+      hop = Math.abs(Math.sin(ph)) * 2.3;
+      sqy = 1 + Math.cos(ph * 2) * 0.07;
       sqx = 1 - (sqy - 1) * 0.85;
     } else {
       sqy = 1 + Math.sin(this.time * 2.1) * 0.02;
