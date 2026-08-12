@@ -16,7 +16,8 @@
   // Resolve them through a try so a missing module is just undefined.
   const M = {};
   for (const n of ['Farm', 'Hotbar', 'NPCs', 'Craft', 'Battle', 'Stock', 'DiveFX',
-                 'Ocean', 'Mining', 'Inv', 'Skills', 'Tame', 'Hood', 'MapChart', 'Quests']) {
+                 'Ocean', 'Mining', 'Inv', 'Skills', 'Tame', 'Hood', 'MapChart', 'Quests',
+                 'Side']) {
     try { M[n] = eval(n); } catch (e) { M[n] = undefined; }
   }
 
@@ -96,6 +97,11 @@
   // the journal's progress hooks (planting, petting) wrap Farm and Tame here,
   // after every module exists
   if (M.Quests && M.Quests.install) M.Quests.install();
+  // and the errand board, which hooks Tame._petApply and rides globalUpdate.
+  // AFTER Quests, so the pet counter sits inside the journal's own wrap rather
+  // than under it -- the order only matters for who counts first, but keeping
+  // it deterministic is why the smoke tests can assert on it.
+  if (M.Side && M.Side.install) M.Side.install();
 
   // ---- the deck's interaction list ---------------------------------------------
   // Every system that puts something on the dock contributes spots; the world
@@ -121,7 +127,7 @@
     worldDraw(ctx);
     const cam = this.camX;
     ctx.save();
-    ctx.translate(-cam, 0);
+    worldSpace(ctx, cam);          // the pier's own scale and camera -- see js/world.js
     if (M.Stock && M.Stock.draw) M.Stock.draw(ctx, cam);
     if (M.NPCs && M.NPCs.drawWorld) M.NPCs.drawWorld(ctx, cam);
     ctx.restore();
@@ -344,7 +350,7 @@
       WorldScene.draw = function (ctx) {
         wd2(ctx);
         ctx.save();
-        ctx.translate(-this.camX, 0);
+        worldSpace(ctx, this.camX);
         M.Tame.drawWorld(ctx, this.camX);
         ctx.restore();
       };

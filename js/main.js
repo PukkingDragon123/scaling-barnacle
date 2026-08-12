@@ -453,6 +453,35 @@ const Game = {
         text(c, `${p.n}/${p.of}`, bx + bw / 2, by2 - 0.5, { size: 5.5, color: '#f6e8c9', align: 'center', shadow: false });
       }
       c.restore();
+
+      // ---- and under it, the ERRANDS strip. One line, and it names the errand
+      // rather than counting them, because "3 errands" tells you nothing and
+      // "Ten blades of kelp 6/10" tells you where to swim. A finished one takes
+      // the slot and turns green: that is the cue to go and hand it over.
+      if (typeof Side !== 'undefined' && Side && Side.ensure()) {
+        const act = Side.active();
+        if (act.length) {
+          let show = null;
+          for (const q of act) if (Side.isDone(q)) { show = q; break; }
+          const ready = !!show;
+          if (!show) show = act[0];
+          const sp = Side.prog(show);
+          const ey = ty + th + 4;
+          this._sideRect = { x: tx, y: ey, w: tw, h: 24 };
+          uiPanel(c, tx, ey, tw, 24, 0.94, true);
+          c.save();
+          c.beginPath(); c.rect(tx + 4, ey + 3, tw - 8, 18); c.clip();
+          c.fillStyle = ready ? '#3f9a58' : '#8a6a44';
+          c.fillRect(tx + 7, ey + 6, 4, 4);
+          text(c, show.name, tx + 15, ey + 4, { size: 6, color: ready ? '#2f6b40' : '#4a3020', shadow: false });
+          const tail = ready
+            ? `ready -- ${(typeof Quests !== 'undefined' && Quests.GIVER_NAMES[show.from]) || show.from} is waiting`
+            : (sp ? `${sp.n}/${sp.of}` : '');
+          text(c, tail + (act.length > 1 ? `   (+${act.length - 1} more)` : ''), tx + 15, ey + 13,
+            { size: 5.5, color: ready ? '#3f9a58' : '#8a6a48', shadow: false });
+          c.restore();
+        } else { this._sideRect = null; }
+      }
     }
   },
 
@@ -731,7 +760,16 @@ function frame(now) {
       const r = Game._goalRect, m = Input.mouse;
       if (m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y && m.y <= r.y + r.h) {
         Quests.open = true;
+        Quests.tab = 0;
         Quests.scroll = clamp((G.goal || 0) - 1, 0, Math.max(0, QUESTS.length - Quests.ROWS));
+        SND.blip();
+      }
+    }
+    // and the errand strip under it opens the journal on the OTHER page
+    if (!Quests.open && !Quests.letter && Input.mouse.clicked && Game._sideRect) {
+      const r = Game._sideRect, m = Input.mouse;
+      if (m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y && m.y <= r.y + r.h) {
+        Quests.open = true; Quests.tab = 1; Quests.escroll = 0;
         SND.blip();
       }
     }
@@ -776,6 +814,9 @@ function frame(now) {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
   if (Game.scene) Game.scene.draw(ctx);
+  // the harbour's interact prompt goes on last, over every prop layer that
+  // chains onto WorldScene.draw -- see WorldScene.drawPrompt
+  if (Game.scene === WorldScene && WorldScene.drawPrompt) WorldScene.drawPrompt(ctx);
   // colour grade the world (never the UI): richer colour, deeper shadows.
   // Re-draw the finished frame through a filter — blend modes would scramble hue.
   if (Game.scene) {
@@ -803,6 +844,9 @@ function frame(now) {
   if (Bench.open) Bench.draw(ctx);
   // the journal and the opening letter sit above the HUD, below the touch pads
   if (G && Game.scene !== TitleScene && !cine && typeof Quests !== 'undefined') Quests.draw(ctx);
+  // the errand hand-in slip sits above everything but the touch pads: it goes up
+  // WHILE the dialogue box is still open, which is the moment it is about
+  if (G && Game.scene !== TitleScene && !cine && typeof Side !== 'undefined') Side.draw(ctx);
   TouchUI.draw(ctx);
   Game.drawToasts(ctx);
   if (Game.helpOpen) Game.drawHelp(ctx);

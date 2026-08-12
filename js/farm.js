@@ -627,12 +627,25 @@ const Farm = {
 
   // ---- shop / inventory bridge --------------------------------------------------------
 
+  // What a seed packet costs, as a multiplier. Finishing Sprout's garden branch
+  // (SIDE_QUESTS 'g_basket') earns the seedDeal perk and she sells you packets at
+  // what she pays for them -- a standing 25% off, for good. Anything that quotes
+  // a seed price must go through here or the stall will lie about the total.
+  seedRate() {
+    return (typeof Side !== 'undefined' && Side && Side.perk('seedDeal')) ? 0.75 : 1;
+  },
+  seedPrice(key, n) {
+    const c = this._def(key);
+    if (!c) return 0;
+    return Math.max(1, Math.round(c.seedPrice * Math.max(1, Math.round(n) || 1) * this.seedRate()));
+  },
+
   buySeed(key, n) {
     if (!this.ensure()) return false;
     const c = this._def(key);
     if (!c) return false;
     n = Math.max(1, Math.round(n) || 1);
-    const price = c.seedPrice * n;
+    const price = Math.max(1, Math.round(c.seedPrice * n * this.seedRate()));
     if (G.money < price) { SND.alarm(); Game.toast('Not enough sand dollars.'); return false; }
     // reuse the canonical purchase helper so cash/toast/save behave identically
     Shop.buy(price, () => { G.farm.seeds[key] += n; }, `${c.seedName} x${n}`);

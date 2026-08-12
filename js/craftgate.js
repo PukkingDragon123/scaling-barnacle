@@ -1684,7 +1684,9 @@ const Forge = {
       WorldScene.draw = function (ctx) {
         wd(ctx);
         ctx.save();
-        ctx.translate(-Math.round(this.camX * DPX) / DPX, 0);
+        // the harbour's own scale and camera, not a bare pan: a table drawn in
+        // screen space came out 1/1.5 size and sank through the planks
+        worldSpace(ctx, this.camX);
         Forge.drawPlaced(ctx, this.camX);
         ctx.restore();
       };

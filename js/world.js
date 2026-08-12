@@ -37,6 +37,28 @@ const WVW = W / WORLD_ZOOM, WVH = H / WORLD_ZOOM;
 // pier and its trestles fill the lower third, the horizon and sky take the rest.
 const WORLD_CAMY = DECK_Y - WVH * 0.74;
 
+// THE HARBOUR'S WORLD SPACE, in one place.
+//
+// WorldScene.draw opens with scale(WORLD_ZOOM) then translate(-camX, -WORLD_CAMY)
+// and CLOSES both before it returns. Every bolt-on module that draws props on the
+// deck (NPCs and the livestock pens in js/integrate.js, the crafted tables in
+// js/craftgate.js, the tide pool in Tame) hangs off that same draw and so runs
+// AFTER the restore -- in screen space. Each of them was doing translate(-camX, 0)
+// and nothing else, which is wrong twice over:
+//
+//   * no zoom, so a neighbour was drawn at 1/1.5 the size of the pier they were
+//     standing on -- which is why making Fintan taller did nothing you could see
+//   * no -WORLD_CAMY, so their feet landed 14 units BELOW the plank line and
+//     everyone stood shin-deep in the deck
+//
+// This is that transform, exactly as world.js applies it. Call it inside a save()
+// and every prop lands in the same space as the boards.
+function worldSpace(ctx, camX) {
+  ctx.scale(WORLD_ZOOM, WORLD_ZOOM);
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(-camX, -WORLD_CAMY);
+}
+
 // Every structure is anchored by its MEASURED deck-surface line (fraction of
 // sprite height) so nothing floats: deck surfaces all land exactly on DECK_Y.
 // The house is the BUILDING only (house_body) — its own deck and stairs are
@@ -160,6 +182,40 @@ const WorldScene = {
     this.smoke = this.smoke.filter(s => s.t > 0);
 
     if (G.pendingCrate && G.pendingCrate.t < 10) SND.droneOn(); else SND.droneOff();
+  },
+
+  // THE INTERACT PROMPT, drawn as the very last thing in the harbour.
+  //
+  // It used to be painted inside draw()'s zoom block, which put it UNDER every
+  // bolt-on prop layer -- NPCs, the crafted tables, the pens, the tide pool --
+  // because all of those chain onto WorldScene.draw and therefore run after it.
+  // Nobody noticed while the neighbours were being drawn tiny and half-sunk;
+  // the moment they stood up at full size, Fintan's chest was in front of the
+  // one label telling you that you could talk to him.
+  //
+  // So it owns its own transform and main.js calls it after the scene, which is
+  // what a prompt is: the topmost thing in the world, under the HUD.
+  drawPrompt(ctx) {
+    if (!G) return;
+    const cam = this.camX;
+    let best = null, bd = 22;
+    for (const s of this.spots()) {
+      const d = Math.abs(this.px - s.x);
+      if (d < bd) { bd = d; best = s; }
+    }
+    if (!best) return;
+    ctx.save();
+    worldSpace(ctx, cam);
+    const label = (TouchUI.enabled ? '' : '[E] ') + best.label;
+    const w = textWidth(ctx, label, 7) + 12;
+    const bx = clamp(this.px, cam + w / 2 + 4, cam + WVW - w / 2 - 4);
+    uiPanel(ctx, bx - w / 2, DECK_Y - 48, w, 13, 0.95, true);
+    text(ctx, label, bx, DECK_Y - 45, { size: 7, color: '#4a3020', align: 'center', shadow: false });
+    ctx.fillStyle = 'rgba(246,232,201,0.95)';
+    ctx.beginPath();
+    ctx.moveTo(this.px - 3, DECK_Y - 35.5); ctx.lineTo(this.px + 3, DECK_Y - 35.5); ctx.lineTo(this.px, DECK_Y - 31.5);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
   },
 
   draw(ctx) {
@@ -293,23 +349,8 @@ const WorldScene = {
       ctx.restore();
     }
 
-    // interact prompt bubble
-    let best = null, bd = 22;
-    for (const s of this.spots()) {
-      const d = Math.abs(this.px - s.x);
-      if (d < bd) { bd = d; best = s; }
-    }
-    if (best) {
-      const label = (TouchUI.enabled ? '' : '[E] ') + best.label;
-      const w = textWidth(ctx, label, 7) + 12;
-      const bx = clamp(this.px, cam + w / 2 + 4, cam + WVW - w / 2 - 4);
-      uiPanel(ctx, bx - w / 2, DECK_Y - 48, w, 13, 0.95, true);
-      text(ctx, label, bx, DECK_Y - 45, { size: 7, color: '#4a3020', align: 'center', shadow: false });
-      ctx.fillStyle = 'rgba(246,232,201,0.95)';
-      ctx.beginPath();
-      ctx.moveTo(this.px - 3, DECK_Y - 35.5); ctx.lineTo(this.px + 3, DECK_Y - 35.5); ctx.lineTo(this.px, DECK_Y - 31.5);
-      ctx.closePath(); ctx.fill();
-    }
+    // (the interact prompt used to be drawn here. It is drawPrompt() now, called
+    // LAST -- see the method for why.)
 
     ctx.restore();
     // close the harbour zoom: everything after this is screen space again

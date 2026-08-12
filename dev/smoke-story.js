@@ -142,6 +142,12 @@ const fails = [];
       m.vx = 0; m.vy = 0;
       Ocean.px = m.x - 10; Ocean.py = m.y; Ocean.vx = 0; Ocean.vy = 0;
       await new Promise(r => setTimeout(r, 160));
+      // Otto has not moved during that settle, so Tame's _lpx/_lpy are already
+      // in sync with him -- which means the mob can be put back in reach in
+      // THIS tick and petted in the same one. Waiting again would just give the
+      // wander AI another 160ms to swim it back out of OFFER_R, which is what
+      // made this assertion flaky rather than false.
+      m.x = Ocean.px + 10; m.y = Ocean.py; m.vx = 0; m.vy = 0;
       m.trust = 0; m.state = 0; m.stateT = 0; m.ease = 1;
       const t0 = m.trust;
       Tame.pet(m);

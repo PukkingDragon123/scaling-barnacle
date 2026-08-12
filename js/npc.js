@@ -358,6 +358,11 @@ const NPCs = {
     }
     if (n.rewards) said = said.concat(this._claimRewards(n, r));
     if (key === 'prof') said.push('Now then. Your next step, and I have thought about it: ' + this.hint());
+    // and then, last, whether they have work for you -- said plainly, because
+    // the whole point of an errand is that somebody asked
+    const tk = this._taskOf(key);
+    if (tk && tk.kind === 'in') said.push(`(${n.name} has noticed what you are carrying.  [Q] hand it over)`);
+    else if (tk && tk.kind === 'ask') said.push(`(${n.name} has a job that wants doing.  [Q] hear it)`);
 
     this._setPages(said);
     Game.save();
@@ -622,7 +627,12 @@ const NPCs = {
         else { SND.alarm(); }
         return;
       }
+      const tb = this._btn('task');
+      if (this._in(tb, mx, my)) { this.doTask(this.who); return; }
     }
+    // [Q] is the keyboard's version of the TASK button, so an errand can be
+    // taken and handed in without a mouse.
+    if (Input.p('KeyQ')) { this.doTask(this.who); return; }
     if (clicked || adv) this.advance();
   },
 
@@ -635,8 +645,69 @@ const NPCs = {
   _btn(which) {
     const r = this._rect();
     const y = r.y + r.h - 20;
+    if (which === 'task') return { x: r.x + r.w - 200, y: y, w: 62, h: 16 };
     if (which === 'gift') return { x: r.x + r.w - 134, y: y, w: 58, h: 16 };
     return { x: r.x + r.w - 70, y: y, w: 56, h: 16 };   // 'bye' and 'back' share the slot
+  },
+
+  // ---- errands -------------------------------------------------------------------
+  // What this neighbour's TASK button does right now. Three states, and all
+  // three are worth a click: hand one in, take a new one, or ask how the one you
+  // are carrying is going.
+  _taskOf(key) {
+    if (typeof Side === 'undefined' || !Side || !Side.ensure()) return null;
+    const ready = Side.readyFor(key);
+    if (ready) return { q: ready, kind: 'in' };
+    const offer = Side.offerFor(key);
+    if (offer) return { q: offer, kind: 'ask' };
+    const act = Side.activeFor(key);
+    if (act.length) return { q: act[0], kind: 'wait' };
+    return null;
+  },
+  _taskLabel(key) {
+    const t = this._taskOf(key);
+    if (!t) return 'NO JOBS';
+    return t.kind === 'in' ? 'HAND IN' : (t.kind === 'ask' ? 'A JOB?' : 'HOW GOES');
+  },
+
+  // Clicking it swaps the dialogue pages -- no new mode, no second modal. The
+  // errand's own written lines do the talking, and a short mechanical line is
+  // appended so the player is never left guessing what just changed.
+  doTask(key) {
+    const t = this._taskOf(key);
+    const n = this.byKey(key);
+    if (!t || !n) { SND.alarm(); return; }
+    const q = t.q;
+    if (t.kind === 'in') {
+      const paid = Side.handIn(q);
+      if (!paid) { SND.alarm(); return; }
+      const said = (q.thanks || []).slice();
+      const r = q.reward || {};
+      const bits = [];
+      if (r.money) bits.push(`$${r.money}`);
+      if (r.items) for (const k in r.items) bits.push(`${r.items[k]} ${Side.itemName(k)}`);
+      if (r.seeds) for (const k in r.seeds) bits.push(`${r.seeds[k]} seed packets`);
+      if (bits.length) said.push(`(You are handed ${bits.join(', ')}.)`);
+      if (r.note) said.push(`(${r.note})`);
+      this._setPages(said);
+      return;
+    }
+    if (t.kind === 'ask') {
+      if (!Side.accept(q)) { SND.alarm(); return; }
+      const said = (q.ask || []).slice();
+      said.push(`(Errand taken: "${q.name}". It is in the journal -- [J].)`);
+      if (q.how) said.push(`(${q.how})`);
+      this._setPages(said);
+      return;
+    }
+    // still carrying it: they ask how it is going, and the answer is the numbers
+    const p = Side.prog(q);
+    const said = [`${n.name}: "How is that going, then -- ${q.name.toLowerCase()}?"`];
+    if (q.deliver) said.push(`(You have ${Side.deliverText(q)}.)`);
+    else if (p) said.push(`(${p.n} of ${p.of} so far.)`);
+    if (q.how) said.push(`(${q.how})`);
+    SND.blip();
+    this._setPages(said);
   },
   _giftRect(i) {
     const r = this._rect();
@@ -765,6 +836,14 @@ const NPCs = {
     const canG = this.canGift(this.who);
     const gRec = this.rec(this.who);
     const gaveToday = gRec && gRec.giftDay === G.day;
+    const tk = this._taskOf(this.who);
+    // a hand-in waiting is worth a nudge: the button gets a gold pip on it
+    const tr = this._btn('task');
+    this._button(c, tr, this._taskLabel(this.who), !!tk, mx, my);
+    if (tk && tk.kind === 'in') {
+      c.fillStyle = Math.sin(this.animT * 5) > 0 ? '#ffd45a' : '#e8a93c';
+      c.fillRect(tr.x + 3, tr.y + 3, 3, 3);
+    }
     this._button(c, this._btn('gift'), gaveToday ? 'GIVEN' : 'GIFT', canG, mx, my);
     this._button(c, this._btn('bye'), 'BYE', true, mx, my);
   },
@@ -920,9 +999,21 @@ const NPCs = {
         c.restore();
       }
 
-      // Unspoken-to today? A small tag over their head — but only while Otto is
-      // far enough away that WorldScene's own prompt bubble is not up there.
-      if (this.rec(n.key).talkDay !== G.day && Math.abs(px - n.x) >= 26) {
+      // Over their head, in priority order: an ERRAND mark ('!' they are owed a
+      // hand-in, '?' they are holding a job) beats the plain unspoken-to tag,
+      // because the errand is the thing worth crossing the deck for. Both are
+      // hidden while Otto is close enough for WorldScene's own prompt bubble to
+      // be sitting in the same airspace.
+      const far = Math.abs(px - n.x) >= 26;
+      const mk = (typeof Side !== 'undefined' && Side) ? Side.mark(n.key) : '';
+      if (mk && far) {
+        // scale 3: the glyph is 4x9 texels, so at APIX that would be two logical
+        // units wide -- a speck. Three makes it six wide and thirteen tall,
+        // which is the same weight as the talk tag it replaces.
+        Side.drawMark(c, n.x, DECK_Y - n.h - 9 - bob, mk, 3);
+      } else if (mk && !far) {
+        // nothing: the prompt says it better from two paces
+      } else if (this.rec(n.key).talkDay !== G.day && far) {
         const my = DECK_Y - n.h - 10 - bob + Math.sin(t * 3 + i) * 0.8;
         uiPanel(c, n.x - 5, my, 10, 11, 0.92, true);
         text(c, '!', n.x, my + 2, { size: 7.5, color: '#8a5a2c', align: 'center', shadow: false });

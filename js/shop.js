@@ -103,10 +103,14 @@ const Shop = {
         push({ info: 'SEEDS — plant on a tilled bed, water it daily' });
         for (const sd of F.SEEDS) {
           const held = F.seedCount ? F.seedCount(sd.key) : 0;
+          // the LISTED price has to be the price buySeed actually charges, or
+          // Sprout's standing 25% off (the seedDeal perk) reads as a bug
+          const pr = F.seedPrice ? F.seedPrice(sd.key, 1) : sd.price;
+          const cut = pr < sd.price;
           push({
             gart: sd.art, label: sd.name,
-            sub: (sd.desc || '') + (held ? `   (holding ${held})` : ''),
-            btn: `$${sd.price}`, price: sd.price,
+            sub: (sd.desc || '') + (held ? `   (holding ${held})` : '') + (cut ? '   [Sprout\'s price]' : ''),
+            btn: `$${pr}`, price: pr,
             act: () => F.buySeed(sd.key, 1),
           });
         }
