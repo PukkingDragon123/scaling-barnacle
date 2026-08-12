@@ -2751,12 +2751,10 @@ const Ocean = {
         const hw = 86, hh = hw * hut.height / hut.width;
         ctx.drawImage(hut, x0 + 34, top - hh + 2 * APIX, hw, hh);
       }
-      // and the pier's deck lip, in the dock scene's own plank colours, so the
-      // waterline edge reads as the same boards you walk on up top
-      ctx.fillStyle = '#8a5a34';
-      ctx.fillRect(x0, top - 3, x1 - x0, 4);
-      ctx.fillStyle = '#c9a271';
-      ctx.fillRect(x0, top - 4.5, x1 - x0, 1.5);
+      // (No coded deck lip here any more. Two flat fillRects spanning the whole
+      // pier drew a solid untextured bar across the top of the trestles -- the
+      // "weird cube on the harbour". dock_11 already contains its own deck; a
+      // second one painted in flat colour could only ever look like a slab.)
     } else {
       // no art: a plain bar at the waterline, so the exit still exists
       ctx.fillStyle = '#8a5a34';
@@ -3255,9 +3253,11 @@ const Ocean = {
     for (let i = 1; i < 3; i++) ctx.fillRect(24 + i * 20.6, gy + 4, PIX * 2, 7);
     text(ctx, `${Math.round(this.depth())}m`, 128, gy + 4, { size: 8, color: '#9fc4d4', align: 'right' });
 
-    // dash / roll readiness, right where the eye already is
-    this._pip(ctx, 6, gy - 13, '>>', this.dashCD <= 0, this.dashCD / Math.max(0.01, this.DASH_CD + this.DASH_T));
-    this._pip(ctx, 34, gy - 13, 'O', this.rollCD <= 0, this.rollCD / Math.max(0.01, this.ROLL_CD));
+    // (The dash/roll readiness pips used to sit here, stacked on top of the air
+    // gauge. Sprint is a CURRENT now -- the water carries you, there is no key
+    // and no cooldown to watch -- so the '>>' pip was reporting on a mechanic
+    // that no longer exists, and the roll's own cooldown is short enough to read
+    // off the roll itself. The air bar owns this corner alone.)
 
     // the bag
     const cap = this.bagCap();

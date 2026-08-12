@@ -1759,24 +1759,42 @@ const Hood = {
     // Nothing else about the understructure is drawn: the art already has its
     // deck, its rail, its bracing and its stairs, and drawing a second set on top
     // of a correctly placed sprite is what made this read as a floating shelf.
-    var legF = hm.legF, legW = Math.max(2, w * hm.legW);
+    // THE SAME TRESTLE THE HARBOUR STANDS ON. These used to be flat translucent
+    // bars in a sampled timber colour -- three grey-blue rectangles hanging under
+    // each house, which is exactly what made this scene read as procedural next to
+    // the real pier. It is dock_11 now, the identical art Otto's own pier is built
+    // from, so a neighbour's house is built the way his is.
     var legTop = bottom - 3;              // overlap by a texel so there is no seam
-    var legBot = legTop + 96;
-    // Night has to reach these or they invert: timber colours sampled off a sprite
-    // in daylight are LIGHTER than the water at night, and three pale bars under a
-    // dark house read as scaffolding rather than posts.
     var legDim = 1 - nite * 0.55;
-    ctx.fillStyle = hm.legCol;
-    for (var l = 0; l < legF.length; l++) {
-      var lx = Math.round((hm.x + w * legF[l]) * DPX) / DPX;
-      for (var b = 0; b < 5; b++) {          // five flat bands instead of a gradient
-        var y0 = legTop + (legBot - legTop) * (b / 5);
-        var y1 = legTop + (legBot - legTop) * ((b + 1) / 5);
-        ctx.globalAlpha = 0.8 * (1 - b / 5) * legDim;
-        ctx.fillRect(lx - legW / 2, y0, legW, y1 - y0 + 0.5);
+    var trest = ASSETS['dock_11'];
+    if (trest && trest.width) {
+      var tw = w * 1.02;
+      var th = tw * trest.height / trest.width;
+      var sm2 = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = legDim;
+      ctx.drawImage(trest, hm.x - tw / 2, legTop, tw, th);
+      // a second module below it so the posts run on down into the dark, the way
+      // the old bands did -- faded, because there is no seabed out here
+      ctx.globalAlpha = 0.55 * legDim;
+      ctx.drawImage(trest, hm.x - tw / 2, legTop + th - 2, tw, th);
+      ctx.globalAlpha = 1;
+      ctx.imageSmoothingEnabled = sm2;
+    } else {
+      var legF = hm.legF, legW = Math.max(2, w * hm.legW);
+      var legBot = legTop + 96;
+      ctx.fillStyle = hm.legCol;
+      for (var l = 0; l < legF.length; l++) {
+        var lx = Math.round((hm.x + w * legF[l]) * DPX) / DPX;
+        for (var b = 0; b < 5; b++) {
+          var y0 = legTop + (legBot - legTop) * (b / 5);
+          var y1 = legTop + (legBot - legTop) * ((b + 1) / 5);
+          ctx.globalAlpha = 0.8 * (1 - b / 5) * legDim;
+          ctx.fillRect(lx - legW / 2, y0, legW, y1 - y0 + 0.5);
+        }
       }
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
 
     // The house itself dims after dark, the same way ocean.js dims its own props --
     // a building at full daylight brightness with dimmed coral either side of it is

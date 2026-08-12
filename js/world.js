@@ -25,6 +25,18 @@ const PIER_END = 300;
 const PILING_X = [30, 30, 30];
 const DECK_Y = 214;   // the dock sits low in frame, water filling the bottom
 
+// THE HARBOUR ZOOM. The dock was framed at the full 480x270 while the open sea
+// had been pulled in to 1.5, so stepping out of the water zoomed you OUT and the
+// pier sat small under two thirds of empty sky. 1.5 matches the ocean exactly --
+// same slice, same crisp setting (a sprite texel on three whole device pixels),
+// so the two scenes finally read as one place at one scale.
+const WORLD_ZOOM = 1.5;
+const WVW = W / WORLD_ZOOM, WVH = H / WORLD_ZOOM;
+// With the zoom on, DECK_Y (214) sits past the bottom of a 180-unit slice, so the
+// world needs a vertical camera too. This puts the deck at 74% of the frame: the
+// pier and its trestles fill the lower third, the horizon and sky take the rest.
+const WORLD_CAMY = DECK_Y - WVH * 0.74;
+
 // Every structure is anchored by its MEASURED deck-surface line (fraction of
 // sprite height) so nothing floats: deck surfaces all land exactly on DECK_Y.
 // The house is the BUILDING only (house_body) — its own deck and stairs are
@@ -129,7 +141,7 @@ const WorldScene = {
     // the world narrower than the screen there is nothing to scroll, so the camera
     // pins at 0 and the open sea past the pier end fills the rest of the frame --
     // which is what you should see, having just walked to the edge of it.
-    this.camX = clamp(this.px - W / 2, 0, Math.max(0, this.worldW() - W));
+    this.camX = clamp(this.px - WVW / 2, 0, Math.max(0, this.worldW() - WVW));
 
     if (Input.p('KeyE') || Input.p('Space')) {
       let best = null, bd = 22;
@@ -155,13 +167,23 @@ const WorldScene = {
     const nite = nightness(G.clock);
     this._lampGlows = [];
 
-    // the animated pixel-art ocean, with a gentle horizontal drift
+    // Everything from here to the matching restore() draws into a WVW x WVH
+    // viewport. The backdrop scales with it so the horizon keeps its place in
+    // the frame, and nearest sampling keeps the sea's pixels honest at 1.5.
+    ctx.save();
+    ctx.scale(WORLD_ZOOM, WORLD_ZOOM);
+    const _wsm = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+
+    // the animated pixel-art ocean, with a gentle horizontal drift. Drawn to fill
+    // the slice in SCREEN space (before the world translate) so the horizon keeps
+    // its height in frame however the camera moves.
     const oc = `ocean${Math.floor(this.time * 8) % 12}`;
-    drawA(ctx, oc, -30 - (cam * 0.05) % 30, 0, 540, 270);
+    drawA(ctx, oc, -30 - (cam * 0.05) % 30, 0, 540 / WORLD_ZOOM + 60, WVH);
     SKY.tint(ctx, G.clock, this.time);
 
     ctx.save();
-    ctx.translate(-cam, 0);
+    ctx.translate(-cam, -WORLD_CAMY);
     const endX = this.endX();
 
     // ---- the pier: ONE trestle module tiled edge to edge -------------------------
@@ -280,7 +302,7 @@ const WorldScene = {
     if (best) {
       const label = (TouchUI.enabled ? '' : '[E] ') + best.label;
       const w = textWidth(ctx, label, 7) + 12;
-      const bx = clamp(this.px, cam + w / 2 + 4, cam + W - w / 2 - 4);
+      const bx = clamp(this.px, cam + w / 2 + 4, cam + WVW - w / 2 - 4);
       uiPanel(ctx, bx - w / 2, DECK_Y - 48, w, 13, 0.95, true);
       text(ctx, label, bx, DECK_Y - 45, { size: 7, color: '#4a3020', align: 'center', shadow: false });
       ctx.fillStyle = 'rgba(246,232,201,0.95)';
@@ -289,6 +311,9 @@ const WorldScene = {
       ctx.closePath(); ctx.fill();
     }
 
+    ctx.restore();
+    // close the harbour zoom: everything after this is screen space again
+    ctx.imageSmoothingEnabled = _wsm;
     ctx.restore();
 
     // golden hour: let the low sun fall on the dock and props too
