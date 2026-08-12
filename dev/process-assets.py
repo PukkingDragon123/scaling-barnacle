@@ -590,6 +590,21 @@ print('NPC houses and the pirate ship...')
 grid_slice('BAB4BD72-E265-418D-9C0E-99B625B95BB5.png', 3, 1,
            ['nhouse_light', 'nhouse_cottage', 'nhouse_shack'],
            tol=44, target_h=520, solo=True, defr=True, inset=8)
+# The neighbours' houses are FRAMES: stairs against a wall, a deck under a roof,
+# posts with gaps between them. A border flood fill cannot reach the sheet grey
+# trapped in any of those pockets, so each house shipped with slabs of background
+# in it -- 36,000 pixels of it in the cottage, sitting behind the stairs where it
+# read as a pale wall. Same story for the pier gate against its dark sheet.
+for _n, _bg, _t in (('nhouse_light', (152, 159, 180), 40),
+                    ('nhouse_cottage', (152, 159, 180), 40),
+                    ('nhouse_shack', (152, 159, 180), 40),
+                    ('dock_10', (5, 0, 21), 46)):
+    _p = os.path.join(OUT, _n + '.png')
+    if os.path.exists(_p):
+        _im = trim(global_key(Image.open(_p), tol=_t, bg_col=_bg))
+        _im.save(_p, optimize=True)
+        manifest[_n] = {'w': _im.size[0], 'h': _im.size[1]}
+        print(f'  {_n}: trapped background punched -> {_im.size[0]}x{_im.size[1]}')
 SHIP_BG = (151, 157, 172)
 shipim = defringe(key_bg(Image.open(os.path.join(ROOT, '44A4DA02-2501-46EC-BA19-F213DB2864B5.png')), tol=44),
                   SHIP_BG, tol=44, passes=1)
