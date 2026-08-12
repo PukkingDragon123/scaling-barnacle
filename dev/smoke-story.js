@@ -131,8 +131,18 @@ const fails = [];
       m.vx = 80; m.vy = 0; m.alpha = 1;
       await new Promise(r => setTimeout(r, 900));
       out.wakeLive = Tame.wake.filter(p => p.t > 0).length;
-      m.trust = 0; m.state = 0; m.ease = 1;
-      Ocean.px = m.x - 10; Ocean.py = m.y;
+      // Two things bite here, and both are the game being RIGHT:
+      //   * canPet reads Tame's own copy of the player position (_lpx/_lpy),
+      //     which only syncs when Tame.update runs -- so moving Otto and petting
+      //     in the same tick fails the reach test. Move first, let a frame pass.
+      //   * teleporting Otto next to an animal spikes the measured player speed,
+      //     which is a charge, so it bolts (state 2). Settle it AFTER the move.
+      // and stop the mob first: the wake check above left it swimming at 80/s, so
+      // it drifts out of OFFER_R during the settle and canPet fails on distance
+      m.vx = 0; m.vy = 0;
+      Ocean.px = m.x - 10; Ocean.py = m.y; Ocean.vx = 0; Ocean.vy = 0;
+      await new Promise(r => setTimeout(r, 160));
+      m.trust = 0; m.state = 0; m.stateT = 0; m.ease = 1;
       const t0 = m.trust;
       Tame.pet(m);
       out.gameStarted = !!Tame.petGame;

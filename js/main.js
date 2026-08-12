@@ -595,104 +595,95 @@ const TitleScene = {
   },
 
   draw(c) {
-    // the sea the game is about, moving -- the uploaded loop, not a painted one
-    const oc = ASSETS[`ocean${Math.floor(this.time * 8) % 12}`];
-    const sm = c.imageSmoothingEnabled;
-    c.imageSmoothingEnabled = false;
-    if (oc && oc.width) c.drawImage(oc, 0, 0, W, H);
-    else { c.fillStyle = '#3aa7c9'; c.fillRect(0, 0, W, H); }
-
-    // HOME, exactly as the game draws it: dock_11 trestles with house_body on
-    // the deck -- the same composition WorldScene stands you in front of, not a
-    // stand-in hut. And Otto LIVES on it: he walks the planks, leaps off the
-    // pier end, splashes, and climbs back for another go. The menu is the game,
-    // idling.
-    const deckY = 176;
-    const seg = ASSETS.dock_11, house = ASSETS.house_body;
-    if (seg && seg.width) {
-      const sw = 92, sh = sw * seg.height / seg.width;
-      c.drawImage(seg, W - 160, deckY, sw, sh);
-      c.drawImage(seg, W - 70, deckY, sw, sh);
-      if (house && house.width) {
-        const hw = 86, hh = hw * house.height / house.width;
-        c.drawImage(house, W - 90, deckY - hh + 2, hw, hh);
-      }
+    // THE MENU IS THE GAME. Not a painted approximation of it: this runs the real
+    // Ocean scene -- its water, its light, its seabed, its plants, its bubbles --
+    // with the camera parked on a quiet stretch and Otto's own swim cycle diving
+    // down to tend a bed. Everything you see here is the thing you are about to
+    // play, which is the only way a title screen can honestly promise anything.
+    //
+    // Ocean.draw() is called with the HUD suppressed (Game.scene is TitleScene, so
+    // main.js already skips drawHUD), and Ocean.update is never called -- the
+    // camera and Otto are posed by hand below, so no game state moves.
+    const t = this.time;
+    let live = false;
+    if (typeof Ocean !== 'undefined' && Ocean.ensure && G) {
+      try {
+        if (Ocean.ensure()) {
+          // pose: a slow drift east along a garden stretch, Otto descending to a
+          // bed and rising again on a long cycle
+          const CY = 15;
+          const k = (t % CY) / CY;
+          // A FIXED quiet stretch. The camera used to creep east and, given a
+          // minute, sailed straight into a neighbour's house (they stand at 880,
+          // 2380 and beyond). 1500 is open garden between two of them; the shot
+          // breathes on a slow sine instead of travelling.
+          const bx = 1500 + Math.sin(t * 0.12) * 26;
+          const dive = Math.sin(k * TAU) * 0.5 + 0.5;   // 0 at the surface, 1 at the sand
+          const floor = Ocean.floorAt(bx);
+          Ocean.time = t;
+          Ocean.px = bx;
+          // He works the BEDS: the cycle runs between hovering over the garden and
+          // settling onto it, never up to the surface, so he stays clear of the
+          // logo and the menu rows and always reads as tending something.
+          Ocean.py = lerp(floor - 68, floor - 18, dive);
+          Ocean.vx = 6; Ocean.vy = Math.cos(k * TAU) * 40;
+          Ocean.face = 1;
+          Ocean.anim = dive > 0.55 ? 'dive' : 'cruise';
+          Ocean.animT = t;
+          Ocean.animFrame = (dive > 0.55 ? 'oswim_1' : 'oswim_' + (Math.floor(t * 6.5) % 4));
+          Ocean.camX = bx - Ocean.VW * 0.5;
+          // frame the sand along the bottom, Otto a little below centre
+          Ocean.camY = floor + 22 - Ocean.VH;
+          // The scene's own HUD -- air gauge, bag, prompts -- has no business on a
+          // title screen, and Ocean.draw paints it internally. Stub it for this one
+          // call and put it straight back, so nothing about the real scene changes.
+          const hud = Ocean._drawHUD;
+          Ocean._drawHUD = function () {};
+          try { Ocean.draw(c); } finally { Ocean._drawHUD = hud; }
+          live = true;
+        }
+      } catch (e) { live = false; }
     }
-    // Otto's loop: walk out (0..2.4s) -> leap (2.4..3.1) -> splash -> under
-    const CYC = 6.5;
-    const ot = this.time % CYC;
-    const tipX = W - 154, homeX = W - 44, oy0 = deckY - 10;
-    if (ot < 2.4) {
-      const k = ot / 2.4;
-      const ox = lerp(homeX, tipX, k);
-      const fr = ASSETS[`o4_${4 + (Math.floor(ot * 8) % 4)}`];
-      if (fr && fr.width) {
-        const oh = 24, ow = oh * fr.width / fr.height;
-        c.save(); c.translate(ox, oy0); c.scale(-1, 1);   // walking left
-        c.drawImage(fr, -ow / 2, -oh / 2, ow, oh);
-        c.restore();
-      }
-    } else if (ot < 3.1) {
-      const k = (ot - 2.4) / 0.7;
-      const ox = tipX - k * 34;
-      const oyj = oy0 - 22 * Math.sin(k * Math.PI * 0.85) + k * k * 44;
-      const fr = ASSETS.o4_dive && ASSETS.o4_dive.width ? ASSETS.o4_dive : ASSETS.o4_5;
-      if (fr && fr.width) {
-        const oh = 24, ow = oh * fr.width / fr.height;
-        c.save(); c.translate(ox, oyj); c.scale(-1, 1); c.rotate(-k * 0.9);
-        c.drawImage(fr, -ow / 2, -oh / 2, ow, oh);
-        c.restore();
-      }
-    } else if (ot < 3.9) {
-      // the splash where he went in
-      const k = (ot - 3.1) / 0.8;
-      const sx = tipX - 34, sy = 206;
-      c.globalAlpha = (1 - k) * 0.8;
-      c.fillStyle = '#eafaff';
-      for (let i = 0; i < 5; i++) {
-        const a2 = (i / 4 - 0.5) * 1.6;
-        c.fillRect(sx + Math.sin(a2) * 10 * k - 1, sy - Math.cos(a2) * 12 * k, 2, 2);
-      }
-      c.fillRect(sx - 8 * k, sy - 1, 16 * k, 1.5);
-      c.globalAlpha = 1;
+    if (!live) {
+      // the sea loop, if the ocean could not be posed for any reason
+      const sm0 = c.imageSmoothingEnabled;
+      c.imageSmoothingEnabled = false;
+      const oc = ASSETS[`ocean${Math.floor(t * 8) % 12}`];
+      if (oc && oc.width) c.drawImage(oc, 0, 0, W, H); else { c.fillStyle = '#2a6a8a'; c.fillRect(0, 0, W, H); }
+      c.imageSmoothingEnabled = sm0;
     }
-    c.imageSmoothingEnabled = sm;
 
-    // a soft dusk wash at the bottom so the menu text sits on something calm --
-    // stepped strips, because one rect put a hard line clean across the sea
-    c.fillStyle = 'rgba(8,20,34,0.12)';
+    // a soft dusk wash so the menu text sits on something calm, stepped in
+    // strips because one rect put a hard line clean across the water
+    c.fillStyle = 'rgba(6,16,28,0.13)';
+    c.fillRect(0, 96, W, H - 96);
+    c.fillRect(0, 120, W, H - 120);
     c.fillRect(0, 150, W, H - 150);
-    c.fillRect(0, 162, W, H - 162);
-    c.fillRect(0, 174, W, H - 174);
 
-    // the name of the place. Kept hand-set: it is the one piece of lettering the
-    // game owns.
-    const wob = 0;   // the logo used to bob on a sine; a sign hangs still
-    text(c, "MR. OTTO'S", W / 2 + 1.5, 44 + wob + 1.5, { size: 24, color: 'rgba(30,12,24,0.75)', align: 'center', shadow: false });
-    text(c, "MR. OTTO'S", W / 2, 44 + wob, { size: 24, color: '#ffe6b0', align: 'center', shadow: false });
-    text(c, 'CLAM FARM', W / 2 + 2, 72 - wob + 2, { size: 30, color: 'rgba(20,30,50,0.8)', align: 'center', shadow: false });
-    text(c, 'CLAM FARM', W / 2, 72 - wob, { size: 30, color: '#5ad2f0', align: 'center', shadow: false });
-    text(c, 'a little life on the water', W / 2, 120, { size: 8, color: '#f4d4a8', align: 'center' });
+    // the name of the place. Kept hand-set: the one piece of lettering the game
+    // owns, and it hangs still, the way a sign does.
+    text(c, "MR. OTTO'S", W / 2 + 1.5, 30 + 1.5, { size: 24, color: 'rgba(20,10,18,0.8)', align: 'center', shadow: false });
+    text(c, "MR. OTTO'S", W / 2, 30, { size: 24, color: '#ffe6b0', align: 'center', shadow: false });
+    text(c, 'CLAM FARM', W / 2 + 2, 58 + 2, { size: 30, color: 'rgba(12,24,44,0.85)', align: 'center', shadow: false });
+    text(c, 'CLAM FARM', W / 2, 58, { size: 30, color: '#5ad2f0', align: 'center', shadow: false });
+    text(c, 'a little life on the water', W / 2, 106, { size: 8, color: '#f4d4a8', align: 'center' });
 
     // the menu
     const rows = this._rows();
     for (let i = 0; i < rows.length; i++) {
       const y = this._rowY(i);
       const on = i === this.sel;
+      const wRow = textWidth(c, rows[i].label, 9) / 2 + 16;
       if (on) {
-        const pad = textWidth(c, rows[i].label, 9) / 2 + 14;
-        c.fillStyle = 'rgba(255,230,176,0.12)';
-        c.fillRect(W / 2 - pad, y - 4, pad * 2, 13);
-        text(c, '>', W / 2 - pad + 4, y, { size: 8, color: '#ffe6b0', align: 'left' });
+        uiPanel(c, W / 2 - wRow, y - 5, wRow * 2, 15, 0.94, true);
+        text(c, rows[i].label, W / 2, y, { size: 9, align: 'center', color: '#4a3020', shadow: false });
+      } else {
+        text(c, rows[i].label, W / 2, y, { size: 9, align: 'center', color: '#dbe9ee' });
       }
-      text(c, rows[i].label, W / 2, y, {
-        size: 9, align: 'center',
-        color: on ? '#ffffff' : '#c8d8dc',
-      });
     }
     text(c, TouchUI.enabled || matchMedia('(pointer: coarse)').matches
       ? 'tap a line to choose' : 'arrows + enter', W / 2, H - 14,
-      { size: 6.5, color: 'rgba(255,255,255,0.55)', align: 'center' });
+      { size: 6.5, color: 'rgba(255,255,255,0.6)', align: 'center' });
   },
 };
 
