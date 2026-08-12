@@ -574,7 +574,11 @@ const Farm = {
   act(i) {
     const p = this._get(i);
     if (!p) return;
-    if (!p.tilled) { this.till(i); return; }
+    // NO TILLING BARE SEABED. A plot only exists where a Sea Planter has been
+    // put down, and a planter arrives already full of soil -- so if a placed
+    // plot somehow reads untilled, that is bookkeeping from an older save, not
+    // a job for the player. Fix it silently and fall through to sowing.
+    if (!p.tilled) { p.tilled = true; }
     if (p.dead) { this.clear(i); return; }
     if (!p.crop) { this.openPicker(i); return; }
     if (this.ready(p)) { this.harvest(i); return; }
@@ -586,7 +590,7 @@ const Farm = {
 
   label(p) {
     if (!p) return '';
-    if (!p.tilled) return 'Turn the Seabed';
+    if (!p.tilled) return 'Sow the Planter';
     if (p.dead) return 'Clear Smothered Crop';
     if (!p.crop) return this.seedTotal() > 0 ? 'Plant Seeds' : 'Plant Seeds  (none — see the stall)';
     const c = this.CROPS[p.crop];
@@ -796,7 +800,7 @@ const Farm = {
     G.storage.planter--;
     G.farm.placed = i + 1;
     const p = G.farm.plots[i];
-    if (p) { p.popT = 0.45; this._burst && this._burst(p); }
+    if (p) { p.tilled = true; p.popT = 0.45; this._burst && this._burst(p); }
     if (typeof SND !== 'undefined') SND.chime();
     if (typeof Game !== 'undefined' && Game.toast) Game.toast('The planter settles into the sand.');
     Game.save();

@@ -28,8 +28,8 @@
   // The pier is a fixed 300 units now (world.js PIER_END) — Otto's porch, not a
   // high street — laid out ONCE on a 26-unit grid:
   //
-  //    30 piling dive |  56 house | 82 VISITOR POST | 108 tide pool
-  //   134,160 pens    | 186 cannon | (212..262 LANE) | 286 jump in [pier edge]
+  //    30 piling dive |  56 house | 108 tide pool | 134,160 pens
+  //   186 cannon      | 212 VISITOR POST | (238..262 LANE) | 286 jump in [pier edge]
   //
   // Every pair is >= 26 apart (the [E] radius is 22). The 212..262 stretch and
   // the visitor post when empty are where crafted tables can be put down
@@ -38,7 +38,12 @@
   // the workbench and crafting bench are Forge tables now; the stall's stock is
   // the STALL tab of the same shop; the farm is on the seabed.
   //
-  // THE VISITOR POST (82). The neighbours do not live on Otto's dock — they live
+  // THE VISITOR POST (212). It used to be 82 -- which is INSIDE THE HOUSE. The
+  // cottage spans 34..120 (HOUSE_X 34 + HOUSE_W 86), so whoever dropped by was
+  // drawn half-behind his own host's wall, legs sticking out of the porch. That
+  // is the "npc bugged" look. 212 is open deck between the cannon and the lane.
+  //
+  // The neighbours do not live on Otto's dock — they live
   // at their own homes out at sea (js/hood.js). One of them drops by some
   // mornings and stands at the post; the rest of the time the deck is yours.
   // Fintan plays guide and holds the post for the first two days.
@@ -56,7 +61,7 @@
     const all = M.NPCs.LIST.slice();
     const pick = () => {
       const v = visitorNow();
-      for (const n of all) if (n.key === v) { n.x = 82; return [n]; }
+      for (const n of all) if (n.key === v) { n.x = 212; return [n]; }
       return [];
     };
     const nspots = M.NPCs.spots.bind(M.NPCs);

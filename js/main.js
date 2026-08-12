@@ -110,9 +110,11 @@ const TouchUI = {
       b.push({ x: 8, y: H - 52, w: 44, h: 44, key: 'ArrowLeft', icon: 'left' });
       b.push({ x: 58, y: H - 52, w: 44, h: 44, key: 'ArrowRight', icon: 'right' });
       b.push({ x: W - 52, y: H - 52, w: 44, h: 44, tap: 'KeyE', icon: 'act' });
-      // crafting on a pad: [C] had no touch control at all, so the whole
-      // workbench chain was keyboard-only on a phone
-      b.push({ x: W - 52, y: H - 102, w: 44, h: 44, tap: 'KeyC', icon: 'craft' });
+      // NO CRAFTING PAD. It used to sit at (W-52, H-102) -- a second fat round
+      // button stacked directly above interact, one thumb, two verbs, and the
+      // top one got hit by accident every time. The crafting button is the
+      // anvil on the top rail (js/uibar.js), which is where the bag and the
+      // skills already live. One place for menus, one place for the world.
       b.push({ x: W - 26, y: 24, w: 20, h: 18, tap: 'KeyH', icon: 'help' });
     } else if (sc === DiveScene) {
       b.push({ x: W - 46, y: H - 122, w: 40, h: 40, key: 'KeyW', icon: 'up' });

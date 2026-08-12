@@ -52,6 +52,14 @@ const NPCs = {
   // x = spot on the deck. The dock is crowded: the house sits at 34..120, the
   // laptop at 232, the workbench at 300, lamp posts at 348 + 264n, and dive
   // spots at PILING_X. These three x's are the gaps left over.
+  //
+  // h = drawn height in logical units, and it is measured AGAINST OTTO, who is
+  // 30. The old numbers had Fintan -- a whale, a professor, the biggest thing
+  // that ever visits this pier -- at 42, barely a head taller than the otter,
+  // and Sprout at 31, which read as the same person in a different hat. A
+  // dolphin should look down at you (48), and a whale should fill the frame
+  // (56). Nothing else in the layout depends on h; the sprite grows from the
+  // deck line, so raising it just makes them stand taller in the same spot.
   LIST: [
     {
       key: 'farmer', name: 'Sprout', full: 'Sprout', role: 'dolphin farmhand',
@@ -60,7 +68,7 @@ const NPCs = {
       // sea, so the dock was the only place still showing the wrong species -- and
       // the dialogue portrait is exactly where you notice. Both sheets are 4x4, so
       // the frame map below carries over unchanged.
-      art: 'dfarm', x: 128, h: 31, flip: false,
+      art: 'dfarm', x: 128, h: 42, flip: false,
       frames: { idle: [0, 1, 2, 3], talk: [9, 8], emote: [12, 9, 13], happy: [12, 13], sad: [14, 15] },
       adore: [],
       loved: ['crop_berry_p', 'crop_gourd_p', 'crop_moon_p', 'crop_curl_p', 'crop_blade_p'],
@@ -108,7 +116,7 @@ const NPCs = {
     },
     {
       key: 'prof', name: 'Fintan', full: 'Prof. Fintan Bellwether', role: 'whale scholar',
-      art: 'prof', x: 378, h: 42, flip: false,
+      art: 'prof', x: 378, h: 56, flip: false,
       frames: { idle: [0, 1, 2, 3], talk: [9, 8], emote: [11, 10, 12], happy: [12, 13], sad: [14, 15] },
       adore: ['tea', 'teaLeaf', 'crop_tea_p'],
       loved: ['pearl', 'pearlPol', 'abalonePol'],
@@ -163,7 +171,7 @@ const NPCs = {
     },
     {
       key: 'angler', name: 'Marlow', full: 'Old Marlow', role: 'anglerfish, fisherman',
-      art: 'angler', x: 428, h: 36, flip: false,
+      art: 'angler', x: 428, h: 48, flip: false,
       frames: { idle: [0, 1, 2, 3], talk: [8, 9], emote: [10, 8, 13], happy: [12, 13], sad: [14, 15] },
       adore: [],
       loved: ['roe', 'musselMeat', 'abalone'],

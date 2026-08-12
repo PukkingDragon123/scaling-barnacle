@@ -3352,7 +3352,7 @@ const Ocean = {
         // the slot by a distance.
         { x: W - 92, y: H - 52, w: 40, h: 40, tap: 'KeyE', icon: 'act' },
         { x: W - 92, y: H - 98, w: 40, h: 40, tap: 'Space', icon: 'oroll' },
-        { x: W - 46, y: H - 144, w: 40, h: 40, tap: 'KeyC', icon: 'craft' },
+        // (no crafting pad -- the rail anvil is the crafting button everywhere)
         // same help tab the dock has, in the same place
         { x: W - 26, y: 24, w: 20, h: 18, tap: 'KeyH', icon: 'help' },
       ];
