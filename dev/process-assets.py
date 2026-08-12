@@ -99,6 +99,108 @@ def global_key(im, tol=34, bg_col=None):
     return im
 
 
+def punch_interior(im, bg_col, tol=12, edge_tol=24, core=2):
+    """Delete background TRAPPED INSIDE the artwork, and only that.
+
+    key_bg floods from the border, so it can never reach a pocket the drawing
+    encloses -- the gaps between stair treads, the open space under a stilt house
+    between its legs, and every square between a ladder's rungs. Those shipped as
+    solid grey slabs, which is why a ladder looked like a grey plank with brown
+    stripes painted on it.
+
+    FINDING THEM IS EASY. NOT EATING THE ARTWORK IS THE JOB. Measured on the
+    cottage, against a key colour of (155,160,176):
+
+        trapped pocket under the deck      distance   5.8
+        trapped gap between stair treads   distance   7.5
+        the cream plank wall               distance  49.4
+
+    An order of magnitude apart -- so the old tol=34 (which passes anything
+    within 59) took the whole wall and the house came out looking moth-eaten.
+    Three things keep this honest:
+
+      * TIGHT SEEDS. `tol` only has to admit the flat background, and 12 does
+        that with room to spare while staying miles clear of any real paint.
+      * HYSTERESIS. Anti-aliasing puts a rim of half-background around every
+        pocket, too blended for the tight threshold. `edge_tol` grows the punch
+        outward through those, but ONLY from a pixel already proven background --
+        a blended pixel that is not connected to a seed is somebody's shading and
+        is left alone.
+      * A THICKNESS GATE. A pocket is an AREA; a plank shadow is a LINE. A blob
+        is only punched if it contains a solid (2*core+1) square of its own kind,
+        which a groove of any length never does.
+    """
+    im = im.convert('RGBA')
+    w, h = im.size
+    px = im.load()
+    br, bg_, bb = bg_col
+    t2 = tol * tol * 3
+    e2 = edge_tol * edge_tol * 3
+    near = bytearray(w * h)     # the loose mask: candidate pixels
+    seed = bytearray(w * h)     # the tight mask: certainly background
+    for y in range(h):
+        row = y * w
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a == 0:
+                continue
+            d = (r - br) ** 2 + (g - bg_) ** 2 + (b - bb) ** 2
+            if d < e2:
+                near[row + x] = 1
+                if d < t2:
+                    seed[row + x] = 1
+
+    # the thickness gate, measured on the SEEDS: a groove has no solid core
+    k = core
+    thick = bytearray(w * h)
+    for y in range(k, h - k):
+        row = y * w
+        for x in range(k, w - k):
+            if not seed[row + x]:
+                continue
+            solid = True
+            for dy in range(-k, k + 1):
+                r2 = (y + dy) * w
+                for dx in range(-k, k + 1):
+                    if not seed[r2 + x + dx]:
+                        solid = False
+                        break
+                if not solid:
+                    break
+            if solid:
+                thick[row + x] = 1
+
+    visited = bytearray(w * h)
+    for i in range(w * h):
+        if not near[i] or visited[i]:
+            continue
+        stack = [i]
+        visited[i] = 1
+        blob = []
+        has_seed = False
+        has_core = False
+        while stack:
+            j = stack.pop()
+            blob.append(j)
+            if seed[j]:
+                has_seed = True
+            if thick[j]:
+                has_core = True
+            jx, jy = j % w, j // w
+            if jx > 0 and near[j - 1] and not visited[j - 1]:
+                visited[j - 1] = 1; stack.append(j - 1)
+            if jx < w - 1 and near[j + 1] and not visited[j + 1]:
+                visited[j + 1] = 1; stack.append(j + 1)
+            if jy > 0 and near[j - w] and not visited[j - w]:
+                visited[j - w] = 1; stack.append(j - w)
+            if jy < h - 1 and near[j + w] and not visited[j + w]:
+                visited[j + w] = 1; stack.append(j + w)
+        if has_seed and has_core:
+            for j in blob:
+                px[j % w, j // w] = (0, 0, 0, 0)
+    return im
+
+
 def defringe(im, bg=None, tol=70, passes=2):
     """Flood fill leaves a rim of half-background pixels; drop any edge pixel
     that is still close to the background colour."""
@@ -572,8 +674,10 @@ grid_slice('ECF92C7E-C2C6-419B-88F1-54677C25A7B6.png', 4, 2,
            ['node_wood', 'node_stone', 'node_iron', 'node_gold',
             'node_crystal', 'node_coal', 'node_scrap', 'node_wreck'],
            tol=44, target_h=190, solo=True, defr=True, inset=6)
-# The resource icons off this sheet are cut by COMPONENTS, not a grid -- see the
-# call down in the _sheet_objects section, which is where the helper is defined.
+grid_slice('B5914D75-909C-4C2D-8A1F-C1F66B237242.png', 4, 2,
+           ['res_driftwood', 'res_stone', 'res_ore', 'res_crystal',
+            'res_plank', 'res_nail', 'res_ingot', None],
+           tol=44, target_h=150, solo=True, defr=True, inset=6)
 
 print('crafting stations, weapons, farm tools...')
 grid_slice('B61CD705-62F4-492C-BF81-67C8CC7F703F.png', 2, 2,
@@ -590,21 +694,12 @@ print('NPC houses and the pirate ship...')
 grid_slice('BAB4BD72-E265-418D-9C0E-99B625B95BB5.png', 3, 1,
            ['nhouse_light', 'nhouse_cottage', 'nhouse_shack'],
            tol=44, target_h=520, solo=True, defr=True, inset=8)
-# The neighbours' houses are FRAMES: stairs against a wall, a deck under a roof,
-# posts with gaps between them. A border flood fill cannot reach the sheet grey
-# trapped in any of those pockets, so each house shipped with slabs of background
-# in it -- 36,000 pixels of it in the cottage, sitting behind the stairs where it
-# read as a pale wall. Same story for the pier gate against its dark sheet.
-for _n, _bg, _t in (('nhouse_light', (152, 159, 180), 40),
-                    ('nhouse_cottage', (152, 159, 180), 40),
-                    ('nhouse_shack', (152, 159, 180), 40),
-                    ('dock_10', (5, 0, 21), 46)):
-    _p = os.path.join(OUT, _n + '.png')
-    if os.path.exists(_p):
-        _im = trim(global_key(Image.open(_p), tol=_t, bg_col=_bg))
-        _im.save(_p, optimize=True)
-        manifest[_n] = {'w': _im.size[0], 'h': _im.size[1]}
-        print(f'  {_n}: trapped background punched -> {_im.size[0]}x{_im.size[1]}')
+# A stilt house is a frame too: the flood reaches the sky around it and nothing
+# else. The stair gaps and the whole open underside between the legs shipped as
+# solid grey slabs -- that is the "stacking" in the neighbourhood scene.
+for _nh in ('nhouse_light', 'nhouse_cottage', 'nhouse_shack'):
+    _p = os.path.join(OUT, _nh + '.png')
+    save(_nh, trim(punch_interior(Image.open(_p), (155, 160, 176))))
 SHIP_BG = (151, 157, 172)
 shipim = defringe(key_bg(Image.open(os.path.join(ROOT, '44A4DA02-2501-46EC-BA19-F213DB2864B5.png')), tol=44),
                   SHIP_BG, tol=44, passes=1)
@@ -654,24 +749,30 @@ for _i, _b in enumerate(_pboxes):
     save(PICK_NAMES[_i], despeckle(_cell))
 
 
-# ---- driftwood: NOT cut up ------------------------------------------------------
-# There used to be a drift_0/1/2 here, the res_driftwood bundle chopped into what
-# were meant to be three loose logs. It never worked and the idea is unsalvageable,
-# so it is gone rather than retuned:
+# ---- driftwood, broken up ------------------------------------------------------
+# res_driftwood is a BUNDLE: three logs tied with rope. As an inventory icon a
+# bundle is right (it is a stack of the stuff), but the ocean scatters it as
+# scenery that is supposed to be adrift, and a neatly tied bundle bobbing in open
+# water reads as cargo somebody lost rather than as driftwood.
 #
-#   * The bundle is TIED. The rope crosses the middle of every log, so an
-#     axis-aligned box either contains rope or is a stub of a log, and the shipped
-#     cuts were both -- rope fringe down one edge and a hard chop across the grain.
-#   * Masking the rope by colour does not separate them either. The rope's orange
-#     and the wood's own dark shading overlap in RGB (both clear r-b > 60 with g
-#     below r), so any threshold that removes the rope bleaches holes in the logs.
-#   * Removing the rope and re-running components does not split the bundle:
-#     the logs touch each other where the rope crossed, so it stays one blob.
-#
-# The ocean now strews the whole bundle and the whole plank stack instead, varied
-# by scale, flip and a per-piece tilt. A tied bundle of driftwood on the sand below
-# a fishing pier reads fine -- considerably better than a chopped stub -- and no
-# cropping artifact can come back.
+# So the bundle is cut into its three logs. The crops are measured off the alpha
+# map: the upright log occupies the top-centre, the long diagonal runs across the
+# middle, and the short one sits bottom-left. Each is trimmed to its own content
+# and keyed against the same background, so they come out as three loose pieces
+# that can be strewn at different sizes and angles.
+_dw = Image.open(os.path.join(OUT, 'res_driftwood.png')).convert('RGBA')
+# The rope crosses the middle (roughly x 50..95, y 60..110), so the cuts stay
+# clear of it: the upright above it, and the two clean ends of the long log
+# either side.
+_DW_CUTS = [
+    ('drift_0', (64, 0, 124, 62)),      # the upright, top-centre
+    ('drift_1', (98, 68, 157, 114)),    # the long log's right end
+    ('drift_2', (0, 78, 52, 124)),      # ... and its left end
+]
+for _n, _box in _DW_CUTS:
+    _c = trim(_dw.crop(_box))
+    if _c.size[0] > 2 and _c.size[1] > 2:
+        save(_n, despeckle(_c))
 
 
 # ---- the August upload: ores, weeds, dock kit, item icons ----------------------
@@ -683,19 +784,7 @@ for _i, _b in enumerate(_pboxes):
 # with what you see when you open the file.
 def _sheet_objects(path, bg_tol, names, row_tol=90, min_area=1400, cap=None, dfbg=None,
                    punch_bg=None):
-    src = Image.open(os.path.join(ROOT, path))
-    im = key_bg(src, tol=bg_tol)
-    # punch_bg: also clear background TRAPPED INSIDE a shape, which a border flood
-    # fill can never reach -- the gaps between a ladder's rungs, the panes of a
-    # window, the space under an arch. Without it those come out as solid slabs of
-    # sheet grey and the sprite is unusable over anything. Pass the sheet's own
-    # background colour: by this point the corners are transparent, so letting
-    # global_key sample them would key against black and eat the outlines.
-    #
-    # This runs BEFORE components(), so the punched holes cannot merge two objects
-    # -- they only ever remove pixels that were background to begin with.
-    if punch_bg is not None:
-        im = global_key(im, tol=bg_tol, bg_col=punch_bg)
+    im = key_bg(Image.open(os.path.join(ROOT, path)), tol=bg_tol)
     if dfbg is not None:
         im = defringe(im, dfbg, tol=bg_tol + 24, passes=2)
     boxes = components(im, min_area=min_area)
@@ -723,26 +812,11 @@ def _sheet_objects(path, bg_tol, names, row_tol=90, min_area=1400, cap=None, dfb
         if cell.size[1] > 200:
             sc = 200 / cell.size[1]
             cell = cell.resize((max(1, round(cell.size[0] * sc)), 200), Image.LANCZOS)
+        if punch_bg is not None:
+            cell = punch_interior(cell, punch_bg)
         save(names[i], despeckle(cell))
         out.append(names[i])
     return out
-
-# RESOURCE ICONS -- components, NOT a grid. This sheet is 4 objects on the top row
-# and only THREE on the bottom, and neither row is centred in an even 4x2. A grid
-# slice broke it two ways at once: the plank stack straddled the first vertical
-# line, so cell 1 of the bottom row came out a bare SLIVER of planks (and shipped
-# as res_nail), and every name after it shifted by one -- the nails became
-# res_ingot and the ingots fell off the end into the discarded None. The driftwood
-# bundle on the top row lost the tip of its right-hand log to the same line, which
-# is why the item icon looked chopped. Row-bucketed components find 4 then 3 whole
-# objects, so every name lands on the art it is called after.
-#
-# This must stay BELOW the _sheet_objects def: the file is a straight-line script,
-# and calling the helper from the earlier icon section is a NameError.
-_sheet_objects('B5914D75-909C-4C2D-8A1F-C1F66B237242.png', 44, [
-    'res_driftwood', 'res_stone', 'res_ore', 'res_crystal',
-    'res_plank', 'res_nail', 'res_ingot',
-], row_tol=260, min_area=9000, dfbg=(151, 157, 172))
 
 # ORE NODES. Bright, chunky, and each one sits on a FLAT BASE -- which is exactly
 # what a rock resting on the seabed needs, and what the old node art lacked.
@@ -759,15 +833,14 @@ _sheet_objects('B395B479-D087-4DA2-B444-2F4F08F6586B.png', 34, [
 ], row_tol=160, min_area=3000)
 
 # THE DOCK KIT: everything you can build out on the planks, including the barn.
-# punch_bg because almost every piece here is a FRAME with holes in it -- a ladder
-# is rungs around gaps, a rail and a fence are uprights around gaps, the barn has a
-# doorway. A border fill leaves all of those filled with sheet grey, which is why
-# kit_ladder was unusable: solid slabs between the rungs.
+# Every one of these is a FRAME -- a ladder, a rail, a trestle, a ramp -- so the
+# border flood can reach almost none of the background in them. Unpunched, the
+# ladder shipped as a grey plank with rungs painted on it.
 _sheet_objects('CF64917A-4B5D-4D7A-8DE9-9BEC0F6EA47C.png', 30, [
     'kit_barn', 'kit_pavilion', 'kit_hoist',
     'kit_hayloft', 'kit_ropefence', 'kit_trough', 'kit_ramp',
     'kit_deck', 'kit_trestle', 'kit_ladder', 'kit_rail', 'kit_lamp', 'kit_mooring',
-], row_tol=150, min_area=3000, punch_bg=(149, 159, 183))
+], row_tol=150, min_area=3000, punch_bg=(152, 159, 177))
 
 # ITEM ICONS, on magenta.
 _sheet_objects('27DA4A95-FE40-4173-B479-B244453D2273.png', 60, [

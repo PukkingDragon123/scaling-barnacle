@@ -1744,6 +1744,97 @@ const Hood = {
     this._drawReachMark(ctx, t);
   },
 
+  // HOW HIGH THE OCEAN CAMERA HAS TO LOOK to see somebody's house.
+  //
+  // Ocean clamps camY at -lift, and that lift is driven by how close Otto is to
+  // the SURFACE: a quarter of the frame deep down, two thirds breaking the top.
+  // Neither has anything to do with the neighbourhood -- so you could swim right
+  // up to Sprout's front door, at the one spot in the game where her cottage is
+  // the thing you came to look at, and see her floorboards and nothing above
+  // them. The whole house sat off the top of the frame.
+  //
+  // This returns the lift needed to keep a nearby home's ROOF in shot, easing in
+  // with distance so the framing opens as you approach. Ocean takes the max of
+  // this and its own, so it can only ever help.
+  camLift: function (px) {
+    if (typeof ASSETS === 'undefined') return 0;
+    var best = 0;
+    for (var i = 0; i < this.HOMES.length; i++) {
+      var hm = this.HOMES[i];
+      var d = Math.abs(px - hm.x);
+      if (d > 340) continue;
+      var hh = assetH(hm.art, hm.w);
+      var top = hm.deckY - hh * hm.deckFrac;
+      var want = -(top - 26);                       // the roof, plus a little sky
+      var k = 1 - Math.min(1, Math.max(0, (d - 120) / 220));
+      if (want * k > best) best = want * k;
+    }
+    return best;
+  },
+
+  // kit_ladder, tiled from the deck head down to the bottom of the climb box. The
+  // sprite is one ladder section and the drop out here is taller than one, so it
+  // repeats and the LAST section is CLIPPED to the exact end rather than being
+  // stretched -- a stretched ladder has stretched rungs, and it shows.
+  _ladder: function (ctx, cx, top, bot) {
+    var img = ASSETS.kit_ladder;
+    var W_ = 11;
+    if (!img || !img.width) {
+      ctx.fillStyle = '#a4805a';
+      ctx.fillRect(cx - 5, top, 1.6, bot - top);
+      ctx.fillRect(cx + 3.4, top, 1.6, bot - top);
+      ctx.fillStyle = '#c9a271';
+      for (var ry = top + 5; ry < bot; ry += 6.5) ctx.fillRect(cx - 5, ry, 10, 1.4);
+      return;
+    }
+    var H_ = W_ * img.height / img.width;
+    var x = Math.round((cx - W_ / 2) * DPX) / DPX;
+    for (var y = top; y < bot; y += H_) {
+      var keep = Math.min(H_, bot - y);
+      if (keep < 1) break;
+      if (keep >= H_ - 0.01) { ctx.drawImage(img, x, y, W_, H_); continue; }
+      ctx.drawImage(img, 0, 0, img.width, img.height * (keep / H_), x, y, W_, keep);
+    }
+  },
+
+  // The dock kit dressing a neighbour's porch: a mooring post at the ladder head,
+  // a lamp at the far end, and a run of rope fence along the open side. Three
+  // uploaded sprites, no procedural anything, and between them they turn "a house
+  // on stilts" into "somebody's front door".
+  _deckKit: function (ctx, hm, t, nite) {
+    var dim = 1 - nite * 0.25;
+    var stand = function (name, cx, h) {
+      var img = ASSETS[name];
+      if (!img || !img.width) return;
+      var w = h * img.width / img.height;
+      ctx.globalAlpha = dim;
+      ctx.drawImage(img, Math.round((cx - w / 2) * DPX) / DPX, hm.deckY - h, w, h);
+      ctx.globalAlpha = 1;
+    };
+    var side = hm.climbDX < 0 ? -1 : 1;             // the ladder's side of the house
+    // the rope fence runs along the side AWAY from the ladder, so it never draws
+    // across the one thing the player has to be able to reach
+    var img = ASSETS.kit_ropefence;
+    if (img && img.width) {
+      var fh = 13, fw = fh * img.width / img.height;
+      var fx = hm.x - side * (hm.w * 0.14) - fw / 2;
+      ctx.globalAlpha = 0.95 * dim;
+      ctx.drawImage(img, Math.round(fx * DPX) / DPX, hm.deckY - fh + 1, fw, fh);
+      ctx.globalAlpha = 1;
+    }
+    stand('kit_mooring', hm.x + side * (hm.w * 0.34), 18);
+    stand('kit_lamp', hm.x - side * (hm.w * 0.34), 17);
+    if (nite > 0.1) {
+      var lx = hm.x - side * (hm.w * 0.34), ly = hm.deckY - 14;
+      ctx.fillStyle = '#ffd27a';
+      for (var g = 3; g >= 1; g--) {
+        ctx.globalAlpha = nite * 0.10 * g / 3;
+        ctx.beginPath(); ctx.arc(lx, ly, 5 + g * 6, 0, TAU); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+  },
+
   _drawHome: function (ctx, hm, camX, camY, t) {
     var w = hm.w;
     if (hm.x + w < camX - 70 || hm.x - w > camX + W + 70) return;
@@ -1824,13 +1915,20 @@ const Hood = {
     var lBot = this.CLIMB_BOT + 4;
     // dimmed after dark like everything else, but the least of anything here: this
     // is the affordance, and it has to stay findable in the dark
+    // IT IS A SPRITE NOW. This used to be four fillRects -- two pale bars and a
+    // stack of rungs -- exactly the coded-visual look this game keeps being told
+    // to stop doing, sat next to a hand-painted stilt house where the difference
+    // was impossible to miss. kit_ladder is a real painted ladder from the dock
+    // kit, tiled down the drop; the uploaded art was unused in the manifest.
     ctx.globalAlpha = 1 - nite * 0.3;
-    ctx.fillStyle = '#a4805a';
-    ctx.fillRect(cx - 5, lTop, 1.6, lBot - lTop);
-    ctx.fillRect(cx + 3.4, lTop, 1.6, lBot - lTop);
-    ctx.fillStyle = '#c9a271';
-    for (var ry = lTop + 5; ry < lBot; ry += 6.5) ctx.fillRect(cx - 5, ry, 10, 1.4);
+    this._ladder(ctx, cx, lTop, lBot);
     ctx.globalAlpha = 1;
+
+    // ---- Deck furniture, so a home is a PLACE and not one sprite on water. A
+    // mooring post at the ladder head, a lamp at the other end, and a run of rope
+    // fence along the open side -- same dock kit as the ladder, all unused until
+    // now. "no other thing" was the note, and this is the other thing.
+    this._deckKit(ctx, hm, t, nite);
 
     // ---- their planter, up on the deck. No box drawn around it: at this scale the
     // crop alone reads as a plant in a pot, and every one of the three sprites

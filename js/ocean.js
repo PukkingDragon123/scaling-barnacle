@@ -1614,7 +1614,17 @@ const Ocean = {
     // launch still opens it to nearly two thirds.
     const airK = clamp((10 - this.py) / 44, 0, 1);
     this._sky = lerp(this._sky, airK, clamp(dt * 3.2, 0, 1));
-    const lift = lerp(this.VH * 0.24, this.VH * 0.66, this._sky);
+    // ...and near a neighbour's HOUSE, however deep Otto is, enough to see it.
+    // This lift is driven purely by nearness to the surface, which has nothing to
+    // do with the neighbourhood -- so you could swim right up to Sprout's front
+    // door, at the one spot in the game where her cottage is the thing you came
+    // to look at, and get her floorboards with the whole house off the top of the
+    // frame. Hood.camLift asks for the roof; the max means it can only ever help.
+    let lift = lerp(this.VH * 0.24, this.VH * 0.66, this._sky);
+    if (typeof Hood !== 'undefined' && Hood && Hood.camLift) {
+      const hl = Hood.camLift(this.px);
+      if (hl > lift) lift = hl;
+    }
     const k = 1 - Math.pow(0.0025, dt);
     // THE CURRENT: a slow figure-of-eight drift that fades in as Otto slows down
     // and vanishes entirely at speed. Hovering, the frame breathes like the water
