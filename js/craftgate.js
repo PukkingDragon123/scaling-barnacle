@@ -1252,14 +1252,25 @@ const Forge = {
       on = this._in(r, m.x, m.y);
       rrect(c, r.x, r.y, r.w, r.h,
         sel ? 'rgba(201,162,113,0.85)' : (on ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.3)'));
+      // shadow OFF on the selected tab. text() drops a black copy one pixel down
+      // and right, which is right for pale ink on water and wrong for dark ink on
+      // a cream plate -- it read as the label printed twice and smeared.
       text(c, names[i], r.x + r.w / 2, r.y + 3.5,
-        { size: 7, color: sel ? '#4a3020' : (locked ? '#7a6a55' : P.dim), align: 'center' });
-      // a shackle bar on the locked tab: cheaper than a glyph and never a tofu box
+        { size: 7, align: 'center', shadow: !sel,
+          color: sel ? '#4a3020' : (locked ? '#7a6a55' : P.dim) });
+      // a padlock on the locked tab, INSIDE it. The old one was a black square
+      // with a bar poking out of the tab's top edge, which read as a rendering
+      // fault rather than a lock. Body, shackle, keyhole, six fillRects.
       if (!locked) continue;
-      c.fillStyle = 'rgba(0,0,0,0.35)';
-      c.fillRect(r.x + r.w - 10, r.y + 4, 6, 6);
-      c.fillStyle = 'rgba(201,162,113,0.7)';
-      c.fillRect(r.x + r.w - 9, r.y + 2, 4, PIX * 2);
+      var lx = r.x + r.w - 11, ly = r.y + 4;
+      c.fillStyle = 'rgba(201,162,113,0.75)';
+      c.fillRect(lx + 1.5, ly - 2.5, 4, 1);            // shackle top
+      c.fillRect(lx + 1.5, ly - 2.5, 1, 2.5);
+      c.fillRect(lx + 4.5, ly - 2.5, 1, 2.5);
+      c.fillStyle = 'rgba(233,180,85,0.9)';
+      c.fillRect(lx, ly, 7, 5.5);                       // body
+      c.fillStyle = 'rgba(30,18,8,0.8)';
+      c.fillRect(lx + 3, ly + 2, 1, 2);                 // keyhole
     }
   },
 

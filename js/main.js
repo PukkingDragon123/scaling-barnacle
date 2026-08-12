@@ -532,13 +532,18 @@ const Game = {
       text(c, ln, 66, y, { size: 7, color: col });
       y += 12;
     }
-    // the plan, right in the guide
+    // the plan, right in the guide. It read `cur.hint` -- a field the old chapter
+    // list had and the survey does not -- so the guide printed the word
+    // "undefined" at the player on every single open.
     text(c, "OTTO'S PLAN", 66, y + 2, { size: 7, color: '#ffe66e' });
-    const cur = G.goal < GOALS.length ? GOALS[G.goal] : null;
-    text(c, cur
-      ? `  ${G.goal}/${GOALS.length} done  >  ${cur.name} — ${cur.hint}`
-      : `  All ${GOALS.length} goals complete. Otto is living the dream!`,
-      66, y + 14, { size: 7, color: '#d8ccb4' });
+    const S_ = (typeof Side !== 'undefined' && Side && Side.ensure()) ? Side : null;
+    const cur = S_ ? S_.mainNow() : null;
+    const n = S_ ? S_.mainDone() : 0, of = S_ ? S_.main().length : 0;
+    let line;
+    if (!cur) line = `  The survey is finished. ${of}/${of}.`;
+    else if (S_ && !S_.taken(cur.key)) line = `  ${n}/${of} done  >  ask Fintan for "${cur.name}"`;
+    else line = `  ${n}/${of} done  >  ${cur.name} — ${cur.how || ''}`;
+    text(c, line, 66, y + 14, { size: 7, color: '#d8ccb4' });
   },
 
   drawCursor(c) {
@@ -575,7 +580,10 @@ const TitleScene = {
     rows.push({ key: 'sound', label: SND.muted ? 'sound: off' : 'sound: on' });
     return rows;
   },
-  _rowY(i) { return 178 + i * 17; },
+  // The board is LEFT of centre so Otto's working column has the right third to
+  // itself. Both the draw and the hit test read these two, so they cannot drift.
+  _boardX() { return Math.round(W * 0.5 - 168 - 18); },
+  _rowY(i) { return 176 + i * 17; },
 
   _activate(row) {
     if (row.key === 'continue') {
@@ -618,7 +626,8 @@ const TitleScene = {
     let overRow = -1;
     for (let i = 0; i < rows.length; i++) {
       const y = this._rowY(i);
-      if (m.y >= y - 5 && m.y <= y + 7 && m.x > W / 2 - 70 && m.x < W / 2 + 70) overRow = i;
+      const bx0 = this._boardX();
+      if (m.y >= y - 5 && m.y <= y + 10 && m.x > bx0 && m.x < bx0 + 168) overRow = i;
     }
     if (overRow >= 0 && overRow !== this.sel) { this.sel = overRow; this.confirm = false; }
     if (m.clicked) {
@@ -651,6 +660,12 @@ const TitleScene = {
           // 2380 and beyond). 1500 is open garden between two of them; the shot
           // breathes on a slow sine instead of travelling.
           const bx = 1500 + Math.sin(t * 0.12) * 26;
+          // He is framed RIGHT OF CENTRE. Posed dead centre he swam straight
+          // through the menu -- the "continue" plate had an otter lying across
+          // it -- and no amount of transparency fixes a character standing where
+          // the buttons are. The camera is offset so his working column sits in
+          // the right third and the board owns the left.
+          const OFF = 62;
           const dive = Math.sin(k * TAU) * 0.5 + 0.5;   // 0 at the surface, 1 at the sand
           const floor = Ocean.floorAt(bx);
           Ocean.time = t;
@@ -664,9 +679,9 @@ const TitleScene = {
           Ocean.anim = dive > 0.55 ? 'dive' : 'cruise';
           Ocean.animT = t;
           Ocean.animFrame = (dive > 0.55 ? 'oswim_1' : 'oswim_' + (Math.floor(t * 6.5) % 4));
-          Ocean.camX = bx - Ocean.VW * 0.5;
+          Ocean.camX = bx - Ocean.VW * 0.5 - OFF;
           // frame the sand along the bottom, Otto a little below centre
-          Ocean.camY = floor + 22 - Ocean.VH;
+          Ocean.camY = floor + 4 - Ocean.VH;   // sand along the very bottom, no dead fill under it
           // The scene's own HUD -- air gauge, bag, prompts -- has no business on a
           // title screen, and Ocean.draw paints it internally. Stub it for this one
           // call and put it straight back, so nothing about the real scene changes.
@@ -686,37 +701,72 @@ const TitleScene = {
       c.imageSmoothingEnabled = sm0;
     }
 
-    // a soft dusk wash so the menu text sits on something calm, stepped in
-    // strips because one rect put a hard line clean across the water
-    c.fillStyle = 'rgba(6,16,28,0.13)';
-    c.fillRect(0, 96, W, H - 96);
-    c.fillRect(0, 120, W, H - 120);
-    c.fillRect(0, 150, W, H - 150);
+    // THE FURNITURE. Everything below is a HANGING SIGN and a BOARD, drawn from
+    // the same wood as every panel in the game, because the title screen was the
+    // one place still setting bare text straight onto the water:
+    //
+    //   * the name floated on the seaweed with a drop shadow and nothing behind
+    //     it, so it read as text over a screenshot
+    //   * only the SELECTED row had a plate; the other two were loose text, so
+    //     the menu changed shape as you arrowed down it
+    //   * three stacked translucent rects were supposed to calm the water and
+    //     instead put three hard horizontal steps across the whole screen
+    //   * and Otto swam straight through all of it
+    //
+    // A sign and a board fix every one of those at once: they are opaque, so the
+    // scene passes BEHIND them, and they are the game's own furniture, so the
+    // menu is made of the same thing the journal is.
 
-    // the name of the place. Kept hand-set: the one piece of lettering the game
-    // owns, and it hangs still, the way a sign does.
-    text(c, "MR. OTTO'S", W / 2 + 1.5, 30 + 1.5, { size: 24, color: 'rgba(20,10,18,0.8)', align: 'center', shadow: false });
-    text(c, "MR. OTTO'S", W / 2, 30, { size: 24, color: '#ffe6b0', align: 'center', shadow: false });
-    text(c, 'CLAM FARM', W / 2 + 2, 58 + 2, { size: 30, color: 'rgba(12,24,44,0.85)', align: 'center', shadow: false });
-    text(c, 'CLAM FARM', W / 2, 58, { size: 30, color: '#5ad2f0', align: 'center', shadow: false });
-    text(c, 'a little life on the water', W / 2, 106, { size: 8, color: '#f4d4a8', align: 'center' });
+    // ---- the hanging sign ---------------------------------------------------
+    const sw = 268, sh = 72, sx = (W - sw) / 2, sy = 14;
+    // two ropes up out of frame, swaying a hair with the sign
+    const sway = Math.sin(t * 0.6) * 0.6;
+    c.fillStyle = '#6b4a2a';
+    c.fillRect(sx + 26, 0, 2, sy + 4);
+    c.fillRect(sx + sw - 28, 0, 2, sy + 4);
+    c.save();
+    c.translate(W / 2, sy);
+    c.rotate(sway * 0.0035);
+    c.translate(-W / 2, -sy);
+    uiPanel(c, sx, sy, sw, sh, 0.97, true);
+    text(c, "MR. OTTO'S", W / 2, sy + 8, { size: 14, color: '#7a5232', align: 'center', shadow: false });
+    text(c, 'CLAM FARM', W / 2, sy + 24, { size: 22, color: '#3f6d86', align: 'center', shadow: false });
+    // a rule and the tagline, on the sign where a sign would carry it
+    for (let dx2 = sx + 22; dx2 < sx + sw - 22; dx2 += 6) {
+      c.fillStyle = '#b08a5c'; c.fillRect(dx2, sy + 52, 4, 1.5);
+      c.fillStyle = '#8a6a44'; c.fillRect(dx2 + 1, sy + 53.5, 4, 1);
+    }
+    text(c, 'a little life on the water', W / 2, sy + 57, { size: 7, color: '#8a6a48', align: 'center', shadow: false });
+    c.restore();
 
-    // the menu
+    // ---- the menu board -----------------------------------------------------
     const rows = this._rows();
+    const bw = 168, bh = 24 + rows.length * 17;
+    const bx2 = this._boardX(), by2 = this._rowY(0) - 12;
+    uiPanel(c, bx2, by2, bw, bh, 0.97, true);
     for (let i = 0; i < rows.length; i++) {
       const y = this._rowY(i);
       const on = i === this.sel;
-      const wRow = textWidth(c, rows[i].label, 9) / 2 + 16;
       if (on) {
-        uiPanel(c, W / 2 - wRow, y - 5, wRow * 2, 15, 0.94, true);
-        text(c, rows[i].label, W / 2, y, { size: 9, align: 'center', color: '#4a3020', shadow: false });
-      } else {
-        text(c, rows[i].label, W / 2, y, { size: 9, align: 'center', color: '#dbe9ee' });
+        // the selected line gets an inked plate and a pointing paw-print dot,
+        // so the shape of the board never changes as you move down it
+        c.fillStyle = 'rgba(122,74,48,0.20)';
+        c.fillRect(bx2 + 7, y - 5, bw - 14, 15);
+        c.fillStyle = '#8a5a2c';
+        c.fillRect(bx2 + 11, y + 1, 3, 3);
       }
+      text(c, rows[i].label, bx2 + bw / 2 + 4, y, {
+        size: 9, align: 'center', shadow: false,
+        color: on ? '#4a3020' : '#8a6a48',
+      });
+    }
+    // the hint lives ON the board: under it, it sat on the sand and vanished
+    for (let dx3 = bx2 + 14; dx3 < bx2 + bw - 14; dx3 += 6) {
+      c.fillStyle = '#c9ab78'; c.fillRect(dx3, by2 + bh - 15, 4, 1);
     }
     text(c, TouchUI.enabled || matchMedia('(pointer: coarse)').matches
-      ? 'tap a line to choose' : 'arrows + enter', W / 2, H - 14,
-      { size: 6.5, color: 'rgba(255,255,255,0.6)', align: 'center' });
+      ? 'tap a line' : 'arrows + enter', bx2 + bw / 2, by2 + bh - 11,
+      { size: 6, color: '#a4805a', align: 'center', shadow: false });
   },
 };
 

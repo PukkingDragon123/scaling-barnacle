@@ -135,9 +135,20 @@ function uiPanel(ctx, x, y, w, h, alpha = 0.92, light = false) {
     wood: '#9c5b32', lit: '#c98a50', dim: '#6b3a1d',
     knob: '#8a4f2a', knobLit: '#c98a50', pin: '#e9b455',
   } : {
-    fill: '#3a2617', fill2: '#301d10', out: '#140b05',
-    wood: '#59371f', lit: '#7e5433', dim: '#241207',
-    knob: '#4e3018', knobLit: '#7e5433', pin: '#b98a3e',
+    // THE DARK VARIANT, which every big menu uses (the bag, the skill trees, the
+    // crafting board) and which had gone flat. The old palette put the wood at
+    // #59371f against a #3a2617 page and the corner knobs at #4e3018 -- BETWEEN
+    // the two -- so the bevel had nothing to catch and the knobs were invisible.
+    // The result was a plain dark-brown rectangle with a hairline border, sitting
+    // in the same game as the journal's carved parchment frame: the same object,
+    // apparently made by two different people.
+    //
+    // These are the same anatomy with the contrast put back. Stained oak against
+    // a dark page, a clear sun side and shadow side, knobs a full step LIGHTER
+    // than the frame so they stand proud of it, and real brass in the pins.
+    fill: '#241a12', fill2: '#1a1109', out: '#0f0803',
+    wood: '#6b4526', lit: '#96663c', dim: '#38200f',
+    knob: '#8a5a30', knobLit: '#c08a52', pin: '#e9b455',
   };
 
   ctx.save();

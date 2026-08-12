@@ -100,7 +100,7 @@ const Shop = {
         });
       }
       if (F && F.SEEDS) {
-        push({ info: 'SEEDS — plant on a tilled bed, water it daily' });
+        push({ info: 'SEEDS — sow them in a planter, fan a current on it daily' });
         for (const sd of F.SEEDS) {
           const held = F.seedCount ? F.seedCount(sd.key) : 0;
           // the LISTED price has to be the price buySeed actually charges, or
