@@ -241,6 +241,48 @@ const bad = (m) => { fails.push(m); console.log('FAIL  ' + m); };
     else ok('a pat counts exactly once, and only when it lands');
   }
 
+  // ---- 8. the sea does not stack ------------------------------------------------
+  // THE tripwire for the spawn bug: a chunk is only remembered once every animal
+  // in it found a pool slot, so a partly-placed chunk came round again the next
+  // frame and spawned the SAME animals a second time -- same id, same x and y,
+  // exactly on top of themselves -- until the pool capped out at twenty with two
+  // or three animals stacked ten deep. Separately, the streamer walks chunk rows
+  // 320 units tall and the seabed sits near 320, so the row below Otto was
+  // entirely buried and everything it rolled spawned inside the sand.
+  const sea = await page.evaluate(async () => {
+    Game.go(Ocean, { from: 'dock' });
+    await new Promise(r => setTimeout(r, 600));
+    let worstLive = 0, dupes = 0, buried = 0, clustered = 0, samples = 0;
+    for (let step = 0; step < 14; step++) {
+      Ocean.px += 420; Ocean.vx = 0;
+      await new Promise(r => setTimeout(r, 260));
+      const live = Tame.mobs.filter(m => m.live);
+      worstLive = Math.max(worstLive, live.length);
+      const ids = {};
+      for (const m of live) {
+        if (m.kind !== 0) continue;
+        if (ids[m.id]) dupes++;
+        ids[m.id] = 1;
+        const fl = Ocean.floorAt(m.x);
+        if (isFinite(fl) && m.y > fl + 6) buried++;
+      }
+      for (let a = 0; a < live.length; a++)
+        for (let c = a + 1; c < live.length; c++) {
+          const dx = live[a].x - live[c].x, dy = live[a].y - live[c].y;
+          if (dx * dx + dy * dy < 25) clustered++;      // within 5 units = stacked
+        }
+      samples++;
+    }
+    return { worstLive, dupes, buried, clustered, samples, cap: Tame.MAX_MOBS };
+  });
+  console.log('the sea:', JSON.stringify(sea));
+  if (sea.dupes) bad(`${sea.dupes} duplicate animal ids in the water -- the same creature spawned twice`);
+  if (sea.buried) bad(`${sea.buried} animals spawned under the seabed`);
+  if (sea.clustered) bad(`${sea.clustered} animals stacked within 5 units of another`);
+  if (sea.worstLive >= sea.cap) bad(`the animal pool hit its cap of ${sea.cap} -- streaming is leaking`);
+  if (!sea.worstLive) bad('no animals streamed in at all');
+  else ok(`the sea streams cleanly: peak ${sea.worstLive}/${sea.cap} live, 0 duplicated, 0 buried, 0 stacked`);
+
   await b.close();
   if (fails.length) {
     console.log('\nFAILS:\n  ' + fails.join('\n  '));

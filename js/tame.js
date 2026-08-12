@@ -601,9 +601,14 @@ const Tame = {
 
     // The open ocean is mostly empty water -- that is what makes finding
     // something an event. Shallows are busier than the deep.
+    // DENSITY. These used to be lower, and the sea still looked busy -- because
+    // half of what you saw was the same animal stacked on itself, and the other
+    // half included a whole chunk row spawned under the sand. With both fixed the
+    // honest count showed up: one animal every few screens. Raised so the water
+    // reads alive on the strength of real animals only.
     var r0 = rng();
-    var n = df < 0.14 ? (r0 < 0.56 ? 1 : (r0 < 0.74 ? 2 : 0))
-      : (r0 < 0.40 ? 1 : (r0 < 0.56 ? 2 : 0));
+    var n = df < 0.14 ? (r0 < 0.62 ? 1 : (r0 < 0.90 ? 2 : 0))
+      : (r0 < 0.50 ? 1 : (r0 < 0.78 ? 2 : 0));
     if (n <= 0) return out;
 
     for (var i = 0; i < n; i++) {
@@ -615,6 +620,16 @@ const Tame = {
       var x = chunkX * cw + this.MARGIN + (cw - this.MARGIN * 2) * (lane + (rng() - 0.5) * 0.16);
       var y = y0 + this.MARGIN + (ch - this.MARGIN * 2) * rng();
       if (y < this.SURFACE_Y + 20) y = this.SURFACE_Y + 20;
+      // ...and nothing swims INSIDE THE SAND. The streamer walks a 3x3 grid of
+      // 320-unit chunk rows around Otto, and the seabed out here sits around 320
+      // -- so the row below him is entirely buried, and every animal it rolled
+      // was placed under the floor. They are pushed up to a body's length above
+      // the sand instead, and a chunk with no water left in it spawns nothing.
+      var fl = this._floorAt(x);
+      if (fl !== null) {
+        if (y0 + this.MARGIN > fl - 24) continue;      // this row is all sand
+        if (y > fl - 24) y = fl - 24;
+      }
       var adult = rng() < 0.72;
       var babies = 0;
       if (adult && sp.babies > 0 && rng() < 0.42) babies = 1 + (rng() < 0.35 && sp.babies > 1 ? 1 : 0);
@@ -624,6 +639,13 @@ const Tame = {
       });
     }
     return out;
+  },
+
+  // The seabed height at x, or null when no scene publishes one.
+  _floorAt: function (x) {
+    if (typeof Ocean === 'undefined' || !Ocean || !Ocean.floorAt) return null;
+    var f = Ocean.floorAt(x);
+    return (typeof f === 'number' && isFinite(f)) ? f : null;
   },
 
   // Where this patch of sea sits in the species ladder, 0..1. The seabed is a
@@ -674,6 +696,20 @@ const Tame = {
       var p = list[i];
       var rec = G.tame.wild[p.id];
       if (rec && rec.k) continue;               // this one already came home
+      // ALREADY IN THE WATER? THEN DO NOT SPAWN IT AGAIN.
+      //
+      // This is THE stacking bug. A chunk is only remembered once EVERY animal in
+      // it found a pool slot -- a sensible rule, since a full pool must not
+      // silently erase one. But the animals that DID get slots stayed live, and
+      // the chunk came round again on the very next frame, and spawned them a
+      // second time: same id, same chunk key, same x and y, exactly on top of
+      // themselves. Then a third. Then the pool hit its cap of twenty with the
+      // same two or three animals stacked ten deep, which is what "there's like
+      // 20 of them stacking" is.
+      //
+      // The id is already the identity (chunkX_chunkY_index), so the test is a
+      // scan for it, and a present animal counts as placed.
+      if (this._liveById(p.id)) continue;
       if (!this._spawnWild(p, rec, ck)) all = false;
     }
     // Only remember the chunk once everything in it actually made it into the
@@ -695,6 +731,16 @@ const Tame = {
     }
     this._seen = fresh;
     this._seenN = n;
+  },
+
+  // Is this exact animal already swimming? ids are stable per chunk, so this is
+  // the whole duplicate test. Linear over 20 slots, called only while streaming.
+  _liveById: function (id) {
+    for (var i = 0; i < this.MAX_MOBS; i++) {
+      var m = this.mobs[i];
+      if (m.live && m.kind === 0 && m.id === id) return true;
+    }
+    return false;
   },
 
   _spawnWild: function (p, rec, ck) {
