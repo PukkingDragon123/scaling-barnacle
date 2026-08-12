@@ -28,91 +28,114 @@ const fails = [];
   await page.waitForFunction(() => Game.fadeDir === 0 && Game.fade === 0, null, { timeout: 30000 });
   await page.evaluate(() => { if (typeof TitleScene !== 'undefined' && Game.scene === TitleScene) { Game.scene = WorldScene; WorldScene.enter({}); } if (G && G.flags) G.flags.letter = true; if (typeof Quests !== 'undefined') Quests.letter = false; });
 
-  // one chapter: apply its condition, let the loop tick, check the page turned
-  const step = async (label, fn) => {
+  // ONE SURVEY STEP, played the whole way round: ask Fintan for it, satisfy it,
+  // walk it back. The round trip IS the feature, so the test does the round trip
+  // -- a step that quietly completes itself is exactly the thing that was
+  // removed, and this suite fails if it comes back.
+  const step = async (key, label, fn) => {
     const before = await page.evaluate(() => ({ goal: G.goal, money: G.money }));
+    // 1. it must be on offer from Fintan, and NOT already satisfied on its own
+    const offer = await page.evaluate((k) => {
+      const q = Side.byKey(k);
+      const o = Side.offerFor('prof');
+      return { offered: !!o && o.key === k, state: Side.state(k) };
+    }, key);
+    if (!offer.offered) fails.push(`${label}: Fintan is not offering it (state ${offer.state})`);
+    // 2. take it through the dialogue box
+    await page.evaluate((k) => { NPCs.talk('prof'); NPCs.doTask('prof'); NPCs.close(); }, key);
+    const took = await page.evaluate((k) => Side.taken(k), key);
+    if (!took) fails.push(`${label}: the TASK button did not take it`);
+    // 3. do the thing
     await page.evaluate(fn);
-    await page.waitForTimeout(500);
-    const after = await page.evaluate(() => ({ goal: G.goal, money: G.money }));
+    await page.waitForTimeout(120);
+    const ready = await page.evaluate((k) => Side.isDone(Side.byKey(k)), key);
+    if (!ready) fails.push(`${label}: doing the work did not satisfy it`);
+    // 4. and nothing may have advanced on its own
+    const mid = await page.evaluate(() => G.goal);
+    if (mid !== before.goal) fails.push(`${label}: G.goal moved without a hand-in`);
+    // 5. hand it back
+    await page.evaluate(() => { NPCs.talk('prof'); NPCs.doTask('prof'); NPCs.close(); });
+    await page.waitForTimeout(200);
+    const after = await page.evaluate(() => ({ goal: G.goal, money: G.money, state: G.side }));
     const ok = after.goal === before.goal + 1;
-    console.log(`${ok ? 'ok  ' : 'FAIL'}  ch${before.goal} ${label}  ($${before.money} -> $${after.money})`);
-    if (!ok) fails.push(`chapter ${before.goal} (${label}) did not complete`);
+    console.log(`${ok ? 'ok  ' : 'FAIL'}  step${before.goal + 1} ${label}  ($${before.money} -> $${after.money})`);
+    if (!ok) fails.push(`${label}: handing it in did not advance the survey`);
     return after;
   };
 
-  await step('hello', () => { NPCs.talk('prof'); NPCs.open = false; });
+  await step('m_hello', 'say hello', () => { NPCs.talk('prof'); NPCs.close(); });
 
-  // Fintan's kit must be in hand BEFORE the shells chapter is attempted
+  // Fintan's kit must be in hand once the survey is under way
   const kit = await page.evaluate(() => {
     let scraper = false;
     for (const s of G.hotbar) if (s && s.key === 'scraper') scraper = true;
     return { kitted: !!G.flags.kitted, scraper };
   });
   console.log('      Fintan kit:', JSON.stringify(kit));
-  if (!kit.kitted || !kit.scraper) fails.push('the scraper did not arrive when the shells chapter opened');
+  if (!kit.kitted || !kit.scraper) fails.push('the scraper did not arrive with the first survey step');
 
-  await step('shells', () => { G.stats.scraped = 5; });
-  await step('crate', () => { G.stats.sold = 1; });
+  await step('m_dive', 'five off the piling', () => {
+    G.storage.clam = 3; G.storage.mussel = 2; G.stats.scraped = 5;
+  });
 
   // the workbench chain must be buildable BAREHANDED: timber and stone come
-  // free by hand, the pick is five chapters away
+  // free by hand, the pick is much later
   const hand = await page.evaluate(() => {
     Mining.ensure();
-    const wood = { kind: 'wood', dead: false };
-    const stone = { kind: 'stone', dead: false };
-    const gold = { kind: 'gold', dead: false };
-    const gate = (n) => !G.mining.hasPick && n.kind !== 'wood' && n.kind !== 'stone';
-    return { wood: !gate(wood), stone: !gate(stone), gold: !gate(gold) };
+    const gate = (kind) => !G.mining.hasPick && kind !== 'wood' && kind !== 'stone';
+    return { wood: !gate('wood'), stone: !gate('stone'), gold: !gate('gold') };
   });
   console.log('      barehanded:', JSON.stringify(hand));
   if (!hand.wood || !hand.stone) fails.push('timber/stone need a pick -- the workbench chain is deadlocked');
   if (hand.gold) fails.push('ores are minable without a pick -- the gate is gone');
 
-  await step('knife', () => { G.stats.cracked = 1; });
-  await step('bag', () => { G.gear.bag = 1; });
-  await step('neighbours', () => { NPCs.talk('farmer'); NPCs.open = false; NPCs.talk('angler'); NPCs.open = false; });
-
-  // Sprout's kit must arrive when the PLANTING chapter opens (the off-by-one)
-  const kit2 = await page.evaluate(() => ({ kitted2: !!G.flags.kitted2, planter: (G.storage.planter || 0) }));
-  console.log('      Sprout kit:', JSON.stringify(kit2));
-  if (!kit2.kitted2) fails.push("Sprout's kit did not arrive when the planting chapter opened");
-  if (kit2.planter < 1) fails.push('no planter in hand at the planting chapter');
-
-  await step('planted', () => {
-    Farm.ensure();
-    Farm.place(G.farm.placed);           // the gifted planter, set down for real
-    Farm.till(0);
-    G.farm.seeds.kelp = 1;
-    Farm.plant(0, 'kelp');               // sets qflags.planted via the journal hook
+  await step('m_bench', 'a bench of your own', () => {
+    if (!Array.isArray(G.placed)) G.placed = [];
+    G.placed.push({ key: 'crack', x: 240 });
   });
-  await step('midbed', () => { G.bridge = 2; });
-  await step('petted', () => { G.qflags.petted = true; });
+  await step('m_crate', 'the first crate', () => { G.stats.sold = 1; });
 
-  // Marlow's pick must arrive when the MINING chapter opens
-  const kit3 = await page.evaluate(() => ({ kitted3: !!G.flags.kitted3, hasPick: G.mining.hasPick }));
-  console.log('      Marlow kit:', JSON.stringify(kit3));
-  if (!kit3.hasPick) fails.push('no pick in hand at the mining chapter');
+  // Marlow's pick must be in hand BEFORE the survey asks for iron (step 5), and
+  // Sprout's planter before her own garden branch opens. Both gates are step
+  // counts on the eight-step scale now -- see js/integrate.js.
+  const kit3 = await page.evaluate(() => ({
+    kitted2: !!G.flags.kitted2, planter: (G.storage.planter || 0),
+    kitted3: !!G.flags.kitted3, hasPick: G.mining.hasPick,
+  }));
+  console.log('      Sprout + Marlow kit:', JSON.stringify(kit3));
+  if (!kit3.kitted2) fails.push("Sprout's kit did not arrive by the fourth survey step");
+  if (kit3.planter < 1) fails.push('no planter in hand once the garden branch is open');
+  if (!kit3.hasPick) fails.push('no pick in hand before the survey asks for iron');
 
-  await step('mined', () => { G.mining.mined = 5; });
-  await step('pearl', () => { G.stats.pearls = 1; });
-  await step('polish', () => { G.stats.polished = 1; });
-  await step('deepbed', () => { G.bridge = 3; });
-  await step('still', () => { G.stats.sharkSurvived = 1; });
-  await step('close', () => { NPCs.ensure(); G.friends.farmer.pts = 200; });
+  await step('m_cord', 'rope and rivets', () => { G.storage.rope = 4; G.storage.iron = 2; });
 
-  // the keepsake must be on the stall shelf now, and only now
+  await step('m_stone', 'strike the stone', () => { G.mining.mined = 15; });
+  await step('m_case', 'something for the case', () => {
+    G.storage.pearlPol = 2; G.storage.abalonePol = 1;
+    G.stats.pearls = 2; G.stats.polished = 3;
+  });
+
+  // the keepsake must be on the stall shelf once somebody is close
   const band = await page.evaluate(() => {
+    NPCs.ensure(); G.friends.farmer.pts = 200;
     Shop.tab = Shop.STALL_TAB;
     return Shop.buildRows().some(r => r.label === 'Pearl Band');
   });
   console.log('      keepsake on the shelf:', band);
-  if (!band) fails.push('the pearl band is not for sale after A Heart Alongside');
+  if (!band) fails.push('the pearl band is not for sale at eight hearts');
 
-  await step('dream', () => { G.money = 5000; });
+  await step('m_survey', 'the survey, finished', () => {
+    G.money = 2500;
+    NPCs.talk('farmer'); NPCs.close();
+    NPCs.talk('angler'); NPCs.close();
+  });
 
-  const end = await page.evaluate(() => ({ goal: G.goal, chapters: QUESTS.length }));
-  console.log(`\nthe story: ${end.goal}/${end.chapters} chapters complete`);
-  if (end.goal !== end.chapters) fails.push('the story did not reach the last page');
+  const end = await page.evaluate(() => ({
+    goal: G.goal, steps: MAIN_QUESTS.length, cineKeys: Object.keys(Cine.BEATS).length,
+  }));
+  console.log(`\nthe survey: ${end.goal}/${end.steps} steps handed in`);
+  if (end.goal !== end.steps) fails.push('the survey did not reach its last step');
+  if (end.cineKeys < 3) fails.push('the cinematic beats are missing');
 
   // ---- the tame layer, pinned ------------------------------------------------
   // Feature work in tame.js was once lost to a container rollback BETWEEN

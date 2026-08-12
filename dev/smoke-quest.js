@@ -50,26 +50,44 @@ const fails = [];
   await page.waitForTimeout(300);
   const s2 = await page.evaluate(() => ({
     letter: Quests.letter, journal: Quests.open,
-    flag: G.flags.letter, chapters: QUESTS.length, goal: G.goal,
+    flag: G.flags.letter, chapters: QUESTS.length, goal: G.goal, errands: SIDE_QUESTS.length,
   }));
   console.log('journal:', JSON.stringify(s2));
   if (s2.letter) fails.push('the letter did not fold away on [E]');
   if (!s2.journal) fails.push('[J] did not open the journal');
-  if (s2.chapters < 12) fails.push('the questline is thin: ' + s2.chapters + ' chapters');
+  // QUESTS is Fintan's survey now (branch 'main'), and the rest of the board is
+  // SIDE_QUESTS. Between them they have to carry the whole game.
+  if (s2.chapters < 8) fails.push('the survey is thin: ' + s2.chapters + ' steps');
+  if (s2.errands < 15) fails.push('the errand board is thin: ' + s2.errands + ' errands');
   await page.screenshot({ path: OUT + '/q-journal.png' });
   await page.keyboard.press('KeyJ');
 
-  // ---- 3. chapter one ticks and pays when Fintan says hello -------------------
+  // ---- 3. step one of the survey: ASKED FOR, done, and HANDED BACK -------------
+  // The point of the restructure is that nothing advances on its own any more.
+  // So: meeting Fintan must NOT move G.goal by itself; taking his first step and
+  // handing it in must.
   const s3 = await page.evaluate(async () => {
     const money0 = G.money, goal0 = G.goal;
     NPCs.talk('prof');                       // the real door: talking sets met
-    NPCs.open = false;                       // close the modal so the loop runs
-    await new Promise(r => setTimeout(r, 600));
-    return { goal0, goal: G.goal, paid: G.money - money0, met: G.friends.prof.met };
+    await new Promise(r => setTimeout(r, 400));
+    const goalAfterMeeting = G.goal;
+    const q = Side.byKey('m_hello');
+    NPCs.doTask('prof');                     // TASK -> takes it
+    const taken = Side.taken(q.key);
+    const doneNow = Side.isDone(q);          // met, so it is already satisfied
+    NPCs.doTask('prof');                     // TASK -> hands it in
+    NPCs.close();
+    await new Promise(r => setTimeout(r, 300));
+    return { goal0, goalAfterMeeting, goal: G.goal, taken, doneNow,
+             paid: G.money - money0, met: G.friends.prof.met, cine: !!Cine.cur };
   });
-  console.log('chapter one:', JSON.stringify(s3));
-  if (!(s3.goal > s3.goal0)) fails.push('meeting Fintan did not turn the page');
-  if (!(s3.paid >= 20)) fails.push('chapter one paid ' + s3.paid + ', expected the letter money');
+  console.log('survey step one:', JSON.stringify(s3));
+  if (s3.goalAfterMeeting !== s3.goal0) fails.push('meeting Fintan advanced the main quest by itself');
+  if (!s3.taken) fails.push('the TASK button did not take the first survey step');
+  if (!s3.doneNow) fails.push('having met him did not satisfy step one');
+  if (!(s3.goal > s3.goal0)) fails.push('handing step one in did not move G.goal');
+  if (!(s3.paid >= 60)) fails.push('step one paid ' + s3.paid + ', expected the survey money');
+  if (!s3.cine) fails.push('the arrival beat did not play');
 
   // ---- 4. the pearl band ------------------------------------------------------
   const s4 = await page.evaluate(() => {

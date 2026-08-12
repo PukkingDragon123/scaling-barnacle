@@ -99,289 +99,57 @@ const NODE_DEFS = {
 const BENCH_CRACK = { clam: 'clamMeat', mussel: 'musselMeat', oyster: 'oysterMeat' };
 const BENCH_POLISH = { abalone: 'abalonePol', pearl: 'pearlPol' };
 
-// THE STORY, one chapter at a time. This used to be a bare list of goal strings;
-// it is the questline now -- each entry carries who it comes from, a few quiet
-// lines for the journal, and a small thank-you at the end. The old GOALS /
-// GOAL_DONE pair is derived from it below, so the banner, the help line and the
-// advance hook in main.js keep working, and an old save's G.goal index still
-// points at a sensible chapter.
+// THE MAIN QUEST IS FINTAN'S, and it is the only quest that is not asked for by
+// somebody else -- because he is the one who wrote to you.
 //
-// The writing rule for every line in here: say it the way a neighbour would.
-// Nothing shouts, nothing explains twice, and nobody is excited on your behalf.
-const QUESTS = [
-  {
-    key: 'hello', from: 'prof',
-    name: 'Say hello at the post',
-    hint: 'Someone is waiting on the deck',
-    how: 'walk right with [D], press [E] at the visitor post',
-    brief: [
-      'The letter said the neighbours were good folk.',
-      'One of them is already standing at the visitor post,',
-      'pretending he only happened to be passing.',
-    ],
-    done: (g) => !!(g.friends && g.friends.prof && g.friends.prof.met),
-    reward: { money: 20, note: 'Fintan slips you a little starting money.' },
-  },
-  {
-    key: 'shells', from: 'prof',
-    name: 'Five shells for the pantry',
-    hint: 'Dive at the piling and scrape',
-    how: '[E] at the piling to dive; hold to scrape, release in the green to pry',
-    brief: [
-      'Start the way everyone here started:',
-      'dive at the piling, scrape five shells loose,',
-      'and climb back up before your air runs thin.',
-    ],
-    done: (g) => g.stats.scraped >= 5,
-    prog: (g) => ({ n: Math.min(5, g.stats.scraped), of: 5 }),
-    reward: { money: 40 },
-  },
-  {
-    key: 'crate', from: 'prof',
-    name: 'Send the first crate',
-    hint: 'Sell on the house laptop; the drone pays on pickup',
-    how: '[E] at the house, open the laptop, SELL tab',
-    brief: [
-      'The laptop in the house reaches the market.',
-      'List what you scraped. A drone comes for the crate',
-      'and leaves the money under a pebble, as is proper.',
-    ],
-    done: (g) => g.stats.sold >= 1,
-    reward: { money: 60 },
-  },
-  {
-    key: 'knife', from: 'angler',
-    name: 'The knack of the knife',
-    hint: 'Crack a shell at the workbench, tap on the centre',
-    how: '[C] opens crafting: make a Shell Workbench, place it, then [E] it',
-    brief: [
-      'Marlow says a shell opens for timing, not force.',
-      'Crack one at the workbench. Wait for the middle.',
-      'You will know the sound when you hear it.',
-    ],
-    done: (g) => g.stats.cracked >= 1,
-    reward: { money: 40 },
-  },
-  {
-    key: 'bag', from: 'sprout',
-    name: 'A bag that fits',
-    hint: 'Workbench: rope and driftwood',
-    how: 'hand-craft a Crude Workbench ([C]), place it, craft the Mesh Bag there',
-    brief: [
-      'Pockets only go so far.',
-      'Twist some rope, save some driftwood,',
-      'and make yourself a proper mesh bag.',
-    ],
-    done: (g) => g.gear.bag >= 1,
-    reward: { money: 50 },
-  },
-  {
-    key: 'neighbours', from: 'sprout',
-    name: 'Meet the neighbours',
-    hint: 'All three of them, wherever you find them',
-    how: 'swim out ([E] at pier edge) -- their houses are east; [E] to talk',
-    brief: [
-      'Three of them live out on the water.',
-      'Sprout grows things, Fintan measures things,',
-      'and Marlow catches things. Say hello properly.',
-    ],
-    done: (g) => {
-      const f = g.friends || {};
-      return !!(f.farmer && f.farmer.met && f.prof && f.prof.met && f.angler && f.angler.met);
-    },
-    prog: (g) => {
-      const f = g.friends || {};
-      let n = 0;
-      for (const k of ['farmer', 'prof', 'angler']) if (f[k] && f[k].met) n++;
-      return { n, of: 3 };
-    },
-    reward: { money: 40, note: 'It is a small bay. Now everyone knows your name.' },
-  },
-  {
-    key: 'planted', from: 'sprout',
-    name: 'Something planted',
-    hint: 'Set the planter on the sand, then a packet in it',
-    how: '[E] on the sand by the pier to set the planter, [E] again to till and plant',
-    brief: [
-      'Sprout left you a planter and will not stop',
-      'mentioning it. Set it down on the seabed by the',
-      'pier, buy a packet, and give the sand a job.',
-    ],
-    done: (g) => !!(g.qflags && g.qflags.planted),
-    reward: { money: 60 },
-  },
-  {
-    key: 'midbed', from: 'prof',
-    name: 'Room to grow',
-    hint: 'BUILD tab: rate the piling for the mid bed',
-    how: 'laptop, BEDS tab',
-    brief: [
-      'The shallows are honest work, but the oysters',
-      'live a little further down. Rate the piling',
-      'and the mid bed is yours to tend.',
-    ],
-    done: (g) => g.bridge >= 2,
-    reward: { money: 80 },
-  },
-  {
-    key: 'petted', from: 'sprout',
-    name: 'A gentle touch',
-    hint: 'Swim up slowly and press [T]',
-    how: 'swim close and slow, [E] starts the petting game, [E] again in the heart',
-    brief: [
-      'The animals out there are curious about you.',
-      'Move slowly, let one look you over,',
-      'and pet it before it changes its mind.',
-    ],
-    done: (g) => !!(g.qflags && g.qflags.petted),
-    reward: { money: 40 },
-  },
-  {
-    key: 'mined', from: 'angler',
-    name: 'Stone and spark',
-    hint: 'Take up a rock with [E] and mind the timing bar',
-    how: '[E] a rock to take it up, then time your swings to the bar',
-    brief: [
-      'The seabed keeps stone, coal and old iron.',
-      'Take a rock up with [E] and swing on the beat.',
-      'Five good chunks will do to start.',
-    ],
-    done: (g) => !!(g.mining && g.mining.mined >= 5),
-    prog: (g) => ({ n: Math.min(5, (g.mining && g.mining.mined) || 0), of: 5 }),
-    reward: { money: 60 },
-  },
-  {
-    key: 'pearl', from: 'prof',
-    name: 'A pearl of your own',
-    hint: 'Crack oysters; clean cracks find more',
-    how: 'crack oysters at the shell bench -- clean timing finds more',
-    brief: [
-      'An irritation, wrapped in patience, until it shines.',
-      'Fintan has a whole lecture about it.',
-      'Find one and you will only get the short version.',
-    ],
-    done: (g) => g.stats.pearls >= 1,
-    reward: { money: 100 },
-  },
-  {
-    key: 'polish', from: 'prof',
-    name: 'Polish and pride',
-    hint: 'Pearls and abalone gleam at the workbench',
-    how: 'the polish tab at the shell bench: pearls and abalone',
-    brief: [
-      'Anything worth keeping is worth the buffing wheel.',
-      'Polish something precious and see what the',
-      'market ledger makes of it.',
-    ],
-    done: (g) => g.stats.polished >= 1,
-    reward: { money: 80 },
-  },
-  {
-    key: 'deepbed', from: 'angler',
-    name: 'The deep bed',
-    hint: 'BUILD tab; bring a headlamp',
-    how: 'laptop, BEDS tab -- craft a headlamp first',
-    brief: [
-      'Below the mid bed the light gives up.',
-      'Marlow fishes down there and says it is fine,',
-      'which from Marlow is a glowing review.',
-    ],
-    done: (g) => g.bridge >= 3,
-    reward: { money: 120 },
-  },
-  {
-    key: 'still', from: 'angler',
-    name: 'Hold steady',
-    hint: 'When the water goes quiet, stop moving',
-    how: 'when the water goes quiet, release every key and wait',
-    brief: [
-      'Sooner or later the gray one drifts past.',
-      'Marlow has said it a dozen ways and means it:',
-      'go still as a piling, and it goes on by.',
-    ],
-    done: (g) => g.stats.sharkSurvived >= 1,
-    reward: { money: 150, note: 'Marlow nods at you differently now.' },
-  },
-  {
-    key: 'close', from: 'sprout',
-    name: 'A heart alongside',
-    hint: 'Talk most days; gifts help; eight hearts',
-    how: 'talk daily, gift often ([E] them, then GIFT)',
-    brief: [
-      'The work fills the days, but not the evenings.',
-      'Keep showing up for somebody -- little gifts,',
-      'a chat most days -- and see what grows.',
-    ],
-    done: (g) => {
-      const f = g.friends || {};
-      for (const k in f) { if (f[k] && f[k].pts >= 200) return true; }
-      return false;
-    },
-    reward: { note: 'The stall quietly starts stocking keepsakes.' },
-  },
-  {
-    key: 'dream', from: 'letter',
-    name: 'The dream: save $5,000',
-    hint: 'A manor, a trophy, and a full coin purse',
-    how: 'sell, grow, polish -- the ledger does the rest',
-    brief: [
-      'The letter never said get rich.',
-      'It said fix the place up and sleep well.',
-      'Still. Five thousand would fix a lot of planks.',
-    ],
-    done: (g) => g.money >= 5000,
-    prog: (g) => ({ n: Math.min(5000, g.money), of: 5000 }),
-    reward: { note: 'The pier is yours, properly. It always was.' },
-  },
-];
-
-// Derived views, kept because main.js (the banner, the advance hook, the help
-// line) and anything else that predates the questline reads these names.
-const GOALS = QUESTS;
-const GOAL_DONE = QUESTS.map((q) => q.done);
+// There used to be a sixteen-chapter STORY here: a list that advanced ITSELF the
+// moment each condition came true, with nobody to talk to about it and no way to
+// take it, refuse it, or hand it in. It ran in parallel with the errand board and
+// the two never met -- one told you what had happened to you, the other let you
+// do things for people. It is gone. Fintan's survey is the spine now, it lives in
+// SIDE_QUESTS below with branch 'main', and you get every step of it the same way
+// you get everything else out here: by going and talking to him.
+//
+// G.goal survives as a NUMBER and nothing more. Every gate in the game reads it
+// (`goal >= 3` unlocks an errand, the kit gifts in js/integrate.js, the shop) and
+// it is still the honest measure of how far in you are -- it is just how many
+// steps of Fintan's survey you have handed in now, written by Side.handIn,
+// instead of a chapter index the game advanced behind your back.
 
 // ---- THE ERRAND BOARD -----------------------------------------------------------
 //
-// QUESTS above is the STORY: one chapter at a time, in order, and it advances by
-// itself the moment its condition comes true. That is the spine. It is not,
-// however, a game -- it never asks you for anything, it never pays you in
-// anything but coin, and every line of it comes from whoever the writer felt
-// like naming.
+// THE BOARD. Four branches, three neighbours, and every one of them has to be
+// ASKED FOR: you walk up, they mention a job, you take it, you go and do it, and
+// you come BACK to them and hand it over. That round trip is the whole point --
+// it is what makes the three of them people who want things rather than three
+// portraits that dispense a hint.
 //
-// This is the other half. An ERRAND has to be ASKED FOR: you walk up to a
-// neighbour, they mention a job, you take it, you go and do it, and you come
-// BACK to them and hand it over. That round trip is the whole point -- it is
-// what makes the three of them feel like people who want things rather than
-// three portraits that dispense a hint.
+// A branch is a chain: step 2 is not offered until step 1 is handed in. They run
+// in PARALLEL, so there is always more than one thing to be doing:
 //
-// Each neighbour owns a BRANCH, and a branch is a chain: step 2 is not offered
-// until step 1 is handed in. The three branches teach three different halves of
-// the game and they run in PARALLEL, so there is always more than one thing to
-// be doing:
-//
-//   garden (Sprout)  -- planters, sowing, tending, harvesting
-//   galley (Marlow)  -- diving, cracking, and then cooking what you cracked
-//   works  (Fintan)  -- driftwood, rope, the bench, the pick, the polished thing
-//
-// ODD JOBS are the fourth kind: unchained one-offs, any of the three may hold
-// one, and they exist so a branch you have run dry is never the end of the list.
+//   main   (Fintan) -- THE MAIN QUEST. His survey of the north pier, eight steps,
+//                      and the one that moves G.goal and so gates everything else
+//   garden (Sprout) -- planters, sowing, tending, harvesting
+//   galley (Marlow) -- diving, cracking, and then cooking what you cracked
+//   odd             -- unchained one-offs, so a branch run dry is never the end
 //
 // FIELDS
 //   key      save id. Never reuse one; G.side is keyed by it.
 //   from     NPC key -- 'farmer' (Sprout), 'angler' (Marlow), 'prof' (Fintan)
-//   branch   'garden' | 'galley' | 'works' | 'odd'
+//   branch   'main' | 'garden' | 'galley' | 'odd'
 //   step     position in the chain; 1 is offered first, n needs n-1 handed in
-//   gate(g)  extra unlock on top of the chain (usually a story chapter)
+//   gate(g)  extra unlock on top of the chain (usually a main-quest step count)
 //   deliver  { itemKey: n } -- counted across every stash, and SPENT on hand-in
 //   done(g)  for errands that are not a delivery (place a thing, cook a thing)
 //   prog(g)  { n, of } for the journal bar; deliver quests get one for free
 //   ask      what they say when they offer it
 //   thanks   what they say when you hand it in
+//   cine     a Cine beat key played on hand-in (js/cutscene.js)
 //   reward   { money, items:{}, seeds:{}, xp, perk, note }
 //
-// A note on the deliveries: they are deliberately things you make, not things
-// you buy. Every one of them can be met by playing, and most of them can only be
-// met by playing -- there is no SELL tab shortcut to a Clam Chowder.
+// A note on the deliveries: they are deliberately things you MAKE, not things you
+// buy. Every one can be met by playing, and most can only be met by playing --
+// there is no SELL tab shortcut to a Clam Chowder.
 const _hasTable = (g, k) => Array.isArray(g.placed) && g.placed.some((e) => e && e.key === k);
 const _crops = (g) => (g.farm && g.farm.crops) || {};
 const _sown = (g) => {
@@ -397,7 +165,7 @@ const SIDE_QUESTS = [
   {
     key: 'g_frame', from: 'farmer', branch: 'garden', step: 1,
     name: 'Sand under a frame',
-    gate: (g) => g.goal >= 3,
+    gate: (g) => g.goal >= 2,
     how: 'buy a Sea Planter at the stall, swim down, [E] on the sand by the pier',
     brief: ['A planter is a box of good soil with legs.', 'Nothing grows on bare seabed. Ask anyone.'],
     ask: [
@@ -549,75 +317,140 @@ const SIDE_QUESTS = [
     reward: { money: 360, items: { custard: 1 }, xp: 45, note: 'The good chair is Sprout\'s now. That is settled.' },
   },
 
-  // ==== FINTAN — THE WORKSHOP LINE ========================================
+  // ==== FINTAN — THE MAIN QUEST ===========================================
+  // THE SURVEY OF THE NORTH PIER. He wrote you the letter, so he is the one with
+  // something to finish, and this is it: eight steps that walk the whole game --
+  // meet the bay, dive it, build a bench, sell a crate, twist rope and cut iron,
+  // break stone, polish something worth keeping, and put it in his case.
+  //
+  // Handing one in is what moves G.goal, so this chain gates the errand board,
+  // the kit gifts and the shop. Steps 1, 4 and 8 carry a Cine beat.
   {
-    key: 'w_bench', from: 'prof', branch: 'works', step: 1,
+    key: 'm_hello', from: 'prof', branch: 'main', step: 1,
+    name: 'Say hello at the post',
+    how: 'walk right with [D] and press [E] at the visitor post',
+    brief: ['He is on the deck most mornings, pretending to be passing.'],
+    ask: [
+      'Fintan: "You came. Good. I half expected a letter back."',
+      '"Then let us begin properly: I am doing a survey of this pier and I have',
+      'been doing it alone for eleven years. Say you will help and I will stop',
+      'saying so at parties."',
+    ],
+    thanks: [
+      'Fintan: "Splendid. Consider yourself surveyed in."',
+      'He hands over a small purse without any ceremony at all, which is his way',
+      'of doing ceremony.',
+    ],
+    done: (g) => !!(g.friends && g.friends.prof && g.friends.prof.met),
+    prog: (g) => ({ n: (g.friends && g.friends.prof && g.friends.prof.met) ? 1 : 0, of: 1 }),
+    cine: 'arrive',
+    reward: { money: 60, items: { driftwood: 2 }, xp: 6 },
+  },
+  {
+    key: 'm_dive', from: 'prof', branch: 'main', step: 2,
+    name: 'Five off the piling',
+    how: '[E] at the piling to dive; hold to scrape the crust, release in the green to pry',
+    brief: ['Three clam and two mussel, off the shallow bed.'],
+    ask: [
+      'Fintan: "First entry: what lives on the north piling. I cannot dive it --',
+      'I am a whale, and it is a piling."',
+      '"Three clam and two mussel. Scrape the crust off first; the shell comes',
+      'away on timing, not on force."',
+    ],
+    thanks: [
+      'He lays them out in a row and writes for some time.',
+      'Fintan: "Healthy. Crowded, even. Almar would be unbearable about it."',
+    ],
+    deliver: { clam: 3, mussel: 2 },
+    reward: { money: 90, items: { rope: 2 }, xp: 10 },
+  },
+  {
+    key: 'm_bench', from: 'prof', branch: 'main', step: 3,
     name: 'A bench of your own',
-    gate: (g) => g.goal >= 2,
     how: 'the anvil on the top rail opens crafting; build the Shell Workbench and place it on the deck',
     brief: ['Two driftwood and a stone. Everything else follows it.'],
     ask: [
-      'Fintan: "Almar had a bench on that deck for forty years and the',
-      'deck has been quieter than I like ever since."',
-      '"Two driftwood, one stone. Build it, put it down where you can',
-      'reach it from the ladder. I shall stop mentioning it after that."',
+      'Fintan: "Almar had a bench on that deck for forty years and the deck has',
+      'been quieter than I like ever since."',
+      '"Two driftwood, one stone. Build it, put it down where you can reach it',
+      'from the ladder, and I shall stop mentioning it."',
     ],
     thanks: [
-      'Fintan runs a flipper along the top and finds it acceptable.',
-      '"Good. Timber, so you can build the next one without asking',
-      'the sea nicely."',
+      'He runs a flipper along the top and finds it acceptable.',
+      'Fintan: "Good. Timber, so you can build the next one without asking the',
+      'sea nicely."',
     ],
     done: (g) => _hasTable(g, 'crack'),
     prog: (g) => ({ n: _hasTable(g, 'crack') ? 1 : 0, of: 1 }),
-    reward: { money: 70, items: { driftwood: 4, rope: 2 }, xp: 12 },
+    reward: { money: 110, items: { driftwood: 4, rope: 2 }, xp: 14 },
   },
   {
-    key: 'w_cord', from: 'prof', branch: 'works', step: 2,
+    key: 'm_crate', from: 'prof', branch: 'main', step: 4,
+    name: 'Send the first crate',
+    how: '[E] at the house, open the laptop, SELL tab -- the drone pays on pickup',
+    brief: ['A survey nobody funds is a hobby.'],
+    ask: [
+      'Fintan: "Now the vulgar part, which is the part that buys planks."',
+      '"The laptop in your house reaches the market. List something, anything. A',
+      'drone comes for the crate and leaves the money under a pebble, as is',
+      'proper."',
+    ],
+    thanks: [
+      'Fintan: "There. You are a going concern. I shall note the date."',
+      'He does note the date. He notes it twice.',
+    ],
+    done: (g) => g.stats.sold >= 1,
+    prog: (g) => ({ n: Math.min(1, g.stats.sold), of: 1 }),
+    cine: 'crate',
+    reward: { money: 150, items: { charcoal: 3 }, xp: 18 },
+  },
+  {
+    key: 'm_cord', from: 'prof', branch: 'main', step: 5,
     name: 'Rope and rivets',
     how: 'kelp rope is one blade at the galley bench; iron comes off the seabed with a pick',
     brief: ['Four rope, two iron. The dull half of every good tool.'],
     ask: [
       'Fintan: "Nobody writes ballads about cordage, and yet."',
-      '"Four rope -- twist it yourself from kelp, it is one blade a coil.',
-      'And two iron. Salvage counts; I am not precious about provenance."',
+      '"Four rope -- twist it yourself from kelp, it is one blade a coil. And two',
+      'iron. Salvage counts; I am not precious about provenance."',
     ],
     thanks: [
-      'Fintan coils the rope the proper way without appearing to think.',
-      '"Adequate. Which from me, as Marlow will tell you, is a great deal."',
+      'He coils the rope the proper way without appearing to think about it.',
+      'Fintan: "Adequate. Which from me, as Marlow will tell you, is a great deal."',
     ],
     deliver: { rope: 4, iron: 2 },
-    reward: { money: 150, xp: 20 },
+    reward: { money: 190, xp: 22 },
   },
   {
-    key: 'w_stone', from: 'prof', branch: 'works', step: 3,
+    key: 'm_stone', from: 'prof', branch: 'main', step: 6,
     name: 'Strike the stone',
     how: '[E] a rock on the seabed to take it up, then time each swing to the bar',
     brief: ['Fifteen nodes. The bar is the whole skill.'],
     ask: [
-      'Fintan: "The seabed here is a layer cake and I want to know what is',
-      'in the middle of it."',
-      '"Fifteen nodes, any kind. Take a rock up with [E] and swing ON the',
-      'bar -- the rock decides how fast, not you."',
+      'Fintan: "The seabed here is a layer cake and I want to know what is in the',
+      'middle of it."',
+      '"Fifteen nodes, any kind. Take a rock up with [E] and swing ON the bar --',
+      'the rock decides how fast, not you."',
     ],
     thanks: [
-      'Fintan spreads the samples out and goes quiet for a full minute.',
-      '"Iron under the sand shelf. Almar always said so and I told him he',
+      'He spreads the samples out and goes quiet for a full minute.',
+      'Fintan: "Iron under the sand shelf. Almar always said so and I told him he',
       'was guessing." A pause. "He was guessing. He was also right."',
     ],
     done: (g) => ((g.mining && g.mining.mined) || 0) >= 15,
     prog: (g) => ({ n: Math.min(15, (g.mining && g.mining.mined) || 0), of: 15 }),
-    reward: { money: 190, items: { iron: 2, charcoal: 4 }, xp: 28 },
+    reward: { money: 240, items: { iron: 2, charcoal: 4 }, xp: 30 },
   },
   {
-    key: 'w_case', from: 'prof', branch: 'works', step: 4,
+    key: 'm_case', from: 'prof', branch: 'main', step: 7,
     name: 'Something for the case',
     how: 'crack oysters for pearls, then polish pearl and abalone at the shell bench',
     brief: ['Two polished pearls and a polished abalone. Buffed, not raw.'],
     ask: [
-      'Fintan: "There is a glass case in my study with a card in it that',
-      'says NORTH PIER, and nothing else. It has said that since Almar died."',
-      '"Two pearls and an abalone, polished properly. I would like the card',
-      'to have something to stand next to."',
+      'Fintan: "There is a glass case in my study with a card in it that reads',
+      'NORTH PIER, and nothing else. It has read that since Almar died."',
+      '"Two pearls and an abalone, polished properly. I would like the card to',
+      'have something to stand next to."',
     ],
     thanks: [
       'He sets them on the velvet, moves them a quarter inch, and stops.',
@@ -625,14 +458,46 @@ const SIDE_QUESTS = [
       'He does not say whose pier. He does not have to.',
     ],
     deliver: { pearlPol: 2, abalonePol: 1 },
-    reward: { money: 450, items: { iron: 4, driftwood: 8 }, xp: 55, note: 'The card in the case has company now.' },
+    reward: { money: 420, items: { iron: 4, driftwood: 8 }, xp: 50 },
+  },
+  {
+    key: 'm_survey', from: 'prof', branch: 'main', step: 8,
+    name: 'The survey, finished',
+    how: 'know all three neighbours, and have $2,500 put by',
+    brief: ['A pier is the people on it. He wants both halves written down.'],
+    ask: [
+      'Fintan: "Last entry, and it is not a shell."',
+      '"A pier is not timber, it is the people standing on it. Know all three of',
+      'us properly. And have two and a half thousand put by -- I want the record',
+      'to show the place PAYS, or the next otter will not come."',
+    ],
+    thanks: [
+      'He closes the book, ties it, and puts it in your hands.',
+      'Fintan: "Yours now. Eleven years of mine, and the last year the only one',
+      'anybody enjoyed."',
+      'The lamp is lit. Sprout has fallen asleep in the good chair. Marlow is',
+      'pretending he did not come. Out past the planks the water goes on being',
+      'exactly as generous as it ever was.',
+    ],
+    done: (g) => {
+      const f = g.friends || {};
+      return g.money >= 2500 && !!(f.farmer && f.farmer.met && f.prof && f.prof.met && f.angler && f.angler.met);
+    },
+    prog: (g) => {
+      const f = g.friends || {};
+      let n = 0;
+      for (const k of ['farmer', 'prof', 'angler']) if (f[k] && f[k].met) n++;
+      return { n: n + (g.money >= 2500 ? 1 : 0), of: 4 };
+    },
+    cine: 'survey',
+    reward: { money: 900, xp: 80, note: 'The pier is yours, properly. It always was.' },
   },
 
   // ==== ODD JOBS — unchained, and always something left to do =============
   {
     key: 'o_posts', from: 'farmer', branch: 'odd', step: 1,
     name: 'Barnacles off the posts',
-    gate: (g) => g.goal >= 2,
+    gate: (g) => g.goal >= 1,
     how: 'barnacles scrape off the piling like anything else down there',
     brief: ['Six barnacles. They grow back. They always grow back.'],
     ask: [
@@ -646,7 +511,7 @@ const SIDE_QUESTS = [
   {
     key: 'o_pot', from: 'angler', branch: 'odd', step: 1,
     name: 'A pot to replace a pot',
-    gate: (g) => g.goal >= 4,
+    gate: (g) => g.goal >= 3,
     how: 'crab pot: 3 driftwood and 2 rope at the galley bench',
     brief: ['Three driftwood, two rope. He lost his on the rocks.'],
     ask: [
@@ -661,7 +526,7 @@ const SIDE_QUESTS = [
   {
     key: 'o_tea', from: 'prof', branch: 'odd', step: 1,
     name: 'One cup, no sugar',
-    gate: (g) => g.goal >= 5,
+    gate: (g) => g.goal >= 4,
     how: 'kelp tea: 1 kelp blade + 1 fresh water, COOK tab at the galley bench',
     brief: ['He has asked for it four times now, quite politely.'],
     ask: [
@@ -678,7 +543,7 @@ const SIDE_QUESTS = [
   {
     key: 'o_friend', from: 'farmer', branch: 'odd', step: 1,
     name: 'Make three friends',
-    gate: (g) => g.goal >= 8,
+    gate: (g) => g.goal >= 5,
     how: 'swim close and slow, [E] to start the petting game, [E] again inside the heart',
     brief: ['Pet three of them. Slowly. They can tell when you are in a hurry.'],
     ask: [
@@ -696,7 +561,7 @@ const SIDE_QUESTS = [
   {
     key: 'o_lamp', from: 'angler', branch: 'odd', step: 1,
     name: 'Dark water',
-    gate: (g) => g.goal >= 10,
+    gate: (g) => g.goal >= 6,
     how: 'the dive lamp is a gear recipe; iron and charcoal make the housing',
     brief: ['He will not go down to the deep bed with you until you own a light.'],
     ask: [
@@ -709,6 +574,15 @@ const SIDE_QUESTS = [
     reward: { money: 160, items: { charcoal: 4 }, xp: 22 },
   },
 ];
+
+// The main chain, in step order, derived so there is one list and no second copy
+// to fall out of sync. QUESTS and GOALS are the OLD names for the old chapter
+// list; they point here now, because the tracker, the journal and the hint line
+// all want "the thing you are working on for Fintan" and that is what this is.
+const MAIN_QUESTS = SIDE_QUESTS.filter((q) => q.branch === 'main')
+  .sort((a, b) => (a.step || 0) - (b.step || 0));
+const QUESTS = MAIN_QUESTS;
+const GOALS = MAIN_QUESTS;
 
 const SAVE_KEY = 'ottoClamFarm.v1';
 

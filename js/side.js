@@ -41,6 +41,14 @@ const Side = {
     return true;
   },
 
+  // Called once on boot: an old save carries a chapter-index G.goal that no
+  // longer means anything, so it is rewritten from what has actually been handed
+  // in. A brand new game starts at 0 either way.
+  bootGoal() {
+    if (!this.ensure()) return;
+    G.goal = this.mainDone();
+  },
+
   // ---- the list ------------------------------------------------------------------
   all() { return typeof SIDE_QUESTS !== 'undefined' ? SIDE_QUESTS : []; },
   byKey(k) { for (const q of this.all()) if (q.key === k) return q; return null; },
@@ -246,13 +254,36 @@ const Side = {
       try { NPCs.add(q.from, 30); } catch (e) {}
     }
 
+    this._syncGoal();
     this._flash = { name: q.name, money: r.money || 0, items: r.items || null, note: r.note || '', t: 3.0 };
+    // a main-quest step gets the cinematic beat as well as the slip
+    if (q.branch === 'main' && typeof Quests !== 'undefined' && Quests.complete) Quests.complete(q);
+    if (q.cine && typeof Cine !== 'undefined' && Cine.play) Cine.play(q.cine);
     if (typeof SND !== 'undefined') SND.cash();
     if (typeof Game !== 'undefined' && Game.save) Game.save();
     return true;
   },
 
   perk(name) { return this.ensure() ? !!G.perks[name] : false; },
+
+  // ---- the main chain --------------------------------------------------------------
+  // Fintan's survey. It is an ordinary branch in every way except two: it is the
+  // one G.goal counts, and the journal gives it its own page.
+  main() { return typeof MAIN_QUESTS !== 'undefined' ? MAIN_QUESTS : []; },
+  mainDone() { let n = 0; for (const q of this.main()) if (this.finished(q.key)) n++; return n; },
+  // the step you are on: the first one not handed in
+  mainNow() { for (const q of this.main()) if (!this.finished(q.key)) return q; return null; },
+
+  // G.goal IS the main chain's progress. It used to be a chapter index that the
+  // game advanced on its own; every gate in the codebase reads it (`goal >= 3`
+  // unlocks an errand, the kit gifts in js/integrate.js, the shop), so it stays a
+  // real saved number -- it is just written HERE now, by handing a step in, and
+  // never by anything happening to you quietly.
+  _syncGoal() {
+    if (!this.ensure()) return;
+    const n = this.mainDone();
+    if (G.goal !== n) G.goal = n;
+  },
 
   // ---- per-frame -------------------------------------------------------------------
   update(dt) {

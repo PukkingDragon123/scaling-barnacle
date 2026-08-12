@@ -102,6 +102,10 @@
   // than under it -- the order only matters for who counts first, but keeping
   // it deterministic is why the smoke tests can assert on it.
   if (M.Side && M.Side.install) M.Side.install();
+  // G.goal is Fintan's survey progress now, not a chapter index. An old save
+  // carries the old number, so it is rewritten from what has actually been
+  // handed in -- once, here, before anything reads it as a gate.
+  if (M.Side && M.Side.bootGoal) M.Side.bootGoal();
 
   // ---- the deck's interaction list ---------------------------------------------
   // Every system that puts something on the dock contributes spots; the world
@@ -208,9 +212,19 @@
 
   // ---- what you start the game holding: NOTHING -------------------------------
   // The starting kit used to be handed over silently on frame one. It comes from
-  // people now: Fintan brings Almar's old scraper and pry bar when you say hello
-  // (chapter one), and Sprout brings the watering can and hoe with the planting
-  // chapter. Owning a story means the story gets to hand you things.
+  // people now, and the gates are STEPS OF FINTAN'S SURVEY -- G.goal counts how
+  // many you have handed in (js/side.js), so these numbers are on an eight-step
+  // scale, not the old sixteen-chapter one:
+  //
+  //   1  say hello        -> Fintan brings Almar's scraper and pry bar
+  //   2  five off the piling -> Sprout brings the can, hoe and first planter,
+  //                          which is when Sprout's own garden branch opens
+  //   4  the first crate  -> Marlow lends the pick, one step BEFORE the survey
+  //                          asks for iron, because iron needs a pick
+  //
+  // The old numbers (6 and 9) were chapter indices on a list that is gone; 9 was
+  // past the end of the new chain, so Marlow's pick never arrived at all and the
+  // step that wants two iron was unfinishable.
   if (M.Hotbar) {
     const wu2 = WorldScene.update.bind(WorldScene);
     WorldScene.update = function (dt) {
@@ -222,11 +236,8 @@
         Game.toast("Fintan leaves Almar's old scraper and pry bar on the post.");
         Game.save();
       }
-      if (G && G.flags && !G.flags.kitted2 && G.goal >= 6) {
-        // >= 6, NOT 7: 'planted' is chapter index 6, and the hoe, can and
-        // planter are FOR that chapter -- an off-by-one here handed them over
-        // after the player had already scraped through it unaided
-        // the planting chapter opens: Sprout's gift
+      if (G && G.flags && !G.flags.kitted2 && G.goal >= 2) {
+        // survey step two handed in: Sprout's gift, and the garden branch with it
         G.flags.kitted2 = true;
         M.Hotbar.give('tool', 'can', 1);
         M.Hotbar.give('tool', 'hoe', 1);
@@ -234,8 +245,8 @@
         Game.toast('Sprout drops off a watering can, a hoe, and one sea planter. "For the sand."');
         Game.save();
       }
-      if (G && G.flags && !G.flags.kitted3 && G.goal >= 9 && M.Mining && M.Mining.ensure) {
-        // the mining chapter opens: Marlow's spare pick
+      if (G && G.flags && !G.flags.kitted3 && G.goal >= 4 && M.Mining && M.Mining.ensure) {
+        // survey step four handed in: Marlow's spare pick, before iron is asked for
         G.flags.kitted3 = true;
         M.Mining.ensure();
         G.mining.hasPick = true;

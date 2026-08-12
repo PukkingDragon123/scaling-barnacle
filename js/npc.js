@@ -302,7 +302,12 @@ const NPCs = {
     }
     if (G.bridge >= 3 && !G.gear.lamp) return 'The deep piling is dark as a drawer. Craft the dive lamp at your workbench before you go down there again.';
     if (G.gear.gloves === false && G.bridge >= 2) return 'Urchins are all roe and grievance. Make work gloves at the workbench and take the roe safely.';
-    if (G.goal < GOALS.length) return `${GOALS[G.goal].name}. ${GOALS[G.goal].hint}.`;
+    if (typeof Side !== 'undefined' && Side && Side.ensure()) {
+      const mq = Side.mainNow();
+      if (mq) return Side.taken(mq.key)
+        ? `${mq.name}. ${mq.how || ''}`
+        : `Ask me about the survey -- ${mq.name.toLowerCase()} is next.`;
+    }
     return 'You have done everything I set you. Astonishing. Now do it again, slower, and enjoy it.';
   },
 

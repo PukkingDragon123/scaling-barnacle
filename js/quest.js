@@ -237,7 +237,8 @@ const Quests = {
   _errandRows() {
     const rows = [];
     if (typeof Side === 'undefined' || !Side || !Side.ensure()) return rows;
-    const all = Side.all();
+    // the main chain has its own page; this one is everything else
+    const all = Side.all().filter((q) => q.branch !== 'main');
     for (const q of all) if (Side.taken(q.key)) rows.push({ q, kind: Side.isDone(q) ? 'ready' : 'active' });
     for (const q of all) if (Side.offerable(q)) rows.push({ q, kind: 'offer' });
     for (const q of all) if (Side.finished(q.key)) rows.push({ q, kind: 'done' });
@@ -269,7 +270,7 @@ const Quests = {
     // that is the number a player actually wants at a glance.
     {
       const nAct = (typeof Side !== 'undefined' && Side && Side.ensure()) ? Side.activeCount() : 0;
-      const labels = ['STORY', nAct ? `ERRANDS ${nAct}` : 'ERRANDS'];
+      const labels = ['SURVEY', nAct ? `ERRANDS ${nAct}` : 'ERRANDS'];
       this._tabRects = [];
       let tx = x + 168;
       for (let i = 0; i < 2; i++) {
@@ -309,17 +310,20 @@ const Quests = {
     if (this.tab === 1) { this._drawErrands(c, x, y, w, h); return; }
 
     const rowH = 26, listY = y + 29;
-    const cur = G.goal || 0;
+    const S_ = (typeof Side !== 'undefined' && Side && Side.ensure()) ? Side : null;
+    const chain = S_ ? S_.main() : (typeof QUESTS !== 'undefined' ? QUESTS : []);
+    const cur = S_ ? S_.mainDone() : (G.goal || 0);
     for (let i = 0; i < this.ROWS; i++) {
       const qi = this.scroll + i;
-      if (qi >= QUESTS.length) break;
+      if (qi >= chain.length) break;
       // a notebook does not list what has not happened yet: nothing is written
       // past the line you are on
       if (qi > cur) break;
-      const q = QUESTS[qi];
+      const q = chain[qi];
       const ry = listY + i * rowH;
       const done = qi < cur, active = qi === cur;
       const known = qi <= cur;
+      const took = active && S_ ? S_.taken(q.key) : false;
 
       if (active) {
         c.fillStyle = 'rgba(232,169,60,0.16)';
@@ -347,25 +351,31 @@ const Quests = {
         color: done ? '#8a7458' : (active ? '#4a3020' : '#a4805a'),
       });
       if (active) {
-        // one line of story, then HOW in gold: the journal doubles as the
-        // tutorial, and the how-line carries the actual keys
-        const lines = q.brief || [];
-        if (lines.length) text(c, lines[0], x + 40, ry + 9, { size: 6.5, color: '#7a5c3c', shadow: false });
-        if (q.how) text(c, q.how, x + 40, ry + 16, { size: 6.5, color: '#a8742a', shadow: false });
-        // what finishing it brings, when it brings anything countable
+        // one line of the brief, then HOW in gold: the journal doubles as the
+        // tutorial and the how-line carries the actual keys. An untaken step
+        // says so instead -- you cannot be working on something you never took.
+        if (!took) {
+          text(c, 'not taken yet -- go and ask Fintan for it', x + 40, ry + 9,
+            { size: 6.5, color: '#a4805a', shadow: false });
+        } else {
+          const lines = q.brief || [];
+          if (lines.length) text(c, lines[0], x + 40, ry + 9, { size: 6.5, color: '#7a5c3c', shadow: false });
+          if (q.how) text(c, q.how, x + 40, ry + 16, { size: 6.5, color: '#a8742a', shadow: false });
+        }
         const rw = q.reward || {};
         if (rw.money) {
           text(c, `reward  $${rw.money}`, x + w - 16, ry, { size: 6.5, color: '#3f9a58', align: 'right', shadow: false });
         }
-        const p = q.prog ? q.prog(G) : null;
-        if (p) text(c, `${p.n}/${p.of}`, x + w - 16, ry + 9, { size: 6.5, color: '#a4805a', align: 'right', shadow: false });
+        const p = took && S_ ? S_.prog(q) : null;
+        if (p) text(c, S_ && S_.isDone(q) ? 'ready' : `${p.n}/${p.of}`, x + w - 16, ry + 9,
+          { size: 6.5, color: (S_ && S_.isDone(q)) ? '#3f9a58' : '#a4805a', align: 'right', shadow: false });
       } else if (done && q.from) {
         text(c, `for ${this.GIVER_NAMES[q.from] || q.from}`, x + 40, ry + 9, { size: 6.5, color: '#b09878', shadow: false });
       }
     }
 
     if (this.scroll > 0) text(c, '^', x + w - 14, listY, { size: 8, color: '#a4805a', shadow: false });
-    if (this.scroll + this.ROWS < QUESTS.length)
+    if (this.scroll + this.ROWS < chain.length)
       text(c, 'v', x + w - 14, listY + this.ROWS * rowH - 12, { size: 8, color: '#a4805a', shadow: false });
     text(c, '[J] close   arrows scroll   [Tab] errands', x + 12, y + h - 12, { size: 6.5, color: '#a4805a', shadow: false });
   },
@@ -384,7 +394,7 @@ const Quests = {
       text(c, 'Nobody has asked you for anything yet.', x + 22, y + 44, { size: 8, color: '#7a5c3c', shadow: false });
       text(c, 'Go and talk to the neighbours. They all want', x + 22, y + 58, { size: 6.5, color: '#a4805a', shadow: false });
       text(c, 'something, and they are all too polite to shout it.', x + 22, y + 68, { size: 6.5, color: '#a4805a', shadow: false });
-      text(c, '[J] close   [Tab] the story', x + 12, y + h - 12, { size: 6.5, color: '#a4805a', shadow: false });
+      text(c, '[J] close   [Tab] the survey', x + 12, y + h - 12, { size: 6.5, color: '#a4805a', shadow: false });
       return;
     }
 
@@ -461,7 +471,7 @@ const Quests = {
     if (this.escroll > 0) text(c, '^', x + w - 14, listY, { size: 8, color: '#a4805a', shadow: false });
     if (this.escroll < maxE) text(c, 'v', x + w - 14, listY + this.EROWS * rowH - 14, { size: 8, color: '#a4805a', shadow: false });
     const nd = (typeof Side !== 'undefined' && Side) ? Side.doneCount() : 0;
-    text(c, `[J] close   arrows scroll   [Tab] the story`, x + 12, y + h - 12, { size: 6.5, color: '#a4805a', shadow: false });
+    text(c, `[J] close   arrows scroll   [Tab] the survey`, x + 12, y + h - 12, { size: 6.5, color: '#a4805a', shadow: false });
     text(c, `${nd} done`, x + w - 16, y + h - 12, { size: 6.5, align: 'right', color: '#a4805a', shadow: false });
   },
 

@@ -362,17 +362,12 @@ const Game = {
         this.save();
       }
     }
-    // the story: turn the page when the current chapter's condition comes true.
-    // The reward and the (quiet) toast live in Quests.complete; the flat +$25
-    // fanfare this used to print is gone with the rest of the shouting.
-    if (G.goal < GOALS.length && GOAL_DONE[G.goal](G)) {
-      const done = GOALS[G.goal];
-      G.goal++;
-      if (typeof Quests !== 'undefined' && Quests.complete) Quests.complete(done);
-      else { SND.chime(); this.toast(`journal: "${done.name}" -- done.`); }
-      if (G.goal >= GOALS.length) this.toast('That was the last page of the journal.');
-      this.save();
-    }
+    // (NOTHING ADVANCES THE STORY BEHIND YOUR BACK ANY MORE. A sixteen-chapter
+    // list used to be polled here every frame and turned its own page the moment
+    // a condition came true -- a story that happened TO you, with nobody to talk
+    // to about it. The main quest is Fintan's survey now: you take each step from
+    // him and you hand it back to him, and Side.handIn is the only thing that
+    // moves G.goal. See js/side.js.)
     // autosave
     this.saveT -= dt;
     if (this.saveT <= 0) { this.saveT = 25; this.save(); }
@@ -414,10 +409,17 @@ const Game = {
     // chapter is countable, and the current hint -- and clicking it (or [J])
     // opens the journal.
     {
-      const q = G.goal < GOALS.length ? GOALS[G.goal] : null;
+      // the main quest is whichever step of Fintan's survey is still open, and
+      // whether you have TAKEN it is part of what the tracker has to say
+      const S_ = (typeof Side !== 'undefined' && Side && Side.ensure()) ? Side : null;
+      const q = S_ ? S_.mainNow() : null;
+      const took = q && S_ ? S_.taken(q.key) : false;
+      const ready = q && took && S_ ? S_.isDone(q) : false;
       const name = q ? q.name : 'The pier, at ease';
-      const hint = q ? q.hint : '';
-      const p = q && q.prog ? q.prog(G) : null;
+      const hint = !q ? ''
+        : (!took ? 'Fintan has the next one -- go and ask'
+          : (ready ? 'done -- take it back to Fintan' : (q.how || '')));
+      const p = (q && took && S_) ? S_.prog(q) : null;
       const tw = 118;
       const th = p ? 40 : 34;
       const tx = W - tw - 6, ty = 68;   // below the day panel and the icon buttons
@@ -755,6 +757,7 @@ function frame(now) {
   if (Game.fadeDir === 0 && G && Game.scene !== TitleScene &&
       typeof Quests !== 'undefined' && !Shop.open && !Bench.open && !Game.helpOpen) {
     Quests.update(dt);
+    if (typeof Cine !== 'undefined') Cine.update(dt);
     // clicking the chapter banner is the mouse's way into the journal
     if (!Quests.open && !Quests.letter && Input.mouse.clicked && Game._goalRect) {
       const r = Game._goalRect, m = Input.mouse;
@@ -838,7 +841,12 @@ function frame(now) {
     ctx.restore();
   }
   // the HUD goes under the modals — a full-screen panel would collide with it
-  const cine = typeof IntroScene !== 'undefined' && Game.scene === IntroScene;
+  // A CUT OWNS THE FRAME. The intro is a whole scene; a Cine beat plays over
+  // whatever you were standing in -- and a letterboxed shot with the hearts, the
+  // day panel and two quest trackers still lit in the corners is not a cut, it is
+  // a screenshot with black bars on it. Both suppress the HUD the same way.
+  const cine = (typeof IntroScene !== 'undefined' && Game.scene === IntroScene) ||
+    (typeof Cine !== 'undefined' && Cine.cur);
   if (G && Game.scene !== TitleScene && !cine && !Shop.open && !Bench.open) Game.drawHUD(ctx);
   if (Shop.open) Shop.draw(ctx);
   if (Bench.open) Bench.draw(ctx);
@@ -847,6 +855,9 @@ function frame(now) {
   // the errand hand-in slip sits above everything but the touch pads: it goes up
   // WHILE the dialogue box is still open, which is the moment it is about
   if (G && Game.scene !== TitleScene && !cine && typeof Side !== 'undefined') Side.draw(ctx);
+  // the cinematic beats go OVER everything but the fade: they are cuts, and a cut
+  // is the top of the frame by definition
+  if (G && Game.scene !== TitleScene && typeof Cine !== 'undefined') Cine.draw(ctx);
   TouchUI.draw(ctx);
   Game.drawToasts(ctx);
   if (Game.helpOpen) Game.drawHelp(ctx);

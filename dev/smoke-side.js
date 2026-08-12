@@ -70,15 +70,21 @@ const bad = (m) => { fails.push(m); console.log('FAIL  ' + m); };
   if (shape.chainHole) bad(`${shape.chainHole} errands that are unreachable or unfinishable`);
   if (Object.keys(shape.byFrom).length < 3) bad('the errands do not come from three different neighbours');
   if (Object.keys(shape.byBranch).length < 4) bad('there are fewer than four branches');
+  if (!shape.byBranch.main) bad('there is no main branch -- the survey is missing');
   ok(`${shape.n} errands, ${Object.keys(shape.byFrom).length} givers, ${Object.keys(shape.byBranch).length} branches`);
 
-  // ---- 1. nothing is on offer before its gate --------------------------------
+  // ---- 1. on day one, ONE thing is on offer, and it is the survey ------------
+  // Fintan's first step is ungated on purpose: it is the only thing in the game
+  // you can be asked for before you have done anything. Everything else waits.
   const gated = await page.evaluate(() => {
     G.goal = 0;
-    return { offers: SIDE_QUESTS.filter(q => Side.offerable(q)).map(q => q.key) };
+    const offers = SIDE_QUESTS.filter(q => Side.offerable(q));
+    return { keys: offers.map(q => q.key), branches: offers.map(q => q.branch) };
   });
-  if (gated.offers.length) bad(`day one, chapter zero, and ${gated.offers.length} errands are already on offer: ${gated.offers}`);
-  else ok('nothing is offered before its story gate');
+  console.log('day one offers:', JSON.stringify(gated));
+  if (gated.keys.length !== 1 || gated.keys[0] !== 'm_hello')
+    bad(`day one should offer exactly the first survey step, got: ${gated.keys}`);
+  else ok('day one offers exactly one thing: step one of the survey');
 
   // ---- 2. each neighbour offers their OWN branch ------------------------------
   const owners = await page.evaluate(() => {
@@ -97,7 +103,8 @@ const bad = (m) => { fails.push(m); console.log('FAIL  ' + m); };
   }
   const branches = Object.keys(owners).map(k => owners[k] && owners[k].branch);
   if (new Set(branches.filter(Boolean)).size < 3) bad('the three neighbours are offering the same branch');
-  else ok('each neighbour offers their own branch');
+  if (owners.prof && owners.prof.branch !== 'main') bad('Fintan is not offering the main quest');
+  if (!fails.length) ok('each neighbour offers their own branch, and Fintan owns the main quest');
 
   // ---- 3. the round trip, through the dialogue box ----------------------------
   // Sprout's first: take it, fail to hand it in, do it, hand it in, get paid.

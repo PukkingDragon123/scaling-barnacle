@@ -110,3 +110,168 @@ const IntroScene = {
     }
   },
 };
+
+// ---- CINE: short scripted beats, played over whatever scene you are standing in
+//
+// The intro above is a whole scene, which is right for an opening and much too
+// heavy for a moment. This is the light version: letterbox bars slide in, a
+// couple of lines type themselves over a dimmed frame, one hand-drawn flourish
+// plays behind them, and it hands the game straight back. Two to five seconds,
+// skippable by anything, and it never takes control away -- the world keeps
+// updating underneath, so a beat can fire mid-swim without the game stopping.
+//
+// Beats are pure data (BEATS below) so a quest can name one and nothing else has
+// to know. js/side.js fires them by key on a main-quest hand-in.
+const Cine = {
+  cur: null,          // { key, t, dur, lines, art }
+  _t: 0,
+
+  BEATS: {
+    // step 1 -- the survey begins. His book, opening.
+    arrive: {
+      dur: 4.6,
+      art: 'book',
+      lines: [
+        'THE NORTH PIER SURVEY',
+        'entry one, in a hand that has waited eleven years',
+        'for somebody to hold the other end of the tape',
+      ],
+    },
+    // step 4 -- the drone lifts the first crate. The pier earns.
+    crate: {
+      dur: 4.2,
+      art: 'drone',
+      lines: [
+        'THE FIRST CRATE',
+        'it goes out at noon and the money is under a pebble by three',
+        'which is, Fintan notes, how a place starts paying for itself',
+      ],
+    },
+    // step 8 -- the case, the card, and the book changing hands.
+    survey: {
+      dur: 6.4,
+      art: 'case',
+      lines: [
+        'NORTH PIER',
+        'the card in the case has company now',
+        'the lamp is lit, the good chair is taken,',
+        'and the water goes on being exactly as generous as it was',
+      ],
+    },
+  },
+
+  play(key) {
+    const b = this.BEATS[key];
+    if (!b) return false;
+    this.cur = { key, t: 0, dur: b.dur, lines: b.lines, art: b.art };
+    if (typeof SND !== 'undefined' && SND.chime) SND.chime();
+    return true;
+  },
+
+  update(dt) {
+    if (!this.cur) return;
+    this.cur.t += dt;
+    this._t += dt;
+    const skip = typeof Input !== 'undefined' &&
+      (Input.p('Escape') || Input.p('Enter') || Input.p('Space') || Input.mouse.clicked);
+    if (skip || this.cur.t >= this.cur.dur) this.cur = null;
+  },
+
+  draw(c) {
+    if (!this.cur) return;
+    const b = this.cur, t = b.t;
+    // bars in over 0.35s, out over 0.5s -- the whole grammar of a cut
+    const a = Math.min(clamp(t / 0.35, 0, 1), clamp((b.dur - t) / 0.5, 0, 1));
+    const bar = 34 * a;
+    c.save();
+    c.fillStyle = `rgba(6,7,10,${0.42 * a})`;
+    c.fillRect(0, 0, W, H);
+    c.fillStyle = '#0a0a0c';
+    c.fillRect(0, 0, W, bar);
+    c.fillRect(0, H - bar, W, bar);
+    c.globalAlpha = a;
+
+    this._art(c, b.art, t);
+
+    // the lines type on, one after another, and hold
+    let ly = H / 2 - 4;
+    for (let i = 0; i < b.lines.length; i++) {
+      const start = 0.5 + i * 0.75;
+      if (t < start) break;
+      const s = b.lines[i];
+      const shown = Math.min(s.length, Math.floor((t - start) * 52));
+      const big = i === 0;
+      text(c, s.slice(0, shown), W / 2, ly, {
+        size: big ? 11 : 7, align: 'center',
+        color: big ? '#ffe6b0' : '#dfe9ee',
+        shadow: false,
+      });
+      ly += big ? 18 : 11;
+    }
+    c.globalAlpha = 1;
+    c.restore();
+  },
+
+  // One flourish per beat, drawn from art that is already loaded plus a few
+  // fillRects. Nothing here allocates and nothing here is a gradient.
+  _art(c, kind, t) {
+    const cx = W / 2, cy = H / 2 - 52;
+    if (kind === 'book') {
+      // a book opening: two pages swinging up from the spine
+      const open = clamp((t - 0.3) / 1.1, 0, 1);
+      const e = 1 - (1 - open) * (1 - open);
+      const pw = 30 * e, ph = 24;
+      c.fillStyle = '#7a5232';
+      c.fillRect(cx - 2, cy - ph / 2, 4, ph);
+      c.fillStyle = '#f2dfae';
+      c.fillRect(cx - 2 - pw, cy - ph / 2 + 1, pw, ph - 2);
+      c.fillRect(cx + 2, cy - ph / 2 + 1, pw, ph - 2);
+      c.fillStyle = '#c9ab78';
+      for (let i = 0; i < 5; i++) {
+        const ly = cy - ph / 2 + 5 + i * 4;
+        c.fillRect(cx - pw, ly, Math.max(0, pw - 4), 1);
+        c.fillRect(cx + 5, ly, Math.max(0, pw - 6), 1);
+      }
+    } else if (kind === 'drone') {
+      // the drone lifting a crate out of frame, rotor blur and all
+      const rise = clamp((t - 0.4) / 2.6, 0, 1);
+      const y = cy + 22 - rise * 44;
+      const d = ASSETS.drone_lift || ASSETS.drone_fly;
+      if (d && d.width) {
+        const dw = 34, dh = dw * d.height / d.width;
+        c.drawImage(d, cx - dw / 2, y - dh, dw, dh);
+      }
+      const cr = ASSETS.ic_crate;
+      if (cr && cr.width) {
+        const cw2 = 16, chh = cw2 * cr.height / cr.width;
+        c.drawImage(cr, cx - cw2 / 2, y + 2, cw2, chh);
+      }
+      c.fillStyle = 'rgba(255,255,255,0.35)';
+      for (let i = 0; i < 3; i++) c.fillRect(cx - 10 + i * 8, y + 22 + (i % 2) * 3, 3, 1);
+    } else if (kind === 'case') {
+      // the glass case: a card, then two pearls and an abalone set beside it
+      const w2 = 74, h2 = 30;
+      c.fillStyle = '#3a2617';
+      c.fillRect(cx - w2 / 2 - 2, cy - h2 / 2 - 2, w2 + 4, h2 + 4);
+      c.fillStyle = 'rgba(190,225,235,0.30)';
+      c.fillRect(cx - w2 / 2, cy - h2 / 2, w2, h2);
+      c.fillStyle = '#f2dfae';
+      c.fillRect(cx - 30, cy + 4, 22, 9);
+      text(c, 'NORTH PIER', cx - 19, cy + 5, { size: 4.5, color: '#5a4026', align: 'center', shadow: false });
+      const set = clamp((t - 1.2) / 2.0, 0, 1);
+      const items = ['pearlPol', 'pearlPol', 'abalonePol'];
+      for (let i = 0; i < 3; i++) {
+        const k = clamp((set - i * 0.22) / 0.5, 0, 1);
+        if (k <= 0) continue;
+        c.globalAlpha = k;
+        const ix = cx + 2 + i * 15, iy = cy + 2 - (1 - k) * 10;
+        if (typeof drawItemIcon === 'function') drawItemIcon(c, items[i], ix, iy, 13);
+        c.globalAlpha = 1;
+      }
+      // a slow shine across the glass
+      const sx = cx - w2 / 2 + ((t * 26) % (w2 + 30)) - 15;
+      c.fillStyle = 'rgba(255,255,255,0.10)';
+      c.fillRect(sx, cy - h2 / 2, 6, h2);
+    }
+  },
+};

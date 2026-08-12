@@ -105,14 +105,11 @@ const ok = (cond, msg) => { if (!cond) fails.push(msg); console.log((cond ? 'ok 
   });
   ok(bag1.started, 'Inv.craft(g_bag2) accepted');
   await page.waitForFunction(() => G.gear.bag >= 1, null, { timeout: 8000 });
-  // look the chapter up by KEY: the questline reorders freely, and a magic index
-  // broke the moment a chapter was added ahead of the bag
-  const goal = await page.evaluate(() => {
-    const qi = QUESTS.findIndex(q => q.key === 'bag');
-    return { bag: G.gear.bag, done: GOAL_DONE[qi](G), name: GOALS[qi].name };
-  });
+  // The 'bag' chapter is gone with the rest of the auto-advancing story; what
+  // this was really checking is that Inv.craft actually moves G.gear.bag, so
+  // that is what it checks.
+  const goal = await page.evaluate(() => ({ bag: G.gear.bag }));
   ok(goal.bag === 1 && bag1.before === 0, `G.gear.bag 0 -> ${goal.bag}`);
-  ok(goal.done, `goal "${goal.name}" predicate satisfied by crafting`);
 
   // ---- 8. tier 2 now craftable, applies the same upgrade ----------------------
   const bag2 = await page.evaluate(() => {
