@@ -64,7 +64,12 @@ const Hood = {
   TALK_R: 46,             // how near you must be mid-water to strike up a chat
   CLIMB_R: 34,            // horizontal reach of a ladder
   CLIMB_TOP: -10,         // highest y the ladder can be grabbed from
-  CLIMB_BOT: 76,          // deepest y the ladder can be grabbed from
+  // A LADDER IS A SHORT REACH FROM THE WATER, NOT A ROPE TO THE SEABED. This was
+  // 76, and the ladder is drawn down to exactly this line -- so a painted ladder
+  // ran the full height of the frame past the house, past the trestles, and off
+  // the bottom of the screen. You climb it from the surface; thirty units is a
+  // whole otter's length of it under water, which is generous already.
+  CLIMB_BOT: 30,          // deepest y the ladder can be grabbed from
   HOLD_T: 7,              // how long a resident stays put after you speak to them
   SAY_T: 5.4,             // speech bubble lifetime
   WAKE_MAX: 36,
@@ -1501,7 +1506,19 @@ const Hood = {
     var nite = (typeof nightness === 'function') ? nightness(G.clock) : 0;
 
     // ---- sky and sea, the same ones the dock uses so the two read as one world
-    if (typeof SKY !== 'undefined') {
+    // THE SAME SEA AS THE PIER. This drew SKY's procedural sky and sea -- a coded
+    // gradient with coded waves -- while the dock Otto lives on stands in front
+    // of the painted ocean loop (ocean0..11, the uploaded frames). Two different
+    // oceans a ladder apart, which is exactly why a neighbour's porch never
+    // looked like it was in the same world. It is the loop now, drifting the same
+    // way the dock's does, with nearest sampling so the frames stay crisp.
+    var oc = ASSETS['ocean' + (Math.floor(t * 8) % 12)];
+    if (oc && oc.width) {
+      var sm0 = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(oc, -30 - (t * 5) % 30, 0, W + 60, H);
+      ctx.imageSmoothingEnabled = sm0;
+    } else if (typeof SKY !== 'undefined') {
       SKY.drawSky(ctx, G.clock, t, 0);
       SKY.drawSea(ctx, G.clock, t, 0);
     } else {
@@ -1845,43 +1862,46 @@ const Hood = {
     var bottom = top + hh;
     var nite = (typeof nightness === 'function') ? nightness(G.clock) : 0;
 
-    // ---- The posts, continued DOWN from where the sprite's own stop. There is no
-    // seabed out here, so they fade into the dark rather than landing on anything.
-    // Nothing else about the understructure is drawn: the art already has its
-    // deck, its rail, its bracing and its stairs, and drawing a second set on top
-    // of a correctly placed sprite is what made this read as a floating shelf.
-    // THE SAME TRESTLE THE HARBOUR STANDS ON. These used to be flat translucent
-    // bars in a sampled timber colour -- three grey-blue rectangles hanging under
-    // each house, which is exactly what made this scene read as procedural next to
-    // the real pier. It is dock_11 now, the identical art Otto's own pier is built
-    // from, so a neighbour's house is built the way his is.
-    var legTop = bottom - 3;              // overlap by a texel so there is no seam
+    // ---- The posts, continued DOWN from where the sprite's own stop. There is
+    // no seabed out here, so they fade into the dark rather than landing on
+    // anything, and NOTHING ELSE about the understructure is drawn.
+    //
+    // It used to be a dock_11 trestle span -- the harbour's own bridge module --
+    // and then a SECOND one stacked under that, "so the posts run on down". Two
+    // things went wrong with it. A trestle is a bridge span with its own diagonal
+    // bracing and its own deck lip, so laying one under a little wooden cottage
+    // put a red platform the full width of the house beneath it, and stacking two
+    // built a scaffold TOWER. That is the ugly stacked platform.
+    //
+    // A stilt house does not stand on a bridge. It stands on POSTS, in the same
+    // places its own painted legs already are (legF, measured off each sprite),
+    // so this continues those legs with `pole` -- the tileable timber piling the
+    // dive scene stands on -- and lets the art's own understructure be the only
+    // understructure in the picture.
+    var legTop = bottom - 4;              // overlap by a texel so there is no seam
     var legDim = 1 - nite * 0.55;
-    var trest = ASSETS['dock_11'];
-    if (trest && trest.width) {
-      var tw = w * 1.02;
-      var th = tw * trest.height / trest.width;
+    var pimg = ASSETS.pole;
+    var legF = hm.legF, legW = Math.max(5, w * hm.legW * 1.25);
+    if (pimg && pimg.width) {
+      var ph = legW * pimg.height / pimg.width;
       var sm2 = ctx.imageSmoothingEnabled;
       ctx.imageSmoothingEnabled = false;
-      ctx.globalAlpha = legDim;
-      ctx.drawImage(trest, hm.x - tw / 2, legTop, tw, th);
-      // a second module below it so the posts run on down into the dark, the way
-      // the old bands did -- faded, because there is no seabed out here
-      ctx.globalAlpha = 0.55 * legDim;
-      ctx.drawImage(trest, hm.x - tw / 2, legTop + th - 2, tw, th);
+      for (var l = 0; l < legF.length; l++) {
+        var lx = Math.round((hm.x + w * legF[l] - legW / 2) * DPX) / DPX;
+        for (var py = legTop, seg = 0; seg < 4; py += ph - 1, seg++) {
+          ctx.globalAlpha = clamp(1 - seg * 0.28, 0.06, 1) * legDim;
+          ctx.drawImage(pimg, lx, py, legW, ph);
+        }
+      }
       ctx.globalAlpha = 1;
       ctx.imageSmoothingEnabled = sm2;
     } else {
-      var legF = hm.legF, legW = Math.max(2, w * hm.legW);
-      var legBot = legTop + 96;
       ctx.fillStyle = hm.legCol;
-      for (var l = 0; l < legF.length; l++) {
-        var lx = Math.round((hm.x + w * legF[l]) * DPX) / DPX;
-        for (var b = 0; b < 5; b++) {
-          var y0 = legTop + (legBot - legTop) * (b / 5);
-          var y1 = legTop + (legBot - legTop) * ((b + 1) / 5);
-          ctx.globalAlpha = 0.8 * (1 - b / 5) * legDim;
-          ctx.fillRect(lx - legW / 2, y0, legW, y1 - y0 + 0.5);
+      for (var l2 = 0; l2 < legF.length; l2++) {
+        var lx2 = Math.round((hm.x + w * legF[l2] - legW / 2) * DPX) / DPX;
+        for (var bnd = 0; bnd < 5; bnd++) {
+          ctx.globalAlpha = 0.8 * (1 - bnd / 5) * legDim;
+          ctx.fillRect(lx2, legTop + bnd * 20, legW, 20.5);
         }
       }
       ctx.globalAlpha = 1;

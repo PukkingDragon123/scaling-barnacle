@@ -558,6 +558,12 @@ const Forge = {
     for (i = 0; i < spots.length; i++) {
       s = spots[i];
       if (!s || typeof s.x !== 'number' || s.forge) continue;
+      // A PERSON IS NOT A FIXTURE. The visitor walks a round of the deck now, so
+      // their [E] spot moves -- and blocking a table because somebody happens to
+      // be standing there means where you may build depends on where a whale is
+      // at that second. They step around furniture; furniture does not step
+      // around them. Spots mark themselves `mobile` to opt out.
+      if (s.mobile) continue;
       if (Math.abs(s.x - x) >= this.MIN_GAP) continue;
       return 'too close to ' + this._shortLabel(s.label);
     }

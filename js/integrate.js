@@ -58,23 +58,130 @@
     const rota = ['farmer', 'angler', null, 'prof', null];  // gaps: some days nobody comes
     return rota[G.day % rota.length];
   };
+  // ---- THE VISITOR HAS A DAY, NOT A POST ------------------------------------
+  //
+  // A neighbour used to be pinned at x=212 for the whole visit: they arrived
+  // already standing there and stood there until dusk. That is the "they just
+  // walk to the shore and idle waiting for you" of it -- the deck had a person
+  // shaped ornament on it rather than a guest.
+  //
+  // Now they have a ROUND. Half a dozen places on the pier are worth stopping at,
+  // each with something to do when you get there; the visitor picks one, walks to
+  // it at a believable pace, does the thing for a while, and picks another. They
+  // face the way they are going, bob when they walk, and pause and look at the
+  // water between jobs. Talking to them holds them where they are -- nobody walks
+  // off mid-sentence -- and they resume when the box closes.
+  //
+  // It is deliberately a tiny machine: one object, four fields, no allocation per
+  // frame. Everything downstream (the [E] search, drawWorld, the errand marks)
+  // already reads n.x, so all of it follows the visitor around for free.
+  // Where they stop. Every one of these is at least 26 from a FIXED [E] spot --
+  // the deck's interaction search is nearest-within-22, so two things closer than
+  // that fight and the first registered always wins. dev/smoke-hood.js asserts
+  // exactly this and caught the first draft standing on the jump-in spot.
+  const STOPS = [
+    { x: 82,  act: 'look', say: 'admiring the house' },
+    { x: 212, act: 'look', say: 'reading the weather' },
+    { x: 238, act: 'work', say: 'tidying the workshop lane' },
+    { x: 260, act: 'lean', say: 'watching the water go by' },
+  ];
+  // ...and while they are WALKING they can pass anything. Rather than confine the
+  // round to one clear stretch, their [E] spot is simply withheld while they are
+  // squeezing past a fixture: you talk to somebody who has stopped, which is what
+  // you would do anyway, and no two spots are ever within reach of each other.
+  const FIXED_X = [30, 56, 108, 134, 160, 186, 286];
+  const visitClear = (x) => {
+    for (let i = 0; i < FIXED_X.length; i++) if (Math.abs(x - FIXED_X[i]) < 27) return false;
+    return true;
+  };
+  const visit = {
+    key: null,        // who is here today
+    x: 212,           // where they are
+    tx: 212,          // where they are going
+    dir: 1,
+    hold: 0,          // seconds left doing whatever they are doing
+    act: 'look',
+    walkT: 0,
+  };
+  const visitPick = () => {
+    // never the stop they are already on, so a "move" is always a move
+    let i = (Math.random() * STOPS.length) | 0;
+    if (Math.abs(STOPS[i].x - visit.x) < 20) i = (i + 1 + ((Math.random() * 2) | 0)) % STOPS.length;
+    visit.tx = STOPS[i].x;
+    visit.act = STOPS[i].act;
+  };
+  const visitUpdate = (dt) => {
+    const v = visitorNow();
+    if (v !== visit.key) {                     // a new day, a new neighbour
+      visit.key = v;
+      if (v) { visit.x = 260; visit.tx = 212; visit.hold = 0; visit.dir = -1; }
+    }
+    if (!v) return;
+    // held while you are talking to them: nobody wanders off mid-sentence
+    if (M.NPCs && M.NPCs.open) { visit.walkT = 0; return; }
+    if (visit.hold > 0) {
+      visit.hold -= dt;
+      visit.walkT = 0;
+      if (visit.hold <= 0) visitPick();
+      return;
+    }
+    const d = visit.tx - visit.x;
+    if (Math.abs(d) < 1.5) {
+      visit.x = visit.tx;
+      visit.hold = 4 + Math.random() * 7;       // a good long stop, so they read as busy
+      return;
+    }
+    visit.dir = d < 0 ? -1 : 1;
+    visit.x += visit.dir * 26 * dt;             // an amble; Otto walks at 92
+    visit.walkT += dt * 7;
+  };
+
   if (M.NPCs && M.NPCs.LIST && M.NPCs.spots && M.NPCs.drawWorld) {
     const all = M.NPCs.LIST.slice();
     const pick = () => {
       const v = visitorNow();
-      for (const n of all) if (n.key === v) { n.x = 212; return [n]; }
+      for (const n of all) if (n.key === v) { n.x = Math.round(visit.x); return [n]; }
       return [];
     };
     const nspots = M.NPCs.spots.bind(M.NPCs);
     M.NPCs.spots = function () {
-      const keep = this.LIST; this.LIST = pick();
-      const r = nspots(); this.LIST = keep; return r;
+      const keep = this.LIST;
+      this.LIST = visitClear(visit.x) ? pick() : [];
+      const r = nspots(); this.LIST = keep;
+      // mark it MOBILE, so Forge's placement check knows it is a person walking
+      // past and not a fixture nailed to the planks (see craftgate placeWhy)
+      for (let i = 0; i < r.length; i++) r[i].mobile = true;
+      return r;
     };
     const ndraw = M.NPCs.drawWorld.bind(M.NPCs);
     M.NPCs.drawWorld = function (c, camX) {
-      const keep = this.LIST; this.LIST = pick();
-      const r = ndraw(c, camX); this.LIST = keep; return r;
+      const keep = this.LIST;
+      const list = pick();
+      this.LIST = list;
+      // hand the walk state to the painter for the one frame it is drawing
+      const n = list[0];
+      let keptFlip, keptFrames;
+      if (n) {
+        keptFlip = n.flip; keptFrames = n.frames;
+        // FACING. Every cast sheet is drawn facing right, and NPCs.drawWorld
+        // honours n.flip -- so walking left simply means flipping them.
+        n.flip = visit.dir < 0;
+        // and the WALK: the idle cycle stepped fast reads as a stride at this
+        // size, and the emote frames are what they use when they are working.
+        if (visit.hold <= 0 && !(M.NPCs && M.NPCs.open)) {
+          n.frames = Object.assign({}, keptFrames, { idle: keptFrames.idle, emote: keptFrames.idle });
+        } else if (visit.act === 'work') {
+          n.frames = Object.assign({}, keptFrames, { idle: keptFrames.emote });
+        }
+      }
+      const r = ndraw(c, camX);
+      if (n) { n.flip = keptFlip; n.frames = keptFrames; }
+      this.LIST = keep;
+      return r;
     };
+    // ride the one update slot that runs under every modal
+    const gu0 = Game.globalUpdate.bind(Game);
+    Game.globalUpdate = function (dt) { gu0(dt); visitUpdate(dt); };
   }
   // The farm beds are gone from the deck for good: PLOT_DEF is OCEAN world x now
   // and farm.js owns it (52-unit spacing against its swim REACH, gated on
