@@ -66,6 +66,46 @@ function textWidth(ctx, str, size = 8) {
   return ctx.measureText(str).width;
 }
 
+// TEXT THAT FITS THE BOX IT IS IN.
+//
+// text() draws whatever it is given at whatever size it is given, and every
+// fixed-width panel in the game clips. That is where "the text bugs and goes
+// below" comes from: the quest tracker is 118 units wide and its hint line was
+// "Fintan has the next one -- go and ask", so the player read "...go and as".
+//
+// textFit shrinks first (down to `min`, because a slightly smaller line is
+// always better than a truncated one) and only then cuts, and when it cuts it
+// says so with an ellipsis instead of stopping mid-word. Returns the size it
+// actually used, so a caller can advance its own layout by the right amount.
+function textFit(ctx, str, x, y, maxW, opts = {}) {
+  const { size = 8, min = 5 } = opts;
+  let s2 = size;
+  while (s2 > min && textWidth(ctx, str, s2) > maxW) s2 -= 0.5;
+  if (textWidth(ctx, str, s2) > maxW) {
+    let cut = String(str);
+    while (cut.length > 1 && textWidth(ctx, cut + '...', s2) > maxW) cut = cut.slice(0, -1);
+    str = cut.replace(/[\s\-]+$/, '') + '...';
+  }
+  text(ctx, str, x, y, Object.assign({}, opts, { size: s2 }));
+  return s2;
+}
+
+// Greedy word wrap to a pixel width. Returns the lines; the caller decides how
+// many it has room for, because "how many lines fit" is a layout question and
+// this is a measuring one.
+function textWrap(ctx, str, maxW, size = 8) {
+  const words = String(str).split(/\s+/);
+  const out = [];
+  let line = '';
+  for (const w of words) {
+    const t = line ? line + ' ' + w : w;
+    if (line && textWidth(ctx, t, size) > maxW) { out.push(line); line = w; }
+    else line = t;
+  }
+  if (line) out.push(line);
+  return out;
+}
+
 function rrect(ctx, x, y, w, h, fill, stroke) {
   ctx.fillStyle = fill;
   ctx.fillRect(x, y, w, h);

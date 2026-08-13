@@ -303,28 +303,122 @@ const Game = {
   },
   _toastQ: [],
 
-  hasSave() {
-    try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; }
+  // ---- SAVES: three piers, and a reset that actually resets -------------------
+  //
+  // There used to be one key and one game. Two things were wrong with it: you
+  // could not keep a second run, and "new tide" wrote a fresh G over the top of a
+  // world whose MODULES were all still holding the old one -- Farm's plot cache,
+  // Tame's live animals and chunk memory, Forge's placed tables, the NPC records,
+  // the journal's scroll position. The state object was new; the game on screen
+  // was not, which is why starting over did not look like starting over.
+  //
+  // SLOTS. Three, keyed SAVE_KEY + '.s0'..'.s2', plus a pointer at the last one
+  // played so the menu can open on it. The bare SAVE_KEY is read ONCE, migrated
+  // into slot 0 and deleted, so an existing pier is never lost to this change.
+  SLOTS: 3,
+  slot: 0,
+  _slotKey(i) { return SAVE_KEY + '.s' + i; },
+  _lastKey() { return SAVE_KEY + '.last'; },
+
+  migrate() {
+    try {
+      const legacy = localStorage.getItem(SAVE_KEY);
+      if (legacy && !localStorage.getItem(this._slotKey(0))) {
+        localStorage.setItem(this._slotKey(0), legacy);
+        localStorage.removeItem(SAVE_KEY);
+      }
+      const l = parseInt(localStorage.getItem(this._lastKey()), 10);
+      if (isFinite(l) && l >= 0 && l < this.SLOTS) this.slot = l;
+    } catch (e) {}
   },
+
+  // What the menu shows on a row without loading it: day, money, and how far
+  // through the survey. Null for an empty slot.
+  slotInfo(i) {
+    try {
+      const raw = localStorage.getItem(this._slotKey(i));
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      if (!d) return null;
+      return { day: d.day || 1, money: d.money || 0, goal: d.goal || 0 };
+    } catch (e) { return null; }
+  },
+  hasSlot(i) { return !!this.slotInfo(i); },
+  hasSave() { for (let i = 0; i < this.SLOTS; i++) if (this.hasSlot(i)) return true; return false; },
+
+  eraseSlot(i) {
+    try { localStorage.removeItem(this._slotKey(i)); } catch (e) {}
+  },
+
   save() {
     if (!G) return;
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(G)); } catch (e) {}
+    try {
+      localStorage.setItem(this._slotKey(this.slot), JSON.stringify(G));
+      localStorage.setItem(this._lastKey(), String(this.slot));
+    } catch (e) {}
   },
-  load() {
+  load(i) {
+    if (i !== undefined) this.slot = clamp(i | 0, 0, this.SLOTS - 1);
     const base = defaultState();
     try {
-      const d = JSON.parse(localStorage.getItem(SAVE_KEY));
-      if (!d) { G = base; return; }
+      const d = JSON.parse(localStorage.getItem(this._slotKey(this.slot)));
+      if (!d) { G = base; this.resetModules(); return; }
       G = Object.assign(base, d);
       for (const k of ['storage', 'gear', 'stats', 'flags', 'qflags', 'decor'])
         G[k] = Object.assign(defaultState()[k], d[k] || {});
       if (!Array.isArray(G.growth) || G.growth.length !== 3) G.growth = [1, 1, 1];
       if (!Array.isArray(G.seeds) || G.seeds.length !== 3) G.seeds = [11, 22, 33];
     } catch (e) { G = base; }
+    this.resetModules();
   },
-  newGame() {
+  newGame(i) {
+    if (i !== undefined) this.slot = clamp(i | 0, 0, this.SLOTS - 1);
     G = defaultState();
+    this.resetModules();
     this.save();
+  },
+
+  // THE OTHER HALF OF A RESET. G is only the ledger; the world lives in module
+  // caches that were built from the OLD G and never told it had changed. Every
+  // one of these is a system holding a copy of something:
+  //
+  //   Tame   live animals, the chunk-memory of where it has already spawned
+  //   Farm   the plot list and its cached seabed heights
+  //   Forge  the epoch counter its placed-table cache is keyed on
+  //   NPCs   nothing of its own, but its modal must not survive the cut
+  //   Quests / Side / Cine  open panels, scroll positions, a playing beat
+  //
+  // Anything missing a hook here is a system that will show you the last game.
+  resetModules() {
+    const q = (n) => { try { return eval(n); } catch (e) { return undefined; } };
+    const T = q('Tame');
+    if (T && T.mobs) {
+      for (const m of T.mobs) if (m) m.live = false;
+      T._seen = {}; T._seenN = 0;
+      if (T.petGame) T.petGame = null;
+      T.open = false;
+    }
+    const F = q('Farm');
+    if (F) { F._plots = null; F._bedY = null; F.open = false; }
+    const Fg = q('Forge');
+    if (Fg) { Fg._nl = null; Fg._gepoch = (Fg._gepoch || 0) + 1; Fg._gcache = null; Fg.open = false; Fg.placing = null; }
+    const N = q('NPCs');
+    if (N) { N.open = false; N.who = null; N.mode = 'talk'; }
+    const Qs = q('Quests');
+    if (Qs) { Qs.open = false; Qs.letter = false; Qs.scroll = 0; Qs.escroll = 0; Qs.tab = 0; Qs._card = null; }
+    const Sd = q('Side');
+    if (Sd) { Sd._flash = null; }
+    const Cn = q('Cine');
+    if (Cn) { Cn.cur = null; }
+    const I = q('Inv'); if (I) I.open = false;
+    const Sk = q('Skills'); if (Sk) Sk.open = false;
+    const St = q('Stock'); if (St) St.open = false;
+    const Cf = q('Craft'); if (Cf) Cf.open = false;
+    const Mc = q('MapChart'); if (Mc) Mc.open = false;
+    if (typeof Shop !== 'undefined') Shop.open = false;
+    if (typeof Bench !== 'undefined') Bench.open = false;
+    this.helpOpen = false;
+    this.toasts.length = 0; this._toastQ.length = 0;
   },
 
   // Shell beds only come back overnight — and only some of them. Each piling
@@ -421,7 +515,10 @@ const Game = {
           : (ready ? 'done -- take it back to Fintan' : (q.how || '')));
       const p = (q && took && S_) ? S_.prog(q) : null;
       const tw = 118;
-      const th = p ? 40 : 34;
+      // measured, not guessed: two wrapped hint lines need the room, and a
+      // progress bar needs more again
+      const hintLines = hint ? Math.min(2, textWrap(c, hint, tw - 14, 5.5).length) : 0;
+      const th = 14 + hintLines * 7 + (p ? 12 : 2);
       const tx = W - tw - 6, ty = 68;   // below the day panel and the icon buttons
       this._goalRect = { x: tx, y: ty, w: tw, h: th };
       if (typeof Quests !== 'undefined' && Quests._pulse > 0) {
@@ -443,11 +540,16 @@ const Game = {
         c.lineTo(tx + 10 + Math.cos(ang2) * 1.6, ty + 9 + Math.sin(ang2) * 1.6);
       }
       c.closePath(); c.fill();
-      text(c, name, tx + 17, ty + 5.5, { size: 6.5, color: '#4a3020', shadow: false });
-      text(c, hint, tx + 7, ty + 16, { size: 5.5, color: '#8a6a48', shadow: false });
+      textFit(c, name, tx + 17, ty + 5.5, tw - 24, { size: 6.5, color: '#4a3020', shadow: false });
+      // the hint WRAPS. It used to be one 5.5pt line in a 118-wide panel and the
+      // clip took it mid-word -- "go and as" -- which is the whole "text bugs and
+      // goes below" complaint in one place.
+      const hl = textWrap(c, hint, tw - 14, 5.5);
+      for (let li = 0; li < Math.min(2, hl.length); li++)
+        text(c, hl[li], tx + 7, ty + 14 + li * 7, { size: 5.5, color: '#8a6a48', shadow: false });
       if (p) {
         // the progress bar, with the count on it
-        const bw = tw - 14, bx = tx + 7, by2 = ty + 26;
+        const bw = tw - 14, bx = tx + 7, by2 = ty + th - 10;
         c.fillStyle = 'rgba(90,52,30,0.30)';
         c.fillRect(bx, by2, bw, 6);
         c.fillStyle = '#5f9e4a';
@@ -475,12 +577,12 @@ const Game = {
           c.beginPath(); c.rect(tx + 4, ey + 3, tw - 8, 18); c.clip();
           c.fillStyle = ready ? '#3f9a58' : '#8a6a44';
           c.fillRect(tx + 7, ey + 6, 4, 4);
-          text(c, show.name, tx + 15, ey + 4, { size: 6, color: ready ? '#2f6b40' : '#4a3020', shadow: false });
+          textFit(c, show.name, tx + 15, ey + 4, tw - 22, { size: 6, color: ready ? '#2f6b40' : '#4a3020', shadow: false });
           const tail = ready
             ? `ready -- ${(typeof Quests !== 'undefined' && Quests.GIVER_NAMES[show.from]) || show.from} is waiting`
             : (sp ? `${sp.n}/${sp.of}` : '');
-          text(c, tail + (act.length > 1 ? `   (+${act.length - 1} more)` : ''), tx + 15, ey + 13,
-            { size: 5.5, color: ready ? '#3f9a58' : '#8a6a48', shadow: false });
+          textFit(c, tail + (act.length > 1 ? `   (+${act.length - 1} more)` : ''), tx + 15, ey + 13,
+            tw - 22, { size: 5.5, color: ready ? '#3f9a58' : '#8a6a48', shadow: false });
           c.restore();
         } else { this._sideRect = null; }
       }
@@ -575,34 +677,60 @@ const TitleScene = {
   // wipes it). Continue leads when there is a save; otherwise Begin stands alone.
   _rows() {
     const rows = [];
-    if (Game.hasSave()) rows.push({ key: 'continue', label: 'continue' });
-    rows.push({ key: 'new', label: Game.hasSave() ? (this.confirm ? 'start over -- sure?' : 'new tide') : 'begin' });
+    // THREE PIERS. One row per slot, each showing what is actually in it, so the
+    // menu is a shelf of saves rather than a single "continue" that hides which
+    // game it means. An occupied row also carries an ERASE box on its right,
+    // which is the reset the game never had: "new tide" used to overwrite slot
+    // zero in place, which is not the same thing as throwing a pier away.
+    for (let i = 0; i < Game.SLOTS; i++) {
+      const info = Game.slotInfo(i);
+      rows.push({
+        key: 'slot', slot: i, info: info,
+        label: info ? `pier ${i + 1}` : `pier ${i + 1} -- empty`,
+      });
+    }
     rows.push({ key: 'sound', label: SND.muted ? 'sound: off' : 'sound: on' });
     return rows;
   },
+
+  // the little X at the right of an occupied row
+  _eraseRect(i) {
+    const bx = this._boardX();
+    return { x: bx + 168 - 20, y: this._rowY(i) - 4, w: 14, h: 13 };
+  },
   // The board is LEFT of centre so Otto's working column has the right third to
   // itself. Both the draw and the hit test read these two, so they cannot drift.
+  erasing: -1,       // slot whose ERASE is armed, or -1
   _boardX() { return Math.round(W * 0.5 - 168 - 18); },
   _rowY(i) { return 176 + i * 17; },
 
   _activate(row) {
-    if (row.key === 'continue') {
-      Game.load();
-      Game.go(WorldScene, {});
-      this._armLetter();
-    } else if (row.key === 'new') {
-      // a saved pier deserves one "are you sure" -- and only one
-      if (Game.hasSave() && !this.confirm) { this.confirm = true; SND.blip(); return; }
-      this.confirm = false;
-      Game.newGame();
-      // the opening: Otto swims home. It arms the letter itself, and every key
-      // skips it, so the worst case is two seconds of nice water.
-      if (typeof IntroScene !== 'undefined') Game.go(IntroScene, {});
-      else { Game.go(WorldScene, {}); this._armLetter(); }
+    if (row.key === 'slot') {
+      if (row.info) {
+        Game.load(row.slot);
+        Game.go(WorldScene, {});
+        this._armLetter();
+      } else {
+        Game.newGame(row.slot);
+        // the opening: Otto swims home. It arms the letter itself, and every key
+        // skips it, so the worst case is two seconds of nice water.
+        if (typeof IntroScene !== 'undefined') Game.go(IntroScene, {});
+        else { Game.go(WorldScene, {}); this._armLetter(); }
+      }
+      this.erasing = -1;
     } else if (row.key === 'sound') {
       SND.toggleMute();
       SND.blip();
     }
+  },
+
+  // Erasing takes two clicks and the second one is on a different word, so it is
+  // never something you did by accident on the way to Continue.
+  _erase(i) {
+    if (this.erasing !== i) { this.erasing = i; SND.blip(); return; }
+    Game.eraseSlot(i);
+    this.erasing = -1;
+    if (typeof SND !== 'undefined' && SND.clank) SND.clank();
   },
 
   // The opening letter is armed HERE, at the front door, and only here -- so a
@@ -618,21 +746,36 @@ const TitleScene = {
     this.sel = clamp(this.sel, 0, rows.length - 1);
     if (Input.p('ArrowDown') || Input.p('KeyS')) { this.sel = (this.sel + 1) % rows.length; this.confirm = false; SND.blip(); }
     if (Input.p('ArrowUp') || Input.p('KeyW')) { this.sel = (this.sel + rows.length - 1) % rows.length; this.confirm = false; SND.blip(); }
-    if (Input.p('Escape')) this.confirm = false;
+    if (Input.p('Escape')) { this.confirm = false; this.erasing = -1; }
+    // [X] or [Delete] arms and confirms the erase on the highlighted pier
+    if ((Input.p('KeyX') || Input.p('Delete')) && rows[this.sel] &&
+        rows[this.sel].key === 'slot' && rows[this.sel].info) {
+      this._erase(rows[this.sel].slot); return;
+    }
     if (Input.p('Enter') || Input.p('Space')) { this._activate(rows[this.sel]); return; }
-    // pointer: hover selects, click activates; a click anywhere else continues,
-    // because "tap to play" is still the promise on a phone
+    // pointer: hover selects, click activates. A click on the ERASE box of an
+    // occupied pier arms it; a second click on the same box throws it away.
     const m = Input.mouse;
-    let overRow = -1;
+    let overRow = -1, overErase = -1;
+    const bx0 = this._boardX();
     for (let i = 0; i < rows.length; i++) {
       const y = this._rowY(i);
-      const bx0 = this._boardX();
       if (m.y >= y - 5 && m.y <= y + 10 && m.x > bx0 && m.x < bx0 + 168) overRow = i;
+      if (rows[i].key === 'slot' && rows[i].info) {
+        const er = this._eraseRect(i);
+        if (m.x >= er.x && m.x <= er.x + er.w && m.y >= er.y && m.y <= er.y + er.h) overErase = i;
+      }
     }
-    if (overRow >= 0 && overRow !== this.sel) { this.sel = overRow; this.confirm = false; }
+    this._overErase = overErase;
+    if (overRow >= 0 && overRow !== this.sel) {
+      this.sel = overRow; this.confirm = false;
+      if (this.erasing >= 0 && this.erasing !== rows[overRow].slot) this.erasing = -1;
+    }
     if (m.clicked) {
+      if (overErase >= 0) { this._erase(rows[overErase].slot); return; }
       if (overRow >= 0) this._activate(rows[overRow]);
-      else this._activate(rows[0]);
+      // NO click-anywhere-to-continue. With three piers on the board there is no
+      // single obvious game to fall into, and it fired on the way to the erase box.
     }
   },
 
@@ -745,27 +888,52 @@ const TitleScene = {
     const bx2 = this._boardX(), by2 = this._rowY(0) - 12;
     uiPanel(c, bx2, by2, bw, bh, 0.97, true);
     for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
       const y = this._rowY(i);
       const on = i === this.sel;
       if (on) {
-        // the selected line gets an inked plate and a pointing paw-print dot,
-        // so the shape of the board never changes as you move down it
+        // the selected line gets an inked plate and a pointing dot, so the shape
+        // of the board never changes as you move down it
         c.fillStyle = 'rgba(122,74,48,0.20)';
         c.fillRect(bx2 + 7, y - 5, bw - 14, 15);
         c.fillStyle = '#8a5a2c';
         c.fillRect(bx2 + 11, y + 1, 3, 3);
       }
-      text(c, rows[i].label, bx2 + bw / 2 + 4, y, {
-        size: 9, align: 'center', shadow: false,
-        color: on ? '#4a3020' : '#8a6a48',
-      });
+      if (r.key === 'slot') {
+        // left: the pier's name. right: what is in it, so you never have to load
+        // a save to find out which one it was.
+        const armed = this.erasing === r.slot;
+        text(c, armed ? `erase pier ${r.slot + 1}?` : r.label, bx2 + 18, y, {
+          size: 8, shadow: false, color: armed ? '#a33' : (on ? '#4a3020' : '#8a6a48'),
+        });
+        if (r.info && !armed) {
+          text(c, `day ${r.info.day}  $${r.info.money}`, bx2 + bw - 24, y + 1, {
+            size: 6, align: 'right', shadow: false, color: on ? '#7a5c3c' : '#a4805a',
+          });
+        }
+        if (r.info) {
+          const er = this._eraseRect(i);
+          const hovE = this._overErase === i;
+          c.fillStyle = armed ? '#a33' : (hovE ? '#8a5a2c' : 'rgba(122,74,48,0.28)');
+          c.fillRect(er.x, er.y, er.w, er.h);
+          text(c, armed ? '!' : 'x', er.x + er.w / 2, er.y + 2.5, {
+            size: 7, align: 'center', shadow: false,
+            color: (armed || hovE) ? '#f6e8c9' : '#6a4420',
+          });
+        }
+      } else {
+        text(c, r.label, bx2 + bw / 2 + 4, y, {
+          size: 9, align: 'center', shadow: false,
+          color: on ? '#4a3020' : '#8a6a48',
+        });
+      }
     }
     // the hint lives ON the board: under it, it sat on the sand and vanished
     for (let dx3 = bx2 + 14; dx3 < bx2 + bw - 14; dx3 += 6) {
       c.fillStyle = '#c9ab78'; c.fillRect(dx3, by2 + bh - 15, 4, 1);
     }
     text(c, TouchUI.enabled || matchMedia('(pointer: coarse)').matches
-      ? 'tap a line' : 'arrows + enter', bx2 + bw / 2, by2 + bh - 11,
+      ? 'tap a pier   x erases' : 'arrows + enter    [x] erase', bx2 + bw / 2, by2 + bh - 11,
       { size: 6, color: '#a4805a', align: 'center', shadow: false });
   },
 };
@@ -940,6 +1108,7 @@ loadAssets(() => {
   // fallback Courier and visibly swap a beat later. Both paths of the promise
   // boot -- a font is never worth a black screen.
   const boot = () => {
+    Game.migrate();
     if (Game.hasSave()) Game.load(); else Game.newGame();
     Game.scene = TitleScene;
     TitleScene.enter();
