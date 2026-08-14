@@ -244,7 +244,7 @@ const Skills = {
   // update() and draw() share every rect through these, so a hit box can never
   // drift from the thing it is drawn under.
   WX: 40, WY: 24, WW: 400, WH: 222,
-  TX: 46, TY: 82, TW: 200, TH: 150,     // the tree canvas
+  TX: 46, TY: 92, TW: 200, TH: 142,     // the tree canvas (lower: the header grew a rule and a subtitle)
   IX: 258, IW: 174,                     // the info column
   NS: 24,                               // node box, logical units
   ROW: 36,                              // tier spacing
@@ -706,7 +706,7 @@ const Skills = {
   _tabRect: function (i) {
     var inner = this.WW - 16, gap = 2;
     var w = (inner - gap * 4) / 5;
-    return { x: this.WX + 8 + i * (w + gap), y: this.WY + 19, w: w, h: 14 };
+    return { x: this.WX + 8 + i * (w + gap), y: this.WY + 30, w: w, h: 16 };
   },
 
   // A node's box. Rows are tiers; a row of k nodes is spread evenly across TW so
@@ -900,18 +900,24 @@ const Skills = {
 
     var prof = this.prof(), r = G.skills[prof], acc = this.ACC[this.tab];
 
-    text(c, "otto's skills", this.WX + 10, this.WY + 5, { size: 8, color: '#ffe6b0' });
+    text(c, "OTTO'S TRADES", this.WX + 10, this.WY + 5, { size: 9, color: '#e9c07a' });
+    text(c, 'five things worth getting good at', this.WX + 10, this.WY + 16,
+      { size: 6, color: '#a8895e' });
     var total = this.points();
     if (total > 0) {
-      var pt = total + (total > 1 ? ' points unspent' : ' point unspent');
-      text(c, pt, this.WX + this.WW - 32, this.WY + 6, { size: 7, color: '#ffe66e', align: 'right' });
+      // an unspent point is the reason you opened this, so it gets a plate
+      var pt = total + (total > 1 ? ' points to spend' : ' point to spend');
+      var pw = textWidth(c, pt, 7) + 12;
+      uiPanel(c, this.WX + this.WW - 34 - pw, this.WY + 4, pw, 15, 0.96, true);
+      text(c, pt, this.WX + this.WW - 34 - pw / 2, this.WY + 7,
+        { size: 7, color: '#4a3020', align: 'center', shadow: false });
     }
+    uiRule(c, this.WX + 8, this.WY + 25, this.WW - 16, false);
 
-    // ---- close
+    // ---- close: the frame in miniature, not a bare x
     var cr = this._closeRect();
     var mo = !TouchUI.enabled && this._in(cr, Input.mouse.x, Input.mouse.y);
-    rrect(c, cr.x, cr.y, cr.w, cr.h, mo ? 'rgba(232,67,76,0.5)' : 'rgba(0,0,0,0.3)', 'rgba(226,200,150,0.45)');
-    text(c, 'x', cr.x + cr.w / 2, cr.y + 5, { size: 8, color: '#f6e8c9', align: 'center' });
+    uiClose(c, cr, mo, false);
 
     this._drawTabs(c);
     this._drawBar(c, r, acc);
@@ -930,20 +936,15 @@ const Skills = {
       r = this._tabRect(i);
       on = i === this.tab;
       lit = this._lvT > 0 && this._lvTab === i;
-      rrect(c, r.x, r.y, r.w, r.h,
-        on ? 'rgba(122,74,48,0.95)' : 'rgba(0,0,0,0.28)',
-        on ? 'rgba(255,235,190,0.55)' : 'rgba(226,200,150,0.2)');
-      // the accent bar under the active tab, and a pulse on a fresh level
-      if (on || lit) {
-        c.globalAlpha = on ? 1 : 0.35 + 0.35 * Math.sin(this.time * 12);
-        c.fillStyle = this.ACC[i];
-        c.fillRect(r.x + 2, r.y + r.h - PIX * 2, r.w - 4, PIX * 2);
-        c.globalAlpha = 1;
-      }
+      var hov = !TouchUI.enabled && this._in(r, Input.mouse.x, Input.mouse.y);
+      // paper index tabs, each carrying its track's colour along the foot
+      c.globalAlpha = lit ? 0.65 + 0.35 * Math.sin(this.time * 12) : 1;
+      uiTab(c, r, this.TABS[i], on, hov, this.ACC[i]);
+      c.globalAlpha = 1;
       var lv = G.skills[this.PROFS[i]].lv;
       var pts = G.skills[this.PROFS[i]].pts;
-      text(c, this.TABS[i], r.x + r.w / 2, r.y + 4, { size: 7, color: on ? '#ffe6b0' : '#a89878', align: 'center' });
-      text(c, String(lv), r.x + r.w - 3, r.y + 4, { size: 6, color: on ? '#f6e8c9' : '#8a9484', align: 'right' });
+      text(c, String(lv), r.x + r.w - 4, r.y + (on ? 3 : 4),
+        { size: 6, color: on ? '#7a5232' : '#5f4526', align: 'right', shadow: false });
       if (pts > 0) {
         // an unmissable dot for "you have something to spend here"
         c.fillStyle = '#ffe66e';
@@ -956,7 +957,7 @@ const Skills = {
   // canvas (starting at TY): label at +34, bar at +44, caption at +51, whose
   // 6-unit glyph box ends exactly one unit above TY.
   _drawBar: function (c, r, acc) {
-    var x = this.WX + 10, y = this.WY + 34, w = this.WW - 20;
+    var x = this.WX + 10, y = this.WY + 48, w = this.WW - 20;
     var need = this.need(r.lv);
     var capped = r.lv >= this.MAX_LV;
     var frac = capped ? 1 : (need > 0 ? r.xp / need : 0);
@@ -967,21 +968,20 @@ const Skills = {
     var right = capped ? 'mastered' : (r.xp + ' / ' + need + ' xp');
     text(c, right, x + w, y, { size: 7, color: '#a89878', align: 'right' });
 
-    var by = y + 10, bh = 5;
-    rrect(c, x, by, w, bh, 'rgba(0,0,0,0.42)', 'rgba(226,200,150,0.28)');
-    if (frac > 0) {
-      c.fillStyle = acc;
-      c.globalAlpha = capped ? 0.85 : 1;
-      c.fillRect(x + PIX, by + PIX, (w - PIX * 2) * frac, bh - PIX * 2);
-      c.globalAlpha = 1;
-    }
+    // a bevelled trough with a lit fill, not a flat rectangle in a hairline box
+    var by = y + 10, bh = 6;
+    c.globalAlpha = capped ? 0.85 : 1;
+    uiMeter(c, x, by, w, bh, frac, acc, false);
+    c.globalAlpha = 1;
 
     var pts = r.pts;
     text(c, this.owned(this.prof()) + ' / ' + this.list().length + ' learned',
       x, by + 7, { size: 6, color: '#8a9484' });
+    // (the unspent-point count is on its own plate in the header now; it was
+    // printed twice, once there and once here, three lines apart)
     if (pts > 0) {
-      text(c, pts + (pts > 1 ? ' points to spend' : ' point to spend'),
-        x + w, by + 7, { size: 6, color: '#ffe66e', align: 'right' });
+      text(c, 'a node with a lit ring is one you can afford',
+        x + w, by + 7, { size: 6, color: '#8a7a5a', align: 'right', shadow: false });
     }
   },
 

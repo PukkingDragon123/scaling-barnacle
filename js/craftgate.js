@@ -1160,8 +1160,8 @@ const Forge = {
 
   // ==== geometry ============================================================
   _in: function (r, x, y) { return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; },
-  _closeRect: function () { return { x: this.WX + this.WW - 22, y: this.WY + 4, w: 18, h: 14 }; },
-  _tabRect: function (i) { return { x: this.WX + 10 + i * 58, y: this.WY + 20, w: 54, h: 14 }; },
+  _closeRect: function () { return { x: this.WX + this.WW - 24, y: this.WY + 6, w: 17, h: 15 }; },
+  _tabRect: function (i) { return { x: this.WX + 10 + i * 58, y: this.WY + 28, w: 54, h: 15 }; },
   _gridCell: function (i) {
     var s = this.CELL + this.CGAP;
     return { x: this.WX + 12 + (i % 2) * s, y: this.WY + 46 + ((i / 2) | 0) * s, w: this.CELL, h: this.CELL };
@@ -1234,12 +1234,14 @@ const Forge = {
     c.lineWidth = PIX * 2;
     c.strokeRect(this.WX + 3, this.WY + 3, this.WW - 6, this.WH - 6);
 
-    text(c, "in otto's paws", this.WX + 10, this.WY + 6, { size: 8, color: P.ink });
+    text(c, 'THE WORKBENCH', this.WX + 10, this.WY + 5, { size: 9, color: '#e9c07a' });
+    text(c, 'what otto can make with what otto has', this.WX + 10, this.WY + 15,
+      { size: 6, color: '#a8895e' });
+    uiRule(c, this.WX + 8, this.WY + 24, this.WW - 16, false);
 
-    // close box
+    // a real close box, the frame in miniature -- this was a bare lowercase x
     var cr = this._closeRect(), onC = this._in(cr, m.x, m.y);
-    rrect(c, cr.x, cr.y, cr.w, cr.h, onC ? 'rgba(232,67,76,0.85)' : 'rgba(0,0,0,0.3)');
-    text(c, 'x', cr.x + cr.w / 2, cr.y + 3, { size: 7, color: P.ink, align: 'center' });
+    uiClose(c, cr, onC, false);
 
     this._drawTabs(c, m);
     this._drawGrid(c, row);
@@ -1256,14 +1258,8 @@ const Forge = {
       sel = this.tab === i;
       locked = i === 1 && !this.hasPlaced('bench');
       on = this._in(r, m.x, m.y);
-      rrect(c, r.x, r.y, r.w, r.h,
-        sel ? 'rgba(201,162,113,0.85)' : (on ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.3)'));
-      // shadow OFF on the selected tab. text() drops a black copy one pixel down
-      // and right, which is right for pale ink on water and wrong for dark ink on
-      // a cream plate -- it read as the label printed twice and smeared.
-      text(c, names[i], r.x + r.w / 2, r.y + 3.5,
-        { size: 7, align: 'center', shadow: !sel,
-          color: sel ? '#4a3020' : (locked ? '#7a6a55' : P.dim) });
+      // paper index tabs, the same ones the journal uses
+      uiTab(c, r, names[i], sel, on, null);
       // a padlock on the locked tab, INSIDE it. The old one was a black square
       // with a bar poking out of the tab's top edge, which read as a rendering
       // fault rather than a lock. Body, shackle, keyhole, six fillRects.
@@ -1343,11 +1339,8 @@ const Forge = {
     text(c, row ? this._clip(row.name, 22) : 'nothing picked', this.WX + 12, this.WY + 100,
       { size: 7, color: row && row.kind === 'locked' ? '#7a6a55' : P.ink });
 
-    rrect(c, r.x, r.y, r.w, r.h,
-      ok ? (on ? 'rgba(255,230,110,0.95)' : 'rgba(246,232,201,0.9)') : 'rgba(60,42,28,0.85)',
-      ok ? P.hi : 'rgba(226,200,150,0.28)');
-    text(c, this.rowVerb(row), r.x + r.w / 2, r.y + 5,
-      { size: 7, color: ok ? '#4a3020' : '#8a9484', align: 'center', shadow: false });
+    // a pressable wooden button with a shine, not a flat cream slab
+    uiButton(c, r, this.rowVerb(row), ok, on, this.time);
 
     // the reason, or the flavour line, wrapped by character count the way npc.js,
     // skills.js and inv.js all do it -- Courier is monospace, so it is exact.

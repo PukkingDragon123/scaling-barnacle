@@ -241,6 +241,109 @@ function uiPanel(ctx, x, y, w, h, alpha = 0.92, light = false) {
   ctx.restore();
 }
 
+// ---- PANEL CHROME ---------------------------------------------------------
+//
+// uiPanel draws the FRAME. These draw the things that go on it, and they exist
+// because the crafting board and the skill trees were furnishing themselves out
+// of rrect(): flat rectangles with a hairline stroke, a bare lowercase `x` for a
+// close box, tab strips that were just darker rectangles, and a cream slab for a
+// button. Next to the journal -- carved frame, rope rule, paper index tabs, inked
+// plates -- they read as a different game's menus.
+//
+// One set of painters, used by both, so "the UI" is one thing.
+
+// The rope rule the journal runs under its header: two-tone dashes, the pier's
+// own line. Everything below it is the page.
+function uiRule(ctx, x, y, w, light = true) {
+  for (let dx = x; dx < x + w; dx += 6) {
+    ctx.fillStyle = light ? '#b08a5c' : '#7a5232';
+    ctx.fillRect(dx, y, 4, 1.5);
+    ctx.fillStyle = light ? '#8a6a44' : '#4e3018';
+    ctx.fillRect(dx + 1, y + 1.5, 4, 1);
+  }
+}
+
+// A real close box: the frame in miniature, with an inked X, and it lights up
+// under the pointer so it is obviously a button.
+function uiClose(ctx, r, hover, light = true) {
+  uiPanel(ctx, r.x, r.y, r.w, r.h, hover ? 1 : 0.85, light ? !hover : false);
+  const px2 = APIX;
+  ctx.fillStyle = hover ? '#f6e8c9' : (light ? '#5a3a22' : '#c9a271');
+  for (let i = 0; i < 5; i++) {
+    ctx.fillRect(r.x + r.w / 2 - 2.5 + i * px2 * 2, r.y + r.h / 2 - 2.5 + i * px2 * 2, px2 * 2, px2 * 2);
+    ctx.fillRect(r.x + r.w / 2 + 2.5 - i * px2 * 2 - px2 * 2, r.y + r.h / 2 - 2.5 + i * px2 * 2, px2 * 2, px2 * 2);
+  }
+}
+
+// A paper index tab. The selected one is the page's own colour and joins it; the
+// rest sit behind, darker and a texel lower, the way a stack of dividers does.
+function uiTab(ctx, r, label, on, hover, accent) {
+  const dy = on ? 0 : 1;
+  ctx.fillStyle = on ? '#f2dfae' : (hover ? '#c9ab78' : '#a8895e');
+  ctx.fillRect(r.x, r.y + dy, r.w, r.h - dy);
+  ctx.fillStyle = '#8a6a44';
+  ctx.fillRect(r.x, r.y + dy, r.w, 1);
+  ctx.fillRect(r.x, r.y + dy, 1, r.h - dy);
+  ctx.fillRect(r.x + r.w - 1, r.y + dy, 1, r.h - dy);
+  if (!on) { ctx.fillStyle = 'rgba(60,38,18,0.30)'; ctx.fillRect(r.x + 1, r.y + dy + 1, r.w - 2, r.h - dy - 1); }
+  if (accent) {                       // the track's colour, along the tab's foot
+    ctx.fillStyle = accent;
+    ctx.globalAlpha = on ? 1 : 0.45;
+    ctx.fillRect(r.x + 2, r.y + r.h - 2, r.w - 4, 2);
+    ctx.globalAlpha = 1;
+  }
+  textFit(ctx, label, r.x + r.w / 2, r.y + dy + 3, r.w - 8, {
+    size: 7, align: 'center', shadow: false,
+    color: on ? '#4a3020' : '#5f4526',
+  });
+}
+
+// A pressable wooden button: bevel up when live, pressed in when hovered, flat
+// and grey when it cannot be used. `t` drives a shine sweep on a live button so
+// the thing you are meant to click is the thing that moves.
+function uiButton(ctx, r, label, enabled, hover, t = 0) {
+  const S = APIX;
+  ctx.fillStyle = '#2c170b';
+  ctx.fillRect(r.x - S, r.y - S, r.w + S * 2, r.h + S * 2);
+  ctx.fillStyle = enabled ? (hover ? '#e9c07a' : '#d9ab63') : '#6a5a48';
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.fillStyle = enabled ? (hover ? '#fbe6b4' : '#f0d295') : '#7d6c58';
+  ctx.fillRect(r.x, r.y, r.w, S * 2);
+  ctx.fillRect(r.x, r.y, S * 2, r.h);
+  ctx.fillStyle = enabled ? '#a4763a' : '#4f4336';
+  ctx.fillRect(r.x, r.y + r.h - S * 2, r.w, S * 2);
+  ctx.fillRect(r.x + r.w - S * 2, r.y, S * 2, r.h);
+  if (enabled) {                      // a slow shine, so it reads as live
+    const sx = r.x + ((t * 34) % (r.w + 26)) - 13;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+    ctx.fillStyle = 'rgba(255,255,255,0.16)';
+    ctx.fillRect(sx, r.y, 5, r.h);
+    ctx.restore();
+  }
+  textFit(ctx, label, r.x + r.w / 2, r.y + r.h / 2 - 4, r.w - 8, {
+    size: 7.5, align: 'center', shadow: false,
+    color: enabled ? '#4a3020' : '#9a8d7c',
+  });
+}
+
+// A bevelled trough with a fill: xp, growth, air, anything 0..1. Flat progress
+// rectangles were the other thing making these screens look unfinished.
+function uiMeter(ctx, x, y, w, h, frac, col, light = false) {
+  const S = APIX;
+  ctx.fillStyle = light ? '#5a3c22' : '#0f0803';
+  ctx.fillRect(x - S, y - S, w + S * 2, h + S * 2);
+  ctx.fillStyle = light ? '#c9ab78' : '#2a1d12';
+  ctx.fillRect(x, y, w, h);
+  const fw = Math.max(0, Math.min(1, frac)) * w;
+  if (fw > 0) {
+    ctx.fillStyle = col;
+    ctx.fillRect(x, y, fw, h);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';   // a lit top edge on the fill
+    ctx.fillRect(x, y, fw, S);
+  }
+}
+
 // small pixel heart used by the HUD — authored at device density (14x12 texels
 // drawn into a 7x6 logical footprint) with outline + shine
 function drawHeart(ctx, x, y, kind) {
