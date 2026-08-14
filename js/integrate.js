@@ -166,16 +166,18 @@
         // FACING. Every cast sheet is drawn facing right, and NPCs.drawWorld
         // honours n.flip -- so walking left simply means flipping them.
         n.flip = visit.dir < 0;
-        // and the WALK: the idle cycle stepped fast reads as a stride at this
-        // size, and the emote frames are what they use when they are working.
-        if (visit.hold <= 0 && !(M.NPCs && M.NPCs.open)) {
-          n.frames = Object.assign({}, keptFrames, { idle: keptFrames.idle, emote: keptFrames.idle });
-        } else if (visit.act === 'work') {
+        // THE WALK CYCLE, at last. This used to swap frames.idle for frames.idle
+        // -- a no-op -- so the visitor slid along the planks in an idle pose.
+        // n.frames.walk is row 1 of every cast sheet (npc.js) and drawWorld plays
+        // it whenever n.walking is set.
+        n.walking = visit.hold <= 0 && !(M.NPCs && M.NPCs.open);
+        n.walkT = visit.walkT;
+        if (!n.walking && visit.act === 'work') {
           n.frames = Object.assign({}, keptFrames, { idle: keptFrames.emote });
         }
       }
       const r = ndraw(c, camX);
-      if (n) { n.flip = keptFlip; n.frames = keptFrames; }
+      if (n) { n.flip = keptFlip; n.frames = keptFrames; n.walking = false; }
       this.LIST = keep;
       return r;
     };

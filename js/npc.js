@@ -48,6 +48,11 @@ const NPCs = {
   COLS: 68,            // wrap width in characters (Courier is monospace: 0.6em)
   MAXL: 4,             // lines per page
 
+  // FRAMES. Each cast sheet is 4x4. Row 0 (0-3) is the idle; ROW 1 (4-7) IS A
+  // WALK CYCLE -- legs mid-stride, body leaning into it -- and it had never been
+  // drawn once, in any scene, because no frame map named it. The visitor walks a
+  // round of the deck now, so it finally has somewhere to go.
+  //
   // ---- the cast ---------------------------------------------------------------
   // x = spot on the deck. The dock is crowded: the house sits at 34..120, the
   // laptop at 232, the workbench at 300, lamp posts at 348 + 264n, and dive
@@ -69,7 +74,7 @@ const NPCs = {
       // the dialogue portrait is exactly where you notice. Both sheets are 4x4, so
       // the frame map below carries over unchanged.
       art: 'dfarm', x: 128, h: 42, flip: false,
-      frames: { idle: [0, 1, 2, 3], talk: [9, 8], emote: [12, 9, 13], happy: [12, 13], sad: [14, 15] },
+      frames: { idle: [0, 1, 2, 3], walk: [4, 5, 6, 7], talk: [9, 8], emote: [12, 9, 13], happy: [12, 13], sad: [14, 15] },
       adore: [],
       loved: ['crop_berry_p', 'crop_gourd_p', 'crop_moon_p', 'crop_curl_p', 'crop_blade_p'],
       liked: ['clam', 'mussel', 'clamMeat', 'musselMeat', 'tea'],
@@ -117,7 +122,7 @@ const NPCs = {
     {
       key: 'prof', name: 'Fintan', full: 'Prof. Fintan Bellwether', role: 'whale scholar',
       art: 'prof', x: 378, h: 56, flip: false,
-      frames: { idle: [0, 1, 2, 3], talk: [9, 8], emote: [11, 10, 12], happy: [12, 13], sad: [14, 15] },
+      frames: { idle: [0, 1, 2, 3], walk: [4, 5, 6, 7], talk: [9, 8], emote: [11, 10, 12], happy: [12, 13], sad: [14, 15] },
       adore: ['tea', 'teaLeaf', 'crop_tea_p'],
       loved: ['pearl', 'pearlPol', 'abalonePol'],
       liked: ['oyster', 'oysterMeat', 'abalone', 'crop_moon_p'],
@@ -172,7 +177,7 @@ const NPCs = {
     {
       key: 'angler', name: 'Marlow', full: 'Old Marlow', role: 'anglerfish, fisherman',
       art: 'angler', x: 428, h: 48, flip: false,
-      frames: { idle: [0, 1, 2, 3], talk: [8, 9], emote: [10, 8, 13], happy: [12, 13], sad: [14, 15] },
+      frames: { idle: [0, 1, 2, 3], walk: [4, 5, 6, 7], talk: [8, 9], emote: [10, 8, 13], happy: [12, 13], sad: [14, 15] },
       adore: [],
       loved: ['roe', 'musselMeat', 'abalone'],
       liked: ['mussel', 'clam', 'oyster', 'clamMeat', 'stock_hogfish_p', 'stock_sunfish_p'],
@@ -981,12 +986,20 @@ const NPCs = {
 
       // Idle bob plus a short emote every few seconds. Both are derived from the
       // global clock, so drawWorld needs no per-frame state of its own.
+      // WALKING beats everything: a moving sprite playing an idle loop is the
+      // thing that reads as sliding. n.walking and n.walkT are set for the one
+      // frame by whoever is driving them (js/integrate.js's visitor).
       const cyc = 8.5 + i * 2.7;
       const ph = (t + i * 3.9) % cyc;
-      const emoting = ph < 1.8;
-      const pool = emoting ? n.frames.emote : n.frames.idle;
-      const fi = emoting ? Math.floor(ph * 2.2) % pool.length : Math.floor(t * 2 + i) % pool.length;
-      const bob = Math.sin(t * 1.6 + i * 2.1) * 0.7 + (emoting ? Math.abs(Math.sin(ph * 5)) * 0.9 : 0);
+      const walking = !!n.walking && n.frames.walk;
+      const emoting = !walking && ph < 1.8;
+      const pool = walking ? n.frames.walk : (emoting ? n.frames.emote : n.frames.idle);
+      const fi = walking ? Math.floor(n.walkT || 0) % pool.length
+        : (emoting ? Math.floor(ph * 2.2) % pool.length : Math.floor(t * 2 + i) % pool.length);
+      // a walk bounces off the boards; an idle breathes
+      const bob = walking
+        ? Math.abs(Math.sin((n.walkT || 0) * Math.PI * 0.5)) * 1.6
+        : Math.sin(t * 1.6 + i * 2.1) * 0.7 + (emoting ? Math.abs(Math.sin(ph * 5)) * 0.9 : 0);
 
       c.fillStyle = 'rgba(40,20,10,0.18)';
       c.beginPath();

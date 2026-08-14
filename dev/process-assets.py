@@ -355,7 +355,7 @@ def gutters(im, axis, want, min_run=2):
 
 
 def grid_slice(src, cols, rows, names, tol=34, target_h=None, target_w=None,
-               solo=False, defr=False, inset=0, gutter=True):
+               solo=False, defr=False, inset=0, gutter=True, punch_bg=None):
     im = key_bg(Image.open(os.path.join(ROOT, src)), tol)
     if defr:
         im = defringe(im)
@@ -399,6 +399,14 @@ def grid_slice(src, cols, rows, names, tol=34, target_h=None, target_w=None,
                 if target_w and cell.size[0] > target_w:
                     s = target_w / cell.size[0]
                     cell = cell.resize((target_w, max(1, round(cell.size[1] * s))), Image.NEAREST)
+                # A FRAME HAS HOLES IN IT. A watering can's handle loop, a
+                # basket's mouth, a cutlass's knuckle guard: the border flood
+                # cannot reach any of them, so they shipped as solid studio grey.
+                # `punch` names the key colour for the sheet and punch_interior
+                # takes only the enclosed pockets (see its docstring for why a
+                # flat colour key eats the artwork and this does not).
+                if punch_bg is not None:
+                    cell = punch_interior(cell, punch_bg)
                 save(names[i], cell)
             i += 1
 
@@ -685,10 +693,10 @@ grid_slice('B61CD705-62F4-492C-BF81-67C8CC7F703F.png', 2, 2,
            tol=44, target_h=240, solo=True, defr=True, inset=8)
 grid_slice('62451256-5BAA-4CD6-BD4C-EFD42333B1EC.png', 2, 2,
            ['wpn_flint', 'wpn_cannon', 'wpn_cutlass', 'wpn_bomb'],
-           tol=44, target_h=200, solo=True, defr=True, inset=8)
+           tol=44, target_h=200, solo=True, defr=True, inset=8, punch_bg=(152, 159, 177))
 grid_slice('C00A1CE6-2BF7-4E2C-B253-F539283F9CE5.png', 4, 3,
            [f'ftool_{i}' for i in range(12)],
-           tol=44, target_h=170, solo=True, defr=True, inset=6)
+           tol=44, target_h=170, solo=True, defr=True, inset=6, punch_bg=(152, 159, 177))
 
 print('NPC houses and the pirate ship...')
 grid_slice('BAB4BD72-E265-418D-9C0E-99B625B95BB5.png', 3, 1,

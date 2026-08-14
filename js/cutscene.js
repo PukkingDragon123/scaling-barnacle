@@ -75,12 +75,11 @@ const IntroScene = {
     const fr = ASSETS[`oswim_${Math.floor(t * 6.5) % 4}`];
     if (fr && fr.width) {
       const ow = 40, oh = ow * fr.height / fr.width;
-      // the swim sheet faces LEFT (like every creature sheet); he travels right
-      c.save();
-      c.translate(ox, oy);
-      c.scale(-1, 1);
-      c.drawImage(fr, -ow / 2, -oh / 2, ow, oh);
-      c.restore();
+      // HE FACES RIGHT ALREADY. The oswim sheet is drawn head-right -- unlike the
+      // creature sheets, which face left -- and this flipped him anyway, so the
+      // whole opening had Otto swimming backwards towards his own front door,
+      // tail first, for eight and a half seconds.
+      c.drawImage(fr, ox - ow / 2, oy - oh / 2, ow, oh);
       // his wake: a couple of fading dashes behind him
       c.fillStyle = 'rgba(255,255,255,0.35)';
       for (let i = 1; i <= 3; i++) {
