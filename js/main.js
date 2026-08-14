@@ -115,7 +115,12 @@ const TouchUI = {
       // top one got hit by accident every time. The crafting button is the
       // anvil on the top rail (js/uibar.js), which is where the bag and the
       // skills already live. One place for menus, one place for the world.
-      b.push({ x: W - 26, y: 24, w: 20, h: 18, tap: 'KeyH', icon: 'help' });
+      // THE HELP TAB WAS ON TOP OF THE BAG. The rail (js/uibar.js) runs
+      // BX..BX+3*27 at y 40..62 and the last button starts at x 452; this pad was
+      // 454..474 at y 24..42, so its bottom two rows sat inside the bag button
+      // and a thumb aimed at the bag opened the field guide instead. It goes to
+      // the LEFT of the rail, on the rail's own line, clear of all three.
+      b.push({ x: W - 108, y: 42, w: 20, h: 18, tap: 'KeyH', icon: 'help' });
     } else if (sc === DiveScene) {
       b.push({ x: W - 46, y: H - 122, w: 40, h: 40, key: 'KeyW', icon: 'up' });
       b.push({ x: W - 46, y: H - 76, w: 40, h: 40, key: 'KeyS', icon: 'down' });
@@ -976,6 +981,7 @@ function frame(now) {
       typeof Quests !== 'undefined' && !Shop.open && !Bench.open && !Game.helpOpen) {
     Quests.update(dt);
     if (typeof Cine !== 'undefined') Cine.update(dt);
+    if (typeof FX !== 'undefined') FX.update(dt);
     // clicking the chapter banner is the mouse's way into the journal
     if (!Quests.open && !Quests.letter && Input.mouse.clicked && Game._goalRect) {
       const r = Game._goalRect, m = Input.mouse;
@@ -1072,6 +1078,7 @@ function frame(now) {
   if (G && Game.scene !== TitleScene && !cine && typeof Quests !== 'undefined') Quests.draw(ctx);
   // the errand hand-in slip sits above everything but the touch pads: it goes up
   // WHILE the dialogue box is still open, which is the moment it is about
+  if (G && Game.scene !== TitleScene && typeof FX !== 'undefined') FX.draw(ctx);
   if (G && Game.scene !== TitleScene && !cine && typeof Side !== 'undefined') Side.draw(ctx);
   // the cinematic beats go OVER everything but the fade: they are cuts, and a cut
   // is the top of the frame by definition

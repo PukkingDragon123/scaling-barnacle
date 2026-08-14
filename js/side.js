@@ -255,6 +255,12 @@ const Side = {
     }
 
     this._syncGoal();
+    // the burst: gold for the coin, green for the goods, thrown up out of the
+    // slip so the payout has a moment instead of just appearing
+    if (typeof FX !== 'undefined') {
+      FX.burst(84, 48, 16, { col: '#ffd45a', spread: 46, g: 62, up: 26, s: 1, star: true, life: 0.75 });
+      FX.burst(84, 48, 10, { col: '#7dffb0', spread: 34, g: 54, up: 18, s: 1, life: 0.6 });
+    }
     this._flash = { name: q.name, money: r.money || 0, items: r.items || null, note: r.note || '', t: 3.0 };
     // a main-quest step gets the cinematic beat as well as the slip
     if (q.branch === 'main' && typeof Quests !== 'undefined' && Quests.complete) Quests.complete(q);

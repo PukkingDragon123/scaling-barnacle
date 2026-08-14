@@ -99,7 +99,7 @@ def global_key(im, tol=34, bg_col=None):
     return im
 
 
-def punch_interior(im, bg_col, tol=12, edge_tol=24, core=2):
+def punch_interior(im, bg_col, tol=12, edge_tol=24, core=1):
     """Delete background TRAPPED INSIDE the artwork, and only that.
 
     key_bg floods from the border, so it can never reach a pocket the drawing
@@ -128,7 +128,10 @@ def punch_interior(im, bg_col, tol=12, edge_tol=24, core=2):
         is left alone.
       * A THICKNESS GATE. A pocket is an AREA; a plank shadow is a LINE. A blob
         is only punched if it contains a solid (2*core+1) square of its own kind,
-        which a groove of any length never does.
+        which a groove of any length never does. core=1 (a 3x3 core) is the
+        default because 2 was too coarse for real architecture: the pale band
+        around house_body's door surround, and the triangle inside the shack's
+        lamp bracket, are both genuine background and both narrower than 5px.
     """
     im = im.convert('RGBA')
     w, h = im.size

@@ -715,6 +715,13 @@ const Forge = {
     this._rowCache = {};
     this._bandSig = '';
     if (SND.clank) SND.clank(); else SND.clink();
+    // sparks off the bench: gold, thrown up, falling back. The place a craft
+    // lands had nothing on it at all.
+    if (typeof FX !== 'undefined') {
+      var _br = this._btnRect ? this._btnRect() : { x: this.WX + 12, y: this.WY + 112, w: 90, h: 16 };
+      FX.burst(_br.x + _br.w / 2, _br.y + 4, 14, { col: '#ffd45a', spread: 52, g: 90, up: 30, life: 0.55, star: true });
+      FX.burst(_br.x + _br.w / 2, _br.y + 4, 8, { col: '#ffe6b0', spread: 30, g: 70, up: 16, life: 0.4 });
+    }
     if (SND.thump) SND.thump(0.5);
     Game.save();
     return true;

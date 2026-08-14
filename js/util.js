@@ -241,6 +241,102 @@ function uiPanel(ctx, x, y, w, h, alpha = 0.92, light = false) {
   ctx.restore();
 }
 
+// ---- FX: one recycled pool of pixel particles ------------------------------
+//
+// Every system in this game that wanted a sparkle grew its own array, its own
+// update and its own draw -- and most of the moments that deserve one still have
+// nothing: handing in an errand, learning a skill, finishing a craft. This is the
+// shared one. It is a FIXED pool, allocated once, so a burst costs no garbage
+// however many go off, and it draws with fillRect on the pixel grid: no arcs, no
+// gradients, no anti-aliasing, nothing that would read as web chrome.
+const FX = {
+  MAX: 96,
+  p: null,
+  _n: 0,
+
+  _ensure() {
+    if (this.p) return;
+    this.p = new Array(this.MAX);
+    for (let i = 0; i < this.MAX; i++) {
+      this.p[i] = { t: 0, life: 1, x: 0, y: 0, vx: 0, vy: 0, g: 0, s: 1, col: '#fff', star: false };
+    }
+  },
+  _slot() {
+    this._ensure();
+    for (let i = 0; i < this.MAX; i++) if (this.p[i].t <= 0) return this.p[i];
+    return null;                      // full: drop it, never grow the pool
+  },
+
+  // A burst. `spread` is the speed envelope, `g` the gravity (0 floats, +40
+  // falls), `star` draws a four-point twinkle instead of a square.
+  burst(x, y, n, opts = {}) {
+    const { col = '#ffe66e', spread = 34, g = 26, life = 0.6, s = 1, star = false, up = 0 } = opts;
+    for (let i = 0; i < n; i++) {
+      const q = this._slot();
+      if (!q) return;
+      const a2 = rand(0, TAU);
+      const sp = rand(spread * 0.35, spread);
+      q.t = q.life = life * rand(0.7, 1.25);
+      q.x = x + rand(-1.5, 1.5); q.y = y + rand(-1.5, 1.5);
+      q.vx = Math.cos(a2) * sp;
+      q.vy = Math.sin(a2) * sp - up;
+      q.g = g; q.s = s; q.col = col; q.star = star;
+    }
+  },
+
+  // A ring: particles thrown outward on one plane. Splashes, impacts, a bed
+  // settling into the sand.
+  ring(x, y, n, opts = {}) {
+    const { col = '#dff2ff', r = 30, life = 0.5, s = 1, flat = 0.35 } = opts;
+    for (let i = 0; i < n; i++) {
+      const q = this._slot();
+      if (!q) return;
+      const a2 = (i / n) * TAU + rand(-0.2, 0.2);
+      q.t = q.life = life * rand(0.8, 1.15);
+      q.x = x; q.y = y;
+      q.vx = Math.cos(a2) * r;
+      q.vy = Math.sin(a2) * r * flat;
+      q.g = 0; q.s = s; q.col = col; q.star = false;
+    }
+  },
+
+  update(dt) {
+    if (!this.p) return;
+    let live = 0;
+    for (let i = 0; i < this.MAX; i++) {
+      const q = this.p[i];
+      if (q.t <= 0) continue;
+      q.t -= dt;
+      q.x += q.vx * dt;
+      q.y += q.vy * dt;
+      q.vy += q.g * dt;
+      q.vx *= 0.98;
+      live++;
+    }
+    this._n = live;
+  },
+
+  draw(ctx) {
+    if (!this.p || !this._n) return;
+    for (let i = 0; i < this.MAX; i++) {
+      const q = this.p[i];
+      if (q.t <= 0) continue;
+      const k = q.t / q.life;
+      ctx.globalAlpha = k > 0.7 ? 1 : k / 0.7;
+      ctx.fillStyle = q.col;
+      const sz = q.s * (k > 0.5 ? 1 : 0.6);
+      const x = Math.round(q.x / APIX) * APIX, y = Math.round(q.y / APIX) * APIX;
+      if (q.star) {                   // a four-point twinkle, five rects
+        ctx.fillRect(x - sz, y, sz * 3, sz);
+        ctx.fillRect(x, y - sz, sz, sz * 3);
+      } else {
+        ctx.fillRect(x, y, sz, sz);
+      }
+    }
+    ctx.globalAlpha = 1;
+  },
+};
+
 // ---- PANEL CHROME ---------------------------------------------------------
 //
 // uiPanel draws the FRAME. These draw the things that go on it, and they exist

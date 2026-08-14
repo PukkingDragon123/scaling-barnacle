@@ -996,10 +996,23 @@ const NPCs = {
       const pool = walking ? n.frames.walk : (emoting ? n.frames.emote : n.frames.idle);
       const fi = walking ? Math.floor(n.walkT || 0) % pool.length
         : (emoting ? Math.floor(ph * 2.2) % pool.length : Math.floor(t * 2 + i) % pool.length);
-      // a walk bounces off the boards; an idle breathes
+      // A WALK BOUNCES OFF THE BOARDS; AN IDLE BREATHES.
+      //
+      // Four drawn frames is a thin cycle, and "add more frames" is not something
+      // a sheet of sixteen can be talked into. What it CAN do is carry the motion
+      // between them: a step has a rise and a fall, the body squashes as the foot
+      // lands and stretches as it leaves, and the whole animal leans into the
+      // direction of travel. Those three, driven off the same walkT the frame
+      // index uses, put a beat between every pair of frames -- so four frames
+      // read as eight and the stride lands instead of sliding.
+      const wph = (n.walkT || 0) * Math.PI * 0.5;
       const bob = walking
-        ? Math.abs(Math.sin((n.walkT || 0) * Math.PI * 0.5)) * 1.6
+        ? Math.abs(Math.sin(wph)) * 1.7
         : Math.sin(t * 1.6 + i * 2.1) * 0.7 + (emoting ? Math.abs(Math.sin(ph * 5)) * 0.9 : 0);
+      // squash on the down beat, stretch on the up; volume roughly conserved
+      const sq = walking ? 1 - Math.cos(wph * 2) * 0.045 : 1;
+      const sx2 = walking ? 1 + Math.cos(wph * 2) * 0.045 : 1;
+      const lean = walking ? Math.sin(wph) * 0.035 : 0;
 
       c.fillStyle = 'rgba(40,20,10,0.18)';
       c.beginPath();
@@ -1012,9 +1025,20 @@ const NPCs = {
         const sx = Math.round(n.x * DPX) / DPX;
         c.save();
         c.translate(sx, DECK_Y + 0.5 - bob);
+        c.rotate(lean * (n.flip ? -1 : 1));
         if (n.flip) c.scale(-1, 1);
+        c.scale(sx2, sq);
         c.drawImage(img, -ww / 2, -hh, ww, hh);
         c.restore();
+        // and the boards give a little dust back on each footfall, the same way
+        // Otto's do -- it is what makes a walk land on something
+        if (walking && Math.sin(wph) > 0.94) {
+          c.fillStyle = 'rgba(226,206,168,0.5)';
+          const d0 = (n.flip ? 1 : -1) * (2 + (Math.floor(n.walkT || 0) % 2));
+          c.fillRect(sx + d0 - 1, DECK_Y - 1.5, 3, 1.5);
+          c.fillStyle = 'rgba(226,206,168,0.25)';
+          c.fillRect(sx + d0 * 2 - 1, DECK_Y - 3, 2, 1);
+        }
       }
 
       // Over their head, in priority order: an ERRAND mark ('!' they are owed a
