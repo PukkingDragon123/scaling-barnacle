@@ -702,21 +702,21 @@ grid_slice('B61CD705-62F4-492C-BF81-67C8CC7F703F.png', 2, 2,
            tol=44, target_h=240, solo=True, defr=True, inset=8)
 grid_slice('62451256-5BAA-4CD6-BD4C-EFD42333B1EC.png', 2, 2,
            ['wpn_flint', 'wpn_cannon', 'wpn_cutlass', 'wpn_bomb'],
-           tol=44, target_h=200, solo=True, defr=True, inset=8, punch_bg=(152, 159, 177))
+           tol=44, target_h=200, solo=True, defr=True, inset=8)
 grid_slice('C00A1CE6-2BF7-4E2C-B253-F539283F9CE5.png', 4, 3,
            [f'ftool_{i}' for i in range(12)],
-           tol=44, target_h=170, solo=True, defr=True, inset=6, punch_bg=(152, 159, 177))
+           tol=44, target_h=170, solo=True, defr=True, inset=6)
 
 print('NPC houses and the pirate ship...')
 grid_slice('BAB4BD72-E265-418D-9C0E-99B625B95BB5.png', 3, 1,
            ['nhouse_light', 'nhouse_cottage', 'nhouse_shack'],
            tol=44, target_h=520, solo=True, defr=True, inset=8)
-# A stilt house is a frame too: the flood reaches the sky around it and nothing
-# else. The stair gaps and the whole open underside between the legs shipped as
-# solid grey slabs -- that is the "stacking" in the neighbourhood scene.
-for _nh in ('nhouse_light', 'nhouse_cottage', 'nhouse_shack'):
-    _p = os.path.join(OUT, _nh + '.png')
-    save(_nh, trim(punch_interior(Image.open(_p), (155, 160, 176))))
+# NO INTERIOR PUNCH ON THE HOUSES. punch_interior stays in this file because the
+# idea is sound, but it is not wired to anything any more: run against real
+# artwork it kept taking PAINT -- a whitewashed door surround, a pale window
+# frame, the lit face of a rock -- because near the key colour and being the key
+# colour are not the same thing and no threshold I tried separated them reliably.
+# The sheets as uploaded are the source of truth.
 SHIP_BG = (151, 157, 172)
 shipim = defringe(key_bg(Image.open(os.path.join(ROOT, '44A4DA02-2501-46EC-BA19-F213DB2864B5.png')), tol=44),
                   SHIP_BG, tol=44, passes=1)
@@ -857,7 +857,7 @@ _sheet_objects('CF64917A-4B5D-4D7A-8DE9-9BEC0F6EA47C.png', 30, [
     'kit_barn', 'kit_pavilion', 'kit_hoist',
     'kit_hayloft', 'kit_ropefence', 'kit_trough', 'kit_ramp',
     'kit_deck', 'kit_trestle', 'kit_ladder', 'kit_rail', 'kit_lamp', 'kit_mooring',
-], row_tol=150, min_area=3000, punch_bg=(152, 159, 177))
+], row_tol=150, min_area=3000)
 
 # ITEM ICONS, on magenta.
 _sheet_objects('27DA4A95-FE40-4173-B479-B244453D2273.png', 60, [
