@@ -1750,6 +1750,14 @@ const Hood = {
       if (a.x < camX - 90 || a.x > camX + W + 90) continue;
       if (a.y < camY - 90 || a.y > camY + H + 90) continue;
       if (a.act === 'sleep' && a.arrived) continue;             // indoors
+      // ...AND NOT AT YOUR PIER. DOCK_AT is (6,-2), which in the ocean view is
+      // the waterline right in among the pilings -- so a neighbour who had come
+      // over was drawn standing in the middle of the pier's understructure, half
+      // behind a post, apparently wedged into it. That is the "npc stuck in the
+      // pier" of it, and it is a DOUBLE DRAW as well: the same visitor is already
+      // being placed on the planks by js/integrate.js, which is what you actually
+      // meet and talk to. Once they have arrived at the dock, the deck owns them.
+      if (a.act === 'dock' && a.arrived) continue;
       // above the waterline they are standing on a deck, so the sprite is anchored
       // at the feet; in the water it is anchored at the body centre
       var onDeck = a.y <= -2;

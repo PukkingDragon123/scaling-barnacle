@@ -54,20 +54,15 @@ function resize() {
     availW = host.clientWidth - inset;
     availH = host.clientHeight - inset;
   }
-  // THE SNAP USED TO THROW AWAY HALF THE SCREEN. Snapping down to a half-integer
-  // step keeps a texel grid whole -- but only matters once the CSS size passes
-  // the backing store, which is W*DPX = 1920 wide. Below that every size is a
-  // DOWNSCALE of a 4x buffer and stays perfectly crisp, snapped or not.
+  // Snap to half-integer scales when upscaling: pixel art stays crisp, and the
+  // shrink-wrapped frame means the leftover space costs nothing visually.
   //
-  // The old rule snapped at any scale >= 1, so a phone held in landscape at 844
-  // wide computed 1.44 and rendered at 1.00: the game sat 480 logical units wide
-  // in the middle of an 844-pixel screen with a black band round it, which is
-  // most of "the pier and house is broken" on a phone. Now the snap applies only
-  // where it buys something, and the picture fills the space everywhere else.
+  // I changed this to fill the screen instead and it was wrong. A non-integer
+  // CSS scale makes texels land on uneven numbers of screen pixels -- some three
+  // wide, some four -- and the whole picture goes soft and irregular. Filling the
+  // frame is not worth what it costs the art. It snaps, and it stays snapped.
   const scaleRaw = Math.min(availW / W, availH / H);
-  const scale = scaleRaw > DPX
-    ? Math.max(1, Math.floor(scaleRaw * 2) / 2)     // past the backing store: snap
-    : Math.max(0.1, scaleRaw);                      // within it: use every pixel
+  const scale = scaleRaw >= 1 ? Math.max(1, Math.floor(scaleRaw * 2) / 2) : Math.max(0.1, scaleRaw);
   canvas.style.width = `${W * scale}px`;
   canvas.style.height = `${H * scale}px`;
 }

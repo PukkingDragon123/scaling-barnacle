@@ -2791,8 +2791,18 @@ const Ocean = {
 
     // THE LADDER: the affordance and the hit box are the same object, so it is
     // drawn from the ladder art at the exact reach the dock check uses.
+    // ...and it starts AT THE DECK, not in the sky above it. lTop was a flat
+    // `surf - 30`, which has nothing to do with where the planks actually are:
+    // dock_11 is seated so its deck sits on the waterline and the trestle hangs
+    // below, so the plank line is `surf - segH * 0.30 + a couple of texels`.
+    // Thirty units above the waterline landed the ladder's top well ABOVE the
+    // boards, poking through them into the air with nothing holding it up.
     const lx = sx + 18;
-    const lTop = surf - 30, lBot = surf + this.DOCK_TOP;
+    const _seg = ASSETS['dock_11'];
+    const _deckTop = (_seg && _seg.width)
+      ? surf - (this.PIER_SEG * _seg.height / _seg.width) * 0.30
+      : surf - 6;
+    const lTop = _deckTop + 3, lBot = surf + this.DOCK_TOP;
     const lad = ASSETS['kit_ladder'];
     if (lad && lad.width) {
       const lw = 15;
