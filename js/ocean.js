@@ -215,7 +215,11 @@ const Ocean = {
   // read; a bilinear tap at 2.5x would soften the entire scene.
   // back to 1.5 by request: tighter on Otto, and it is the crisp setting (a
   // sprite texel lands on exactly 3 device pixels)
-  ZOOM: 1.5,
+  // Zoomed out a step. 1.5 framed the sea tight enough that a house or a shoal
+  // filled the screen before you could see what it was. A sprite texel covers
+  // APIX * DPX * ZOOM device pixels, so at 1.25 that is 2.5 -- not whole, which
+  // is why this scene sets imageSmoothingEnabled = false everywhere it draws.
+  ZOOM: 1.25,
   // How tall the painted sand strip stands, in logical units: SAND_TILE_W scaled by
   // the strip art's aspect (1447x83). The camera's floor cap is measured off this,
   // so the two cannot drift apart.
@@ -2197,18 +2201,10 @@ const Ocean = {
     const air = clamp(surf / 46, 0, 1);
     const p = this._skyPal(typeof G !== 'undefined' && G ? G.clock : 0.3);
 
-    // FAR CHOP: a low, desaturated row a few units above the line. This is the one
-    // thing that turns a flat waterline into open sea once the camera is above it.
-    if (air > 0.02) {
-      const far = p[4];
-      ctx.fillStyle = cssRGB(far);
-      for (let x = 0; x < W; x += 6) {
-        const w1 = Math.sin(t * 1.1 + (x + cx) * 0.035) * 1.1 + Math.sin(t * 2.3 + (x + cx) * 0.012) * 0.8;
-        ctx.globalAlpha = 0.5 * air;
-        ctx.fillRect(x, surf - 4 + w1, 6, 1.7);
-      }
-      ctx.globalAlpha = 1;
-    }
+    // (NO CODED CHOP. A row of rectangles bobbing on two sine waves was drawn a
+    // few units above the line to "turn a flat waterline into open sea" -- and it
+    // is a row of rectangles bobbing on two sine waves, which is what it looks
+    // like. The painted ocean frames behind it already have waves in them.)
 
     // the line itself: brightest thing in frame, from below especially
     ctx.fillStyle = `rgba(226,248,255,${(0.5 - air * 0.16).toFixed(3)})`;
@@ -3229,16 +3225,12 @@ const Ocean = {
       sqx = 1 + Math.sin(k * Math.PI) * 0.1;
     } else if (this.dashT > 0) {
       sqx = 1.08; sqy = 0.94;
-    } else {
-      // THE STROKE. A swimming animal is not a rigid picture being translated:
-      // it gathers and it pushes. This squashes and stretches on the same clock
-      // the swim frames run on, strongest when he is cruising and fading out as
-      // he slows to a hover, where a gentle breath takes over instead.
-      const spK = clamp(this.speed() / 120, 0, 1);
-      const stroke = Math.sin(this.animT * 7.5);
-      sqx = 1 + stroke * 0.05 * spK + Math.sin(this.time * 1.9) * 0.012 * (1 - spK);
-      sqy = 1 - stroke * 0.05 * spK - Math.sin(this.time * 1.9) * 0.012 * (1 - spK);
     }
+    // (NO CONTINUOUS SWIM SQUASH. I added one, and a non-integer scale applied to
+    // a pixel sprite every frame with smoothing off re-rasterises it every frame:
+    // the edges go ragged and CHANGE, which reads exactly like a badly cut-out
+    // sprite even though the png is clean. The sheet's own four frames carry the
+    // stroke; nothing needs to be stretched over the top of them.)
 
     ctx.save();
     // snapped to the SPRITE's texel pitch, not to DPX: at DPX he could land on a

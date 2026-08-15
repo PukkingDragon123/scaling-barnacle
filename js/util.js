@@ -42,7 +42,13 @@ function weightedPick(pairs, r) {
 // scaled up ~1.35x INSIDE the helper: every call site keeps its old numbers and
 // its old layout math, and textWidth measures with the same scaling so nothing
 // drifts. `bold` is accepted and ignored -- a pixel font has one weight.
-const FONT_SCALE = 1.35;
+// VT323 runs narrower and lighter than the bold Courier this used to set, so it
+// is scaled up inside the helper and every call site keeps its old numbers. 1.35
+// was too much: at that multiplier a size-8 dialogue line renders at 10.8px and
+// the text reads oversized against the art -- it was sized to fill the old
+// Courier's box rather than to sit right. 1.15 keeps the face legible at 6pt
+// without shouting at 8.
+const FONT_SCALE = 1.15;
 function _fontFor(size) {
   const fam = typeof FONT_FAMILY !== 'undefined' ? `'${FONT_FAMILY}', ` : '';
   return `${Math.round(size * FONT_SCALE * 2) / 2}px ${fam}"Courier New", monospace`;

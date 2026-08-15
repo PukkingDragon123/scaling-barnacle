@@ -1870,50 +1870,11 @@ const Hood = {
     var bottom = top + hh;
     var nite = (typeof nightness === 'function') ? nightness(G.clock) : 0;
 
-    // ---- The posts, continued DOWN from where the sprite's own stop. There is
-    // no seabed out here, so they fade into the dark rather than landing on
-    // anything, and NOTHING ELSE about the understructure is drawn.
-    //
-    // It used to be a dock_11 trestle span -- the harbour's own bridge module --
-    // and then a SECOND one stacked under that, "so the posts run on down". Two
-    // things went wrong with it. A trestle is a bridge span with its own diagonal
-    // bracing and its own deck lip, so laying one under a little wooden cottage
-    // put a red platform the full width of the house beneath it, and stacking two
-    // built a scaffold TOWER. That is the ugly stacked platform.
-    //
-    // A stilt house does not stand on a bridge. It stands on POSTS, in the same
-    // places its own painted legs already are (legF, measured off each sprite),
-    // so this continues those legs with `pole` -- the tileable timber piling the
-    // dive scene stands on -- and lets the art's own understructure be the only
-    // understructure in the picture.
-    var legTop = bottom - 4;              // overlap by a texel so there is no seam
-    var legDim = 1 - nite * 0.55;
-    var pimg = ASSETS.pole;
-    var legF = hm.legF, legW = Math.max(5, w * hm.legW * 1.25);
-    if (pimg && pimg.width) {
-      var ph = legW * pimg.height / pimg.width;
-      var sm2 = ctx.imageSmoothingEnabled;
-      ctx.imageSmoothingEnabled = false;
-      for (var l = 0; l < legF.length; l++) {
-        var lx = Math.round((hm.x + w * legF[l] - legW / 2) * DPX) / DPX;
-        for (var py = legTop, seg = 0; seg < 4; py += ph - 1, seg++) {
-          ctx.globalAlpha = clamp(1 - seg * 0.28, 0.06, 1) * legDim;
-          ctx.drawImage(pimg, lx, py, legW, ph);
-        }
-      }
-      ctx.globalAlpha = 1;
-      ctx.imageSmoothingEnabled = sm2;
-    } else {
-      ctx.fillStyle = hm.legCol;
-      for (var l2 = 0; l2 < legF.length; l2++) {
-        var lx2 = Math.round((hm.x + w * legF[l2] - legW / 2) * DPX) / DPX;
-        for (var bnd = 0; bnd < 5; bnd++) {
-          ctx.globalAlpha = 0.8 * (1 - bnd / 5) * legDim;
-          ctx.fillRect(lx2, legTop + bnd * 20, legW, 20.5);
-        }
-      }
-      ctx.globalAlpha = 1;
-    }
+    // ---- NOTHING CONTINUES DOWNWARD. There was a run of `pole` pilings drawn
+    // below each house to carry its legs into the water -- and every one of these
+    // sprites already ENDS somewhere sensible; the extra posts just stuck out the
+    // bottom like a stilt house on scaffolding, in a different timber to the art
+    // above them. The sprite is the whole building.
 
     // The house itself dims after dark, the same way ocean.js dims its own props --
     // a building at full daylight brightness with dimmed coral either side of it is
