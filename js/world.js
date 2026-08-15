@@ -326,16 +326,25 @@ const WorldScene = {
     const OTTER_WALK = ['o4_4', 'o4_5', 'o4_6', 'o4_7'];
     const OTTER_IDLE = ['o4_0', 'o4_1', 'o4_2', 'o4_3'];
     const walking = this.walkT > 0 && this.idleT < 0.1;
-    let frameN = 0, sqx = 1, sqy = 1, hop = 0;
+    let frameN = 0, sqx = 1, sqy = 1, hop = 0, lean = 0;
     if (walking) {
       frameN = Math.floor(this.walkT * 0.8) % OTTER_WALK.length;
       const ph = this.walkT * 2.2;
-      hop = Math.abs(Math.sin(ph)) * 2.3;
-      sqy = 1 + Math.cos(ph * 2) * 0.07;
-      sqx = 1 - (sqy - 1) * 0.85;
+      // MORE BOUNCE. A hop of 2.3 on a 30-unit otter is a shuffle; this is a
+      // stride. The squash is on twice the hop's frequency because a body
+      // compresses on BOTH footfalls, and it is inverted through the arc: fat and
+      // low at the bottom, thin and tall at the top, volume roughly conserved.
+      hop = Math.abs(Math.sin(ph)) * 3.6;
+      sqy = 1 - Math.cos(ph * 2) * 0.10;
+      sqx = 1 - (sqy - 1) * 0.9;
+      lean = this.dir * 0.05 + Math.sin(ph) * 0.02;   // he leans into the walk
     } else {
-      sqy = 1 + Math.sin(this.time * 2.1) * 0.02;
+      // AND HE BREATHES STANDING STILL. Two beats: a slow chest rise, and a much
+      // slower sway, so an idle otter is never a frozen picture.
+      sqy = 1 + Math.sin(this.time * 2.1) * 0.035;
       sqx = 1 - (sqy - 1) * 0.7;
+      hop = Math.max(0, Math.sin(this.time * 2.1)) * 0.35;
+      lean = Math.sin(this.time * 0.7) * 0.012;
     }
     ctx.fillStyle = 'rgba(40,20,10,0.18)';
     ctx.beginPath(); ctx.ellipse(this.px, DECK_Y + 0.8, Math.max(3.5, 6 - hop * 0.9), 1.3, 0, 0, TAU); ctx.fill();
@@ -343,7 +352,11 @@ const WorldScene = {
     if (oimg && oimg.width) {
       const oh = 30, ow = oh * oimg.width / oimg.height;
       ctx.save();
-      ctx.translate(Math.round(this.px * DPX) / DPX, DECK_Y + 0.5 - hop);
+      // snapped to the SPRITE's texel pitch (APIX * the harbour zoom), not to
+      // DPX: at DPX he can land on a half-texel and shimmer against the boards
+      const qw = APIX * WORLD_ZOOM;
+      ctx.translate(Math.round(this.px / qw) * qw, DECK_Y + 0.5 - hop);
+      ctx.rotate(lean);
       ctx.scale(this.dir >= 0 ? sqx : -sqx, sqy);   // sheet faces left
       ctx.drawImage(oimg, -ow / 2, -oh + 0.5, ow, oh);
       ctx.restore();

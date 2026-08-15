@@ -413,8 +413,30 @@ const Hotbar = {
     if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
   },
 
+  // How long a slot's pop lasts, and the per-slot timers + last-seen counts that
+  // drive it. Both arrays are allocated once and never resized.
+  POP_T: 0.30,
+  _pop: null,
+  _seen: null,
+
+  // Called from draw, which is the only place that runs every frame: compare each
+  // slot's count with what it held last frame and start a pop where it changed.
+  // Cheap (SLOTS is 10) and it needs no hook into every system that gives or
+  // takes an item -- which is the reason nothing animated before.
+  _watch(dt) {
+    if (!this._pop) { this._pop = new Array(this.SLOTS).fill(0); this._seen = new Array(this.SLOTS).fill(-1); }
+    for (let i = 0; i < this.SLOTS; i++) {
+      const s = G.hotbar[i];
+      const n = this.isEmpty(s) ? 0 : (s.kind === 'item' ? (s.n || 1) : 1);
+      if (this._seen[i] >= 0 && n > this._seen[i]) this._pop[i] = this.POP_T;
+      this._seen[i] = n;
+      if (this._pop[i] > 0) this._pop[i] -= dt;
+    }
+  },
+
   draw(ctx) {
     if (!this._ensure()) return;
+    this._watch(Math.min(0.05, (typeof Game !== 'undefined' && Game.dt) || 0.016));
     const C = this.CELL, x0 = this.barX(), y0 = this.barY();
     const sel = G.hotbarSel;
     const mx = Input.mouse.x, my = Input.mouse.y;
@@ -443,7 +465,19 @@ const Hotbar = {
       }
 
       if (this.isEmpty(s)) continue;
-      this.drawSlotArt(ctx, s, cx + C / 2, cy + C / 2 - 0.5, this.ICON);
+      // THE ITEMS MOVE TOO. The selected slot's icon rides a slow bob so the
+      // thing in your paw is never a sticker, and any slot whose COUNT just
+      // changed pops -- picking something up, spending something, a craft
+      // landing. _pop is a per-slot timer set in _watch below; the pop is a
+      // squash-and-settle, not a fade, so it reads at 16 pixels.
+      const pop = this._pop && this._pop[i] > 0 ? this._pop[i] : 0;
+      const bob = on ? Math.sin(Game.time * 3.4) * 0.7 : 0;
+      const ps = pop > 0 ? 1 + Math.sin(pop / this.POP_T * Math.PI) * 0.34 : 1;
+      ctx.save();
+      ctx.translate(cx + C / 2, cy + C / 2 - 0.5 + bob);
+      ctx.scale(ps, pop > 0 ? 2 - ps : 1);
+      this.drawSlotArt(ctx, s, 0, 0, this.ICON);
+      ctx.restore();
       if (s.kind === 'item' && s.n > 1) {
         text(ctx, String(s.n), cx + C - 1.6, cy + C - 7.5, {
           size: 6.5, color: '#fff8e0', align: 'right' });

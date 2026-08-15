@@ -1659,6 +1659,24 @@ const Ocean = {
     const bedCap = this.floorAt(this.px) + this.SAND_STRIP_H - 6 - this.VH;
     if (bedCap > -lift) tyc = Math.min(tyc, bedCap);
     this.camY += (tyc - this.camY) * k;
+
+    // ---- SNAP THE CAMERA TO THE TEXEL GRID -------------------------------------
+    //
+    // This is the underwater flicker. The camera eases every frame, so camX and
+    // camY were arbitrary floats -- and with smoothing OFF (which is right, it is
+    // what keeps the art crisp) every sprite in the scene gets re-rasterised
+    // against a sub-texel offset that changes 60 times a second. Nothing MOVES
+    // wrong; the pixels just land on a different side of the grid each frame, and
+    // the whole picture crawls. Otto shows it worst because he is the biggest
+    // thing on screen and the one the camera is chasing.
+    //
+    // A sprite texel covers APIX * ZOOM units, so quantising the camera to that
+    // pitch means every sprite lands on the same grid every frame. The easing is
+    // untouched -- only what the camera REPORTS is snapped, so motion stays smooth
+    // and the pixels stay still.
+    const q = APIX * (this.ZOOM || 1);
+    this.camX = Math.round(this.camX / q) * q;
+    this.camY = Math.round(this.camY / q) * q;
   },
 
   // ---- animation state machine ------------------------------------------------
@@ -3201,13 +3219,30 @@ const Ocean = {
       sqx = 1 + Math.sin(k * Math.PI) * 0.1;
     } else if (this.dashT > 0) {
       sqx = 1.08; sqy = 0.94;
+    } else {
+      // THE STROKE. A swimming animal is not a rigid picture being translated:
+      // it gathers and it pushes. This squashes and stretches on the same clock
+      // the swim frames run on, strongest when he is cruising and fading out as
+      // he slows to a hover, where a gentle breath takes over instead.
+      const spK = clamp(this.speed() / 120, 0, 1);
+      const stroke = Math.sin(this.animT * 7.5);
+      sqx = 1 + stroke * 0.05 * spK + Math.sin(this.time * 1.9) * 0.012 * (1 - spK);
+      sqy = 1 - stroke * 0.05 * spK - Math.sin(this.time * 1.9) * 0.012 * (1 - spK);
     }
 
     ctx.save();
-    ctx.translate(Math.round(sx * DPX) / DPX, Math.round(sy * DPX) / DPX);
-    // bank toward the velocity vector; mirrored when he swims left so the lean
-    // still points the way he is going
-    ctx.rotate(this.face > 0 ? this.bank : -this.bank);
+    // snapped to the SPRITE's texel pitch, not to DPX: at DPX he could land on a
+    // half-texel and shimmer against everything else in the scene
+    const q2 = APIX * (this.ZOOM || 1);
+    ctx.translate(Math.round(sx / q2) * q2, Math.round(sy / q2) * q2);
+    // Bank toward the velocity vector, mirrored when he swims left so the lean
+    // still points the way he is going -- QUANTISED to 1/24 rad. A pixel sprite
+    // under a continuously-easing rotation re-rasterises every single frame, and
+    // with smoothing off that is a visible crawl along every edge. In steps it
+    // re-rasterises only when the lean actually changes, and 1/24 rad is finer
+    // than the eye reads at this size.
+    const bankQ = Math.round(this.bank * 24) / 24;
+    ctx.rotate(this.face > 0 ? bankQ : -bankQ);
     if (this.face < 0) ctx.scale(-1, 1);
     ctx.scale(sqx, sqy);
     if (this.over) {

@@ -54,10 +54,20 @@ function resize() {
     availW = host.clientWidth - inset;
     availH = host.clientHeight - inset;
   }
-  // Snap to half-integer scales when upscaling: pixel art stays crisp, and the
-  // shrink-wrapped frame means the leftover space costs nothing visually.
+  // THE SNAP USED TO THROW AWAY HALF THE SCREEN. Snapping down to a half-integer
+  // step keeps a texel grid whole -- but only matters once the CSS size passes
+  // the backing store, which is W*DPX = 1920 wide. Below that every size is a
+  // DOWNSCALE of a 4x buffer and stays perfectly crisp, snapped or not.
+  //
+  // The old rule snapped at any scale >= 1, so a phone held in landscape at 844
+  // wide computed 1.44 and rendered at 1.00: the game sat 480 logical units wide
+  // in the middle of an 844-pixel screen with a black band round it, which is
+  // most of "the pier and house is broken" on a phone. Now the snap applies only
+  // where it buys something, and the picture fills the space everywhere else.
   const scaleRaw = Math.min(availW / W, availH / H);
-  const scale = scaleRaw >= 1 ? Math.max(1, Math.floor(scaleRaw * 2) / 2) : Math.max(0.1, scaleRaw);
+  const scale = scaleRaw > DPX
+    ? Math.max(1, Math.floor(scaleRaw * 2) / 2)     // past the backing store: snap
+    : Math.max(0.1, scaleRaw);                      // within it: use every pixel
   canvas.style.width = `${W * scale}px`;
   canvas.style.height = `${H * scale}px`;
 }
@@ -947,6 +957,7 @@ const TitleScene = {
 let lastT = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - lastT) / 1000) || 0.016;
+  Game.dt = dt;      // published so a draw-only module can time its own effects
   lastT = now;
 
   // mouse speed (used by the shark's stare)
