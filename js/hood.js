@@ -1927,28 +1927,23 @@ const Hood = {
       }
     }
 
-    // ---- The ladder. The art's own access only reaches its own base, so this
-    // carries it down through the waterline to the bottom of the climb box -- the
-    // affordance and the hit box are the same object, by construction.
+    // ---- NO DRAWN LADDER. There was a kit_ladder tiled down from each deck --
+    // and every one of these three sprites ALREADY HAS ITS OWN ACCESS PAINTED ON:
+    // the shack has a ladder, the cottage and the lighthouse have stairs down
+    // their left side, and climbDX was measured off those in the first place. So
+    // the drawn one was always a second ladder pinned next to the real one,
+    // parallel to it and going further down. It is gone; the art's own access is
+    // the affordance, and the climb box still hangs off climbDX, so what you
+    // reach for and what you see are the same object again.
     var cx = hm.x + hm.climbDX;
-    var lTop = hm.deckY - 2;
-    var lBot = this.CLIMB_BOT + 4;
-    // dimmed after dark like everything else, but the least of anything here: this
-    // is the affordance, and it has to stay findable in the dark
-    // IT IS A SPRITE NOW. This used to be four fillRects -- two pale bars and a
-    // stack of rungs -- exactly the coded-visual look this game keeps being told
-    // to stop doing, sat next to a hand-painted stilt house where the difference
-    // was impossible to miss. kit_ladder is a real painted ladder from the dock
-    // kit, tiled down the drop; the uploaded art was unused in the manifest.
-    ctx.globalAlpha = 1 - nite * 0.3;
-    this._ladder(ctx, cx, lTop, lBot);
-    ctx.globalAlpha = 1;
 
-    // ---- Deck furniture, so a home is a PLACE and not one sprite on water. A
-    // mooring post at the ladder head, a lamp at the other end, and a run of rope
-    // fence along the open side -- same dock kit as the ladder, all unused until
-    // now. "no other thing" was the note, and this is the other thing.
-    this._deckKit(ctx, hm, t, nite);
+    // ---- NO BOLTED-ON DECK FURNITURE. There was a mooring post, a lamp and a
+    // run of rope fence added to every porch -- and each of these three sprites
+    // already HAS its furniture painted on: the shack has a hanging lantern, a
+    // barrel and a net; the cottage has planters and a watering can; the
+    // lighthouse has its rail and its lamp room. Laying a second lamp over the
+    // first one is not dressing a deck, it is clutter, and it is most of why the
+    // neighbourhood looked busy in a bad way. The art dresses itself.
 
     // ---- their planter, up on the deck. No box drawn around it: at this scale the
     // crop alone reads as a plant in a pot, and every one of the three sprites

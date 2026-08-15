@@ -3301,11 +3301,25 @@ const Ocean = {
       // Up top and not home: say which way home is, because the sea is wide and
       // the exit is a place now rather than a keypress.
       const d = this.DOCK_X - this.px;
-      if (Math.abs(d) > this.DOCK_R) {
-        ctx.globalAlpha = 0.5;
-        text(ctx, (d < 0 ? '\u25c0 ' : '') + 'the pier is ' + Math.round(Math.abs(d) / this.PX_PER_M) +
-          'm ' + (d < 0 ? 'west' : 'east') + (d > 0 ? ' \u25b6' : ''),
-          W / 2, 42, { size: 7, color: '#d8ccb4', align: 'center' });
+      // NOT WHEN YOU ARE LOOKING AT SOMETHING. This is a wayfinder for open
+      // water, and it was drawn at dead centre unconditionally -- so swimming up
+      // to a neighbour's house put "the pier is 73m west" straight across their
+      // front door and deck. It hides near a home, and it sits on its own small
+      // plate rather than floating on the sky.
+      let nearHome = false;
+      if (typeof Hood !== 'undefined' && Hood && Hood.HOMES) {
+        for (let i = 0; i < Hood.HOMES.length; i++) {
+          if (Math.abs(this.px - Hood.HOMES[i].x) < 190) { nearHome = true; break; }
+        }
+      }
+      if (Math.abs(d) > this.DOCK_R && !nearHome) {
+        const lbl = (d < 0 ? '\u25c0 ' : '') + 'the pier is ' +
+          Math.round(Math.abs(d) / this.PX_PER_M) + 'm ' + (d < 0 ? 'west' : 'east') +
+          (d > 0 ? ' \u25b6' : '');
+        const lw = textWidth(ctx, lbl, 7) + 16;
+        ctx.globalAlpha = 0.9;
+        uiPanel(ctx, W / 2 - lw / 2, 36, lw, 15, 0.9, true);
+        text(ctx, lbl, W / 2, 39, { size: 7, color: '#5a3a22', align: 'center', shadow: false });
         ctx.globalAlpha = 1;
       }
     }

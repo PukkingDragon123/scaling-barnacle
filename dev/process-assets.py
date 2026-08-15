@@ -99,7 +99,7 @@ def global_key(im, tol=34, bg_col=None):
     return im
 
 
-def punch_interior(im, bg_col, tol=12, edge_tol=24, core=1):
+def punch_interior(im, bg_col, tol=12, edge_tol=24, core=2):
     """Delete background TRAPPED INSIDE the artwork, and only that.
 
     key_bg floods from the border, so it can never reach a pocket the drawing
@@ -128,10 +128,16 @@ def punch_interior(im, bg_col, tol=12, edge_tol=24, core=1):
         is left alone.
       * A THICKNESS GATE. A pocket is an AREA; a plank shadow is a LINE. A blob
         is only punched if it contains a solid (2*core+1) square of its own kind,
-        which a groove of any length never does. core=1 (a 3x3 core) is the
-        default because 2 was too coarse for real architecture: the pale band
-        around house_body's door surround, and the triangle inside the shack's
-        lamp bracket, are both genuine background and both narrower than 5px.
+        which a groove of any length never does.
+
+    core=2 (a 5x5 core), and it stays 2. I dropped it to 1 to chase what looked
+    like a grey halo around house_body's door -- and that "halo" is the house's
+    own WHITEWASHED DOOR SURROUND. A 3x3 core is small enough for a pale painted
+    trim to qualify as an area, so the punch ate straight through the frame and
+    left a ragged hole with white crumbs round it. Before/after on magenta made
+    it obvious in one look. The lesson is the one this function's docstring keeps
+    relearning: near the key colour is not the same as being the key colour, and
+    when the two are genuinely close, the only safe gate is a coarse one.
     """
     im = im.convert('RGBA')
     w, h = im.size
