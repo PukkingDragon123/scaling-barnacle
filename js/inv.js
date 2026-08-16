@@ -54,12 +54,14 @@ const Inv = {
   _openT: 0,
 
   // ---- the stations --------------------------------------------------------
-  SWX: 44, SWY: 24, SWW: 392, SWH: 222,
+  // Same page box as the bag, and for the same reason: the hotbar is painted
+  // over the top of us from y 247, so the sheet stops at 240.
+  SWX: 16, SWY: 12, SWW: 448, SWH: 228,
   TAB_Y: 46, TAB_W: 92, TAB_H: 16, TAB_GAP: 3,
-  LIST_X: 154, LIST_Y: 66, LIST_W: 254,
+  LIST_X: 156, LIST_Y: 66, LIST_W: 276,
   ROW_H: 26, ROW_VIS: 5,
-  CARDW: 122, CARDH: 42, CARD_GAP: 6, CARD_COLS: 2, CARD_ROWS: 3,
-  BAR_Y: 210, BAR_H: 30,              // the cost + verb bar under the list
+  CARDW: 134, CARDH: 42, CARD_GAP: 6, CARD_COLS: 2, CARD_ROWS: 3,
+  BAR_Y: 206, BAR_H: 30,              // the cost + verb bar under the list
 
   MAX_JOBS: 3,                        // queued jobs per station
   FUEL_PER_COAL: 34,                  // seconds of furnace burn from one charcoal
@@ -137,24 +139,28 @@ const Inv = {
       skill: 'crafting', layout: 'cards', deco: 'peg',
       blurb: 'tools, tackle and the small comforts',
       pal: { bg: 'rgba(52,36,23,0.96)', ink: '#f6e8c9', dim: '#a89878', hi: '#ffe66e', warm: '#c9a271' },
+      pap: { bg: 'rgba(214,168,96,0.12)', ink: '#4a3020', dim: '#8a7454', hi: '#a8761a', warm: '#7a5232' },
     },
     {
       key: 'forge', name: 'the furnace', art: 'tbl_forge', verb: 'smelt',
       skill: 'smelting', layout: 'rows', deco: 'brick', fuel: true,
       blurb: 'ore in, iron out -- and it eats charcoal',
       pal: { bg: 'rgba(44,24,18,0.96)', ink: '#f6e0c0', dim: '#a4805a', hi: '#e8a93c', warm: '#ff5a4a' },
+      pap: { bg: 'rgba(226,120,60,0.13)', ink: '#4a2a18', dim: '#8a6a4a', hi: '#b2601c', warm: '#b23a34' },
     },
     {
       key: 'mill', name: 'the sawmill', art: 'tbl_mill', verb: 'saw',
       skill: 'carpentry', layout: 'rows', deco: 'grain',
       blurb: 'timber down to planks, planks up to beams',
       pal: { bg: 'rgba(46,34,22,0.96)', ink: '#f6e8c9', dim: '#a89878', hi: '#c9a271', warm: '#a0f2b4' },
+      pap: { bg: 'rgba(150,190,120,0.12)', ink: '#3f3520', dim: '#857a54', hi: '#7a5232', warm: '#3f7a4e' },
     },
     {
       key: 'anvil', name: 'the smithy', art: 'tbl_anvil', verb: 'forge',
       skill: 'smithing', layout: 'cards', deco: 'iron',
       blurb: 'weapons, armour and honest pickaxes',
       pal: { bg: 'rgba(30,32,38,0.96)', ink: '#e6ecf2', dim: '#8a9484', hi: '#c9d4dc', warm: '#5ad2f0' },
+      pap: { bg: 'rgba(90,150,190,0.13)', ink: '#2a3038', dim: '#6a7480', hi: '#3a5a72', warm: '#2a6a8a' },
     },
   ],
 
@@ -1032,6 +1038,7 @@ const Inv = {
     if (!this.station_(st)) st = 'bench';
     this.mode = 'station';
     this.open = true;
+    this._openT = 0;
     this.st = st;
     G.inv.tab = st;
     // Nothing is selected to begin with, on purpose: a click on a row both
@@ -1302,7 +1309,7 @@ const Inv = {
 
   _closeRect: function () {
     var w = this._window();
-    return { x: w.x + w.w - 26, y: w.y + 3, w: 22, h: 18 };
+    return { x: w.x + w.w - 46, y: w.y + 6, w: 22, h: 18 };
   },
 
   _cellRect: function (i) {
@@ -1339,7 +1346,7 @@ const Inv = {
   },
 
   _tabRect: function (i) {
-    return { x: this.SWX + 8 + i * (this.TAB_W + this.TAB_GAP), y: this.TAB_Y, w: this.TAB_W, h: this.TAB_H };
+    return { x: this.SWX + 34 + i * (this.TAB_W + this.TAB_GAP), y: this.TAB_Y, w: this.TAB_W, h: this.TAB_H };
   },
 
   _itemRect: function (i) {
@@ -1364,9 +1371,9 @@ const Inv = {
     return { x: this.SWX + this.SWW - 78, y: this.BAR_Y + 6, w: 70, h: 18 };
   },
 
-  _panelL: function () { return { x: this.SWX + 8, y: this.LIST_Y, w: 96, h: 62 }; },
-  _stokeRect: function () { return { x: this.SWX + 8, y: this.LIST_Y + 78, w: 96, h: 14 }; },
-  _jobRect: function (i) { return { x: this.SWX + 8, y: this.LIST_Y + 106 + i * 20, w: 96, h: 18 }; },
+  _panelL: function () { return { x: this.SWX + 34, y: this.LIST_Y, w: 100, h: 56 }; },
+  _stokeRect: function () { return { x: this.SWX + 34, y: this.LIST_Y + 72, w: 100, h: 14 }; },
+  _jobRect: function (i) { return { x: this.SWX + 34, y: this.LIST_Y + 96 + i * 20, w: 100, h: 18 }; },
 
   // ==== draw ================================================================
   draw: function (c) {
@@ -1385,11 +1392,11 @@ const Inv = {
   },
 
   _bar: function (c, x, y, w, h, frac, fill, back) {
-    c.fillStyle = back || 'rgba(14,10,6,0.7)';
+    c.fillStyle = back || 'rgba(226,214,186,0.9)';
     c.fillRect(x, y, w, h);
     c.fillStyle = fill;
     c.fillRect(x + PIX, y + PIX, Math.max(0, (w - PIX * 2) * clamp(frac, 0, 1)), h - PIX * 2);
-    c.strokeStyle = 'rgba(226,200,150,0.35)';
+    c.strokeStyle = 'rgba(146,116,76,0.55)';
     c.lineWidth = PIX;
     c.strokeRect(x + PIX / 2, y + PIX / 2, w - PIX, h - PIX);
   },
@@ -1413,8 +1420,8 @@ const Inv = {
       { size: 7, color: '#a8895e', shadow: false });
     var slots = this.used() + ' / ' + this.capacity() + ' slots';
     var sw = textWidth(c, slots, 7) + 16;
-    inkBox(c, w.x + w.w - 40 - sw, w.y + 5, sw, 16, '#ffe9a8', '#a8761a', PIX * 2);
-    text(c, slots, w.x + w.w - 40 - sw / 2, w.y + 9.5,
+    inkBox(c, w.x + w.w - 54 - sw, w.y + 6, sw, 16, '#ffe9a8', '#a8761a', PIX * 2);
+    text(c, slots, w.x + w.w - 54 - sw / 2, w.y + 10.5,
       { size: 7, color: '#6b4a22', align: 'center', shadow: false });
 
     r = this._closeRect();
@@ -1427,7 +1434,7 @@ const Inv = {
       s = G.inv.slots[i];
       var on = i === this.hover, sel = i === this.pick;
       inkBox(c, r.x, r.y, r.w, r.h,
-        sel ? 'rgba(255,228,150,0.62)' : (on ? 'rgba(255,255,255,0.55)' : 'rgba(236,224,196,0.45)'),
+        sel ? 'rgba(255,236,182,0.96)' : (on ? 'rgba(255,253,244,0.96)' : 'rgba(247,240,220,0.9)'),
         sel ? '#a8761a' : 'rgba(146,116,76,' + (on ? 0.8 : 0.5) + ')',
         sel ? PIX * 3 : PIX * 2);
       if (!s) continue;
@@ -1487,7 +1494,7 @@ const Inv = {
 
   _drawDetail: function (c) {
     var r = this._cardRect();
-    inkBox(c, r.x, r.y, r.w, r.h, 'rgba(255,251,236,0.78)', 'rgba(146,116,76,0.65)', PIX * 2);
+    inkBox(c, r.x, r.y, r.w, r.h, 'rgba(255,252,242,0.95)', 'rgba(146,116,76,0.65)', PIX * 2);
     var key = this._detailKey();
     if (!key) {
       text(c, 'nothing picked up', r.x + r.w / 2, r.y + r.h / 2 - 10, { size: 7, color: '#a4805a', align: 'center', shadow: false });
@@ -1546,30 +1553,32 @@ const Inv = {
 
   // ---- the station screen --------------------------------------------------
   _drawStation: function (c) {
-    var st = this.station_(this.st) || this.STATIONS[0], pal = st.pal, w = this._window();
+    var st = this.station_(this.st) || this.STATIONS[0], pal = st.pap, w = this._window();
     var mx = Input.mouse.x, my = Input.mouse.y, i, r;
 
-    // panel: the station's own wash over the standard driftwood frame
-    uiPanel(c, w.x, w.y, w.w, w.h, 0.95);
+    // the page, then the station's own wash tinting it -- a light one, because
+    // pal.bg is a near-opaque DARK fill and would black the sheet out
     c.save();
-    this._cellPath(c, w.x + 1.5, w.y + 1.5, w.w - 3, w.h - 3, 3);
+    uiPageOpen(c, clamp(this._openT, 0, 1), w.x + w.w / 2, w.y + w.h / 2);
+    uiPage(c, w.x, w.y, w.w, w.h, 1);
+    c.save();
+    c.beginPath();
+    c.rect(w.x + 3, w.y + 3, w.w - 6, w.h - 6);
     c.clip();
     c.fillStyle = pal.bg;
     c.fillRect(w.x, w.y, w.w, w.h);
     this._drawDeco(c, st, w);
     c.restore();
 
-    text(c, st.name, w.x + 10, w.y + 4, { size: 8, color: pal.hi });
-    text(c, this._hintText(), w.x + w.w - 32, w.y + 6, { size: 6, color: pal.dim, align: 'right' });
+    text(c, st.name, w.x + 34, w.y + 8, { size: 10.5, color: '#7a5232', shadow: false });
+    text(c, st.blurb, w.x + 34, w.y + 22, { size: 6.5, color: pal.dim, shadow: false });
 
     r = this._closeRect();
-    var overX = this._in(r, mx, my);
-    uiPanel(c, r.x, r.y, r.w, r.h, overX ? 0.95 : 0.7);
-    text(c, 'x', r.x + r.w / 2, r.y + 4, { size: 8, color: overX ? pal.hi : pal.dim, align: 'center' });
+    inkClose(c, r, this._in(r, mx, my));
 
-    text(c, st.blurb, w.x + 10, w.y + 15, { size: 6.5, color: pal.dim });
     if (!TouchUI.enabled) {
-      text(c, '[<-] [->] bench', w.x + w.w - 32, w.y + 15, { size: 6, color: pal.dim, align: 'right' });
+      text(c, '[<-] [->] bench   ' + this._hintText(), w.x + w.w - 54, w.y + 10,
+        { size: 6, color: pal.dim, align: 'right', shadow: false });
     }
 
     // station rail
@@ -1577,18 +1586,15 @@ const Inv = {
       var s2 = this.STATIONS[i], on = s2.key === this.st;
       r = this._tabRect(i);
       var hov = this._in(r, mx, my);
-      this._cellPath(c, r.x, r.y, r.w, r.h, 2.5);
-      c.fillStyle = on ? 'rgba(246,232,201,0.92)' : (hov ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.3)');
-      c.fill();
-      c.strokeStyle = on ? s2.pal.hi : 'rgba(226,200,150,0.3)';
-      c.lineWidth = on ? 1.2 : 1;
-      c.stroke();
+      inkBox(c, r.x, r.y, r.w, r.h,
+        on ? '#ffe9a8' : (hov ? 'rgba(255,253,244,0.96)' : 'rgba(240,231,206,0.94)'),
+        on ? '#a8761a' : 'rgba(146,116,76,0.55)', on ? PIX * 3 : PIX * 2);
       var busy = this.activeJob(s2.key);
-      text(c, (i + 1) + '. ' + s2.verb, r.x + 6, r.y + 4.5,
-        { size: 7, color: on ? '#4a3020' : pal.ink, shadow: !on });
+      text(c, (i + 1) + '. ' + s2.verb, r.x + 7, r.y + 4.5,
+        { size: 7, color: on ? '#6b4a10' : pal.ink, shadow: false });
       if (busy) {
         // a little dot per station that has something on the go
-        c.fillStyle = this.jobReady(busy) ? '#a0f2b4' : s2.pal.warm;
+        c.fillStyle = this.jobReady(busy) ? '#3f7a4e' : '#a8761a';
         c.beginPath();
         c.arc(r.x + r.w - 8, r.y + r.h / 2, 2.2, 0, TAU);
         c.fill();
@@ -1604,47 +1610,40 @@ const Inv = {
 
   // left column: the station itself, its gauge and its queue
   _drawStationSide: function (c, st) {
-    var p = this._panelL(), pal = st.pal, i;
-    uiPanel(c, p.x, p.y, p.w, p.h, 0.55, false);
+    var p = this._panelL(), pal = st.pap, i;
+    inkBox(c, p.x, p.y, p.w, p.h, 'rgba(255,252,242,0.95)', 'rgba(146,116,76,0.6)', PIX * 2);
     var art = st.art, box = 52;
     if (this._hasArt(art)) {
       var img = ASSETS[art];
       var aw = img.width >= img.height ? box : box * img.width / img.height;
       drawAC(c, art, p.x + p.w / 2, p.y + p.h / 2 + 1, aw);
     } else {
-      text(c, st.verb, p.x + p.w / 2, p.y + p.h / 2 - 4, { size: 8, color: pal.ink, align: 'center' });
+      text(c, st.verb, p.x + p.w / 2, p.y + p.h / 2 - 4, { size: 8, color: pal.ink, align: 'center', shadow: false });
     }
 
     var j = this.activeJob(this.st);
 
     if (st.fuel) {
       // the furnace's charcoal gauge, with the [stoke] button under it
-      var fy = p.y + 66;
-      text(c, 'fire', p.x, fy, { size: 6.5, color: pal.dim });
+      var fy = p.y + 60;
+      text(c, 'fire', p.x, fy, { size: 6.5, color: pal.dim, shadow: false });
       var frac = this.fuelFrac();
       this._bar(c, p.x + 20, fy + 0.5, p.w - 20, 7, frac, frac > 0.25 ? pal.hi : '#e8434c');
       var sr = this._stokeRect(), on = this._in(sr, Input.mouse.x, Input.mouse.y);
       var coal = this.have('charcoal');
-      uiPanel(c, sr.x, sr.y, sr.w, sr.h, on ? 0.98 : 0.85, true);
-      text(c, 'stoke  (' + coal + ')', sr.x + sr.w / 2, sr.y + 3.5,
-        { size: 6.5, color: coal > 0 ? '#4a3020' : '#a4805a', align: 'center', shadow: false });
+      inkButton(c, sr, 'stoke  (' + coal + ')', coal > 0, on, this.t || 0);
     } else {
       var line = j ? 'working' : 'idle';
-      text(c, line, p.x, p.y + 68, { size: 6.5, color: pal.dim });
+      text(c, line, p.x, p.y + 62, { size: 6.5, color: pal.dim, shadow: false });
     }
 
-    text(c, 'on the bench', p.x, this._jobRect(0).y - 10, { size: 6.5, color: pal.dim });
+    text(c, 'on the bench', p.x, this._jobRect(0).y - 10, { size: 6.5, color: pal.dim, shadow: false });
     var jobs = this.jobsAt(this.st);
     for (i = 0; i < this.MAX_JOBS; i++) {
       var r = this._jobRect(i), job = jobs[i];
-      this._cellPath(c, r.x, r.y, r.w, r.h, 2.5);
-      c.fillStyle = 'rgba(0,0,0,0.32)';
-      c.fill();
-      c.strokeStyle = 'rgba(226,200,150,0.22)';
-      c.lineWidth = PIX * 2;
-      c.stroke();
+      inkBox(c, r.x, r.y, r.w, r.h, 'rgba(247,240,220,0.94)', 'rgba(146,116,76,0.5)', PIX * 2);
       if (!job) {
-        text(c, '--', r.x + r.w / 2, r.y + 5, { size: 6.5, color: pal.dim, align: 'center' });
+        text(c, '--', r.x + r.w / 2, r.y + 5, { size: 6.5, color: pal.dim, align: 'center', shadow: false });
         continue;
       }
       var rec = this.recipe(job.key);
@@ -1653,51 +1652,48 @@ const Inv = {
       if (outKey) this.drawIcon(c, outKey, r.x + 10, r.y + r.h / 2, 13);
       else if (rec && this._hasArt(rec.art)) drawAC(c, rec.art, r.x + 10, r.y + r.h / 2, 13);
       text(c, this._clip(rec ? rec.name : '?', 12), r.x + 20, r.y + 2,
-        { size: 6.5, color: ready ? '#a0f2b4' : pal.ink });
+        { size: 6.5, color: ready ? '#3f7a4e' : pal.ink, shadow: false });
       if (ready) {
-        text(c, 'collect', r.x + 20, r.y + 10, { size: 6, color: '#ffe66e' });
+        text(c, 'collect', r.x + 20, r.y + 10, { size: 6, color: '#a8761a', shadow: false });
       } else if (i === 0) {
         var stall = this.stalled(this.st);
-        this._bar(c, r.x + 20, r.y + 11, r.w - 26, 5, job.t / job.dur, stall ? '#e8434c' : pal.hi);
-        if (stall) text(c, 'cold', r.x + r.w - 4, r.y + 2, { size: 6, color: '#e8434c', align: 'right' });
-        else text(c, Math.ceil(job.dur - job.t) + 's', r.x + r.w - 4, r.y + 2, { size: 6, color: pal.dim, align: 'right' });
+        this._bar(c, r.x + 20, r.y + 11, r.w - 26, 5, job.t / job.dur, stall ? '#b23a34' : pal.hi);
+        if (stall) text(c, 'cold', r.x + r.w - 4, r.y + 2, { size: 6, color: '#b23a34', align: 'right', shadow: false });
+        else text(c, Math.ceil(job.dur - job.t) + 's', r.x + r.w - 4, r.y + 2, { size: 6, color: pal.dim, align: 'right', shadow: false });
       } else {
-        text(c, 'waiting', r.x + 20, r.y + 10, { size: 6, color: pal.dim });
+        text(c, 'waiting', r.x + 20, r.y + 10, { size: 6, color: pal.dim, shadow: false });
       }
     }
     text(c, 'click: collect / cancel', p.x, this._jobRect(this.MAX_JOBS - 1).y + 22,
-      { size: 6, color: pal.dim });
+      { size: 6, color: pal.dim, shadow: false });
   },
 
   _drawRows: function (c, st, mx, my) {
-    var list = this.recipesAt(this.st), pal = st.pal, i;
+    var list = this.recipesAt(this.st), pal = st.pap, i;
     for (i = 0; i < this.ROW_VIS; i++) {
       var idx = this.scroll + i;
       if (idx >= list.length) break;
       var r = this._itemRect(i), rec = list[idx];
       var sel = idx === this.sel, hov = this._in(r, mx, my);
       var lock = this.locked(rec), ok = !lock && this.can(rec);
-      this._cellPath(c, r.x, r.y, r.w, r.h, 2.5);
-      c.fillStyle = sel ? 'rgba(255,255,255,0.16)' : (hov ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.26)');
-      c.fill();
-      c.strokeStyle = sel ? pal.hi : 'rgba(226,200,150,0.2)';
-      c.lineWidth = sel ? 1.1 : PIX * 2;
-      c.stroke();
+      inkBox(c, r.x, r.y, r.w, r.h,
+        sel ? 'rgba(255,236,182,0.96)' : (hov ? 'rgba(255,253,244,0.96)' : 'rgba(247,240,220,0.94)'),
+        sel ? '#a8761a' : 'rgba(146,116,76,0.5)', sel ? PIX * 3 : PIX * 2);
 
       this._drawRecipeIcon(c, rec, r.x + 14, r.y + r.h / 2, 18, lock);
-      text(c, rec.name, r.x + 28, r.y + 3, { size: 7.5, color: lock ? pal.dim : pal.ink });
-      text(c, this._costLine(rec), r.x + 28, r.y + 13, { size: 6.5, color: ok ? pal.dim : '#e8434c' });
+      text(c, rec.name, r.x + 28, r.y + 3, { size: 7.5, color: lock ? pal.dim : pal.ink, shadow: false });
+      text(c, this._costLine(rec), r.x + 28, r.y + 13, { size: 6.5, color: ok ? pal.dim : '#b23a34', shadow: false });
 
       var right = r.x + r.w - 5;
-      if (lock) text(c, 'lvl ' + this.levelFor(rec), right, r.y + 4, { size: 6.5, color: '#e8434c', align: 'right' });
-      else if (rec.out) text(c, 'x' + rec.out.n, right, r.y + 4, { size: 7, color: pal.warm, align: 'right' });
-      text(c, rec.time + 's', right, r.y + 13, { size: 6, color: pal.dim, align: 'right' });
+      if (lock) text(c, 'lvl ' + this.levelFor(rec), right, r.y + 4, { size: 6.5, color: '#b23a34', align: 'right', shadow: false });
+      else if (rec.out) text(c, 'x' + rec.out.n, right, r.y + 4, { size: 7, color: pal.warm, align: 'right', shadow: false });
+      text(c, rec.time + 's', right, r.y + 13, { size: 6, color: pal.dim, align: 'right', shadow: false });
     }
     this._drawArrows(c, st, list.length, this.ROW_VIS, mx, my);
   },
 
   _drawCards: function (c, st, mx, my) {
-    var list = this.recipesAt(this.st), pal = st.pal, i;
+    var list = this.recipesAt(this.st), pal = st.pap, i;
     var vis = this.CARD_COLS * this.CARD_ROWS;
     for (i = 0; i < vis; i++) {
       var idx = this.scroll + i;
@@ -1707,41 +1703,33 @@ const Inv = {
       var lock = this.locked(rec);
       var had = typeof rec.done === 'function' && rec.done(G);
       var ok = !lock && !had && this.can(rec);
-      this._cellPath(c, r.x, r.y, r.w, r.h, 3);
-      c.fillStyle = sel ? 'rgba(255,255,255,0.17)' : (hov ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.3)');
-      c.fill();
-      c.strokeStyle = sel ? pal.hi : 'rgba(226,200,150,0.22)';
-      c.lineWidth = sel ? 1.2 : PIX * 2;
-      c.stroke();
+      inkBox(c, r.x, r.y, r.w, r.h,
+        sel ? 'rgba(255,236,182,0.96)' : (hov ? 'rgba(255,253,244,0.96)' : 'rgba(247,240,220,0.94)'),
+        sel ? '#a8761a' : 'rgba(146,116,76,0.5)', sel ? PIX * 3 : PIX * 2);
 
       // art tile on the left of the card, cosy little frame around it
-      c.fillStyle = 'rgba(0,0,0,0.28)';
-      c.fillRect(r.x + 3, r.y + 3, 32, r.h - 6);
+      inkBox(c, r.x + 3, r.y + 3, 32, r.h - 6, 'rgba(255,251,236,0.75)', 'rgba(146,116,76,0.4)', PIX);
       this._drawRecipeIcon(c, rec, r.x + 19, r.y + r.h / 2, 26, lock);
 
-      text(c, this._clip(rec.name, 15), r.x + 39, r.y + 4, { size: 7.5, color: lock ? pal.dim : pal.ink });
-      text(c, this._clip(this._costLine(rec), 20), r.x + 39, r.y + 14,
-        { size: 6.5, color: ok ? pal.dim : (had ? '#a0f2b4' : '#e8434c') });
-      if (had) text(c, 'owned', r.x + 39, r.y + 25, { size: 6.5, color: '#a0f2b4' });
-      else if (lock) text(c, 'needs ' + this.skillOf(rec) + ' ' + this.levelFor(rec), r.x + 39, r.y + 25, { size: 6, color: '#e8434c' });
+      text(c, this._clip(rec.name, 18), r.x + 39, r.y + 4, { size: 7.5, color: lock ? pal.dim : pal.ink, shadow: false });
+      text(c, this._clip(this._costLine(rec), 24), r.x + 39, r.y + 14,
+        { size: 6.5, shadow: false, color: ok ? pal.dim : (had ? '#3f7a4e' : '#b23a34') });
+      if (had) text(c, 'owned', r.x + 39, r.y + 25, { size: 6.5, color: '#3f7a4e', shadow: false });
+      else if (lock) text(c, 'needs ' + this.skillOf(rec) + ' ' + this.levelFor(rec), r.x + 39, r.y + 25, { size: 6, color: '#b23a34', shadow: false });
       else text(c, rec.time + 's' + (rec.out && rec.out.n > 1 ? '   x' + rec.out.n : ''), r.x + 39, r.y + 25,
-        { size: 6.5, color: pal.warm });
+        { size: 6.5, color: pal.warm, shadow: false });
     }
     this._drawArrows(c, st, list.length, vis, mx, my);
   },
 
   _drawArrows: function (c, st, total, vis, mx, my) {
     if (total <= vis) return;
-    var pal = st.pal, d, r, on;
+    var pal = st.pap, d, r, on;
     for (d = -1; d <= 1; d += 2) {
       r = this._arrow(d);
       on = this._in(r, mx, my);
-      this._cellPath(c, r.x, r.y, r.w, r.h, 2);
-      c.fillStyle = on ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.32)';
-      c.fill();
-      c.strokeStyle = 'rgba(226,200,150,0.25)';
-      c.lineWidth = PIX * 2;
-      c.stroke();
+      inkBox(c, r.x, r.y, r.w, r.h, on ? '#ffe9a8' : 'rgba(247,240,220,0.94)',
+        'rgba(146,116,76,0.55)', PIX * 2);
       c.fillStyle = pal.ink;
       c.beginPath();
       var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
@@ -1754,7 +1742,7 @@ const Inv = {
     var a0 = this._arrow(-1), a1 = this._arrow(1);
     var railY = a0.y + a0.h + 3, railH = a1.y - railY - 3;
     if (railH > 6) {
-      c.fillStyle = 'rgba(0,0,0,0.3)';
+      c.fillStyle = 'rgba(146,116,76,0.28)';
       c.fillRect(a0.x + 5, railY, 4, railH);
       var frac = total > vis ? this.scroll / (total - vis) : 0;
       var kh = Math.max(6, railH * vis / total);
@@ -1764,23 +1752,23 @@ const Inv = {
   },
 
   _drawCostBar: function (c, st, mx, my) {
-    var list = this.recipesAt(this.st), pal = st.pal;
+    var list = this.recipesAt(this.st), pal = st.pap;
     var x = this.LIST_X, y = this.BAR_Y, w = this.SWW - (this.LIST_X - this.SWX) - 8;
-    uiPanel(c, x, y, w, this.BAR_H, 0.5, false);
+    inkBox(c, x, y, w, this.BAR_H, 'rgba(255,252,242,0.95)', 'rgba(146,116,76,0.6)', PIX * 2);
     var rec = this.sel >= 0 ? list[this.sel] : null;
     if (!rec) {
       text(c, list.length ? 'pick something off the shelf' : 'nothing on this bench yet',
-        x + 8, y + 10, { size: 7, color: pal.dim });
+        x + 8, y + 10, { size: 7, color: pal.dim, shadow: false });
       return;
     }
 
     // note line wins for a couple of seconds after an action
     if (this.noteT > 0) {
       c.globalAlpha = clamp(this.noteT, 0, 1);
-      text(c, this.note, x + 8, y + 4, { size: 7, color: pal.hi });
+      text(c, this.note, x + 8, y + 4, { size: 7, color: pal.hi, shadow: false });
       c.globalAlpha = 1;
     } else {
-      text(c, this._clip(rec.desc || '', 46), x + 8, y + 4, { size: 6.5, color: pal.dim });
+      text(c, this._clip(rec.desc || '', 46), x + 8, y + 4, { size: 6.5, color: pal.dim, shadow: false });
     }
 
     // cost, as icons with a held/needed count under each
@@ -1790,23 +1778,16 @@ const Inv = {
       need = rec.cost[k];
       held = this.have(k);
       this.drawIcon(c, k, cx, y + 20, 13);
-      text(c, held + '/' + need, cx + 8, y + 17, { size: 6, color: held >= need ? '#a0f2b4' : '#e8434c' });
+      text(c, held + '/' + need, cx + 8, y + 17, { size: 6, color: held >= need ? '#3f7a4e' : '#b23a34', shadow: false });
       cx += 34;
       if (cx > x + w - 110) break;
     }
     if (rec.money) {
-      text(c, rec.money + ' sd', cx, y + 17, { size: 6.5, color: G.money >= rec.money ? '#a0f2b4' : '#e8434c' });
+      text(c, rec.money + ' sd', cx, y + 17, { size: 6.5, color: G.money >= rec.money ? '#3f7a4e' : '#b23a34', shadow: false });
     }
 
     var r = this._verbRect(), on = this._in(r, mx, my), ok = this.can(rec);
-    this._cellPath(c, r.x, r.y, r.w, r.h, 2.5);
-    c.fillStyle = ok ? (on ? 'rgba(255,230,110,0.95)' : 'rgba(246,232,201,0.9)') : 'rgba(60,42,28,0.85)';
-    c.fill();
-    c.strokeStyle = ok ? pal.hi : 'rgba(226,200,150,0.3)';
-    c.lineWidth = 1;
-    c.stroke();
-    text(c, st.verb + (rec.time > 0 ? ' (' + rec.time + 's)' : ''), r.x + r.w / 2, r.y + 5,
-      { size: 7, color: ok ? '#4a3020' : '#8a9484', align: 'center', shadow: false });
+    inkButton(c, r, st.verb + (rec.time > 0 ? ' (' + rec.time + 's)' : ''), ok, on, this.t || 0);
   },
 
   _costLine: function (r) {

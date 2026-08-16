@@ -433,6 +433,15 @@ const Forge = {
   },
 
   _gateList: function (stKey, list) {
+    // This is wired into Inv.recipesAt at INSTALL time and can therefore be
+    // called before the Forge itself has ever been used -- and Game.resetModules
+    // nulls _gcache on every new game and load WITHOUT clearing _booted, so
+    // _boot() would not put it back. Open a station panel after starting a game
+    // and the first read threw on a null cache. Test the cache, not the flag: a
+    // null cache simply means nothing is cached yet.
+    if (!this._booted) this._boot();
+    if (!this._gcache) this._gcache = {};
+    if (!this._silc) this._silc = {};
     var ep = this._epoch(), hl = !!this.HIDE_LOCKED;
     var c = this._gcache[stKey];
     if (c && c.ep === ep && c.src === list && c.hl === hl) return c.out;

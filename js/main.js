@@ -427,7 +427,7 @@ const Game = {
     const F = q('Farm');
     if (F) { F._plots = null; F._bedY = null; F.open = false; }
     const Fg = q('Forge');
-    if (Fg) { Fg._nl = null; Fg._gepoch = (Fg._gepoch || 0) + 1; Fg._gcache = null; Fg.open = false; Fg.placing = null; }
+    if (Fg) { Fg._nl = null; Fg._gepoch = (Fg._gepoch || 0) + 1; Fg._gcache = {}; Fg.open = false; Fg.placing = null; }
     const N = q('NPCs');
     if (N) { N.open = false; N.who = null; N.mode = 'talk'; }
     const Qs = q('Quests');
