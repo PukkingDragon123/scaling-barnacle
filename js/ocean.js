@@ -2818,11 +2818,35 @@ const Ocean = {
       for (let ry = lTop + 5; ry < lBot; ry += 7) ctx.fillRect(lx - 6, ry, 12, 1.8);
     }
 
-    // a soft glow on it while he is in reach, so the exit is never lost
+    // ---- "you can climb out here" -------------------------------------------
+    // This used to be a flat translucent RECTANGLE painted over the ladder, and
+    // a hard-edged alpha box is not a glow -- it is a pale grey cube sitting on
+    // top of the art, which is exactly what it looked like. Say it in this
+    // game's own language instead: a pair of chevrons bobbing at the top of the
+    // ladder, and pixel sparkles rising up its length. No box.
     if (this.atDock) {
-      ctx.globalAlpha = 0.18 + 0.1 * Math.sin(t * 4);
-      ctx.fillStyle = '#ffe6b0';
-      ctx.fillRect(lx - 12, lTop - 4, 24, lBot - lTop + 8);
+      const S = APIX;
+      const q = (v) => Math.round(v / S) * S;
+      const bob = q(Math.sin(t * 3) * 1.5);
+      ctx.fillStyle = '#fff3cf';
+      for (let k = 0; k < 2; k++) {                    // two chevrons, pointing up
+        const cy = q(lTop - 6 - k * 4) + bob;
+        for (let i = 0; i < 4; i++) {
+          ctx.globalAlpha = (k ? 0.45 : 0.9) * (1 - i * 0.12);
+          ctx.fillRect(q(lx - 1 - i * S * 2), q(cy + i * S * 2), S * 2, S * 2);
+          ctx.fillRect(q(lx - 1 + i * S * 2), q(cy + i * S * 2), S * 2, S * 2);
+        }
+      }
+      // three sparkles drifting up the rungs, on their own phases
+      for (let i = 0; i < 3; i++) {
+        const u = ((t * 0.5 + i / 3) % 1);
+        const sy = q(lBot - u * (lBot - lTop));
+        const sx2 = q(lx + Math.sin(t * 2 + i * 2.1) * 5);
+        ctx.globalAlpha = Math.sin(u * Math.PI) * 0.8;
+        ctx.fillRect(sx2 - S, sy, S * 2, S * 2);
+        ctx.fillRect(sx2 - S * 2, sy + S, S * 4, S);
+        ctx.fillRect(sx2 - S, sy - S, S * 2, S * 4);
+      }
       ctx.globalAlpha = 1;
     }
     ctx.imageSmoothingEnabled = sm;
@@ -3326,13 +3350,15 @@ const Ocean = {
     ctx.fillStyle = '#5a4526';
     ctx.fillRect(-4.5, -6.5, 9, 2);
     ctx.restore();
-    text(ctx, `${this.bagCount}/${cap}`, W - 52, by + 4, { size: 8, color: full ? '#ff5a4a' : '#ffe6b0' });
+    text(ctx, `${this.bagCount}/${cap}`, W - 52, by + 4, { size: 8, shadow: false, color: full ? '#b23a34' : '#4a3020' });
 
     // The ladder prompt, and only when he is actually at it.
     if (!this.over && !this.leaving && this.atDock) {
-      ctx.globalAlpha = 0.6 + 0.4 * Math.sin(this.time * 3);
-      text(ctx, touch ? 'tap the paw to climb the ladder' : '[E] climb the ladder home',
-        W / 2, 42, { size: 7, color: '#ffe6b0', align: 'center' });
+      const lab = touch ? 'tap the paw to climb the ladder' : '[E] climb the ladder home';
+      const lw2 = textWidth(ctx, lab, 7) + 16;
+      ctx.globalAlpha = 0.75 + 0.25 * Math.sin(this.time * 3);
+      uiNote(ctx, W / 2 - lw2 / 2, 38, lw2, 14, { tape: true });
+      text(ctx, lab, W / 2, 41.5, { size: 7, color: '#4a3020', align: 'center', shadow: false });
       ctx.globalAlpha = 1;
     } else if (!this.over && !this.leaving && this.py < 20) {
       // Up top and not home: say which way home is, because the sea is wide and
