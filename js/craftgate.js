@@ -82,6 +82,15 @@ const Forge = {
     good: '#a0f2b4', bad: '#ff6a7a', wood: '#8a6434',
   },
 
+  // The board is a sheet of cream paper now, and PAL is a LIGHT-ON-DARK set --
+  // cream ink on cream paper, which is why the recipe list read as mud. PAL
+  // stays exactly as it is because drawPlaced/_drawTable still paint over open
+  // water; everything inside the page uses PAP instead.
+  PAP: {
+    ink: '#4a3020', dim: '#8a7454', hi: '#a8761a', warm: '#7a5232',
+    good: '#3f7a4e', bad: '#b23a34', wood: '#8a6434',
+  },
+
   // ==== recipe -> skill node ================================================
   // The gate. A recipe whose node is null is open from the first frame; a recipe
   // that is not in this table at all is also open, so a module that adds a recipe
@@ -1309,7 +1318,7 @@ const Forge = {
 
     // a real close box, the frame in miniature -- this was a bare lowercase x
     var cr = this._closeRect(), onC = this._in(cr, m.x, m.y);
-    uiClose(c, cr, onC, false);
+    inkClose(c, cr, onC);
 
     this._drawTabs(c, m);
     this._drawGrid(c, row);
@@ -1321,7 +1330,7 @@ const Forge = {
   },
 
   _drawTabs: function (c, m) {
-    var P = this.PAL, names = ['MAKE', 'BUILD'], i, r, on, sel, locked;
+    var P = this.PAP, names = ['MAKE', 'BUILD'], i, r, on, sel, locked;
     for (i = 0; i < 2; i++) {
       r = this._tabRect(i);
       sel = this.tab === i;
@@ -1348,43 +1357,49 @@ const Forge = {
   // The 2x2. Four cost slots, an arrow, and what comes out -- the one shape every
   // player already knows what to do with.
   _drawGrid: function (c, row) {
-    var P = this.PAL, i, cell, cost = this.rowCost(row);
+    var P = this.PAP, i, cell, cost = this.rowCost(row);
     var keys = [], k;
     if (cost) for (k in cost) if (Object.prototype.hasOwnProperty.call(cost, k)) keys.push(k);
 
     for (i = 0; i < 4; i++) {
       cell = this._gridCell(i);
-      rrect(c, cell.x, cell.y, cell.w, cell.h, 'rgba(0,0,0,0.34)', 'rgba(201,162,113,0.35)');
+      inkBox(c, cell.x, cell.y, cell.w, cell.h,
+        i < keys.length ? 'rgba(255,251,236,0.8)' : 'rgba(226,214,186,0.45)',
+        'rgba(146,116,76,0.7)', PIX * 2);
       if (i >= keys.length) continue;
       k = keys[i];
       var need = cost[k], held = this.have(k);
       this.icon(c, k, cell.x + cell.w / 2, cell.y + cell.h / 2 - 2, 14);
       text(c, held + '/' + need, cell.x + cell.w - 1.5, cell.y + cell.h - 8,
-        { size: 6, color: held >= need ? P.good : P.bad, align: 'right' });
+        { size: 6, color: held >= need ? P.good : P.bad, align: 'right', shadow: false });
     }
 
     // arrow
     var ax = this.WX + 118, ay = this.WY + 94;
-    c.fillStyle = P.dim;
-    c.fillRect(ax, ay - 1, 8, 2);
+    c.strokeStyle = '#8a6440';
+    c.lineWidth = PIX * 2.5;
+    c.lineCap = 'round';
     c.beginPath();
-    c.moveTo(ax + 8, ay - 4); c.lineTo(ax + 12, ay); c.lineTo(ax + 8, ay + 4);
-    c.closePath();
-    c.fill();
+    inkLine(c, ax, ay, ax + 12, ay, 0.8);
+    inkLine(c, ax + 12, ay, ax + 8, ay - 3.5, 0.6);
+    inkLine(c, ax + 12, ay, ax + 8, ay + 3.5, 0.6);
+    c.stroke();
+    c.lineCap = 'butt';
+    c.lineWidth = 1;
 
     // result
     var rr = this._resultRect();
-    rrect(c, rr.x, rr.y, rr.w, rr.h, 'rgba(0,0,0,0.4)', 'rgba(255,230,110,0.4)');
+    inkBox(c, rr.x, rr.y, rr.w, rr.h, 'rgba(255,240,196,0.85)', '#a8761a', PIX * 2.5);
     if (!row) return;
     if (row.kind === 'locked') {
-      text(c, '?', rr.x + rr.w / 2, rr.y + 8, { size: 11, color: '#7a6a55', align: 'center' });
+      text(c, '?', rr.x + rr.w / 2, rr.y + 8, { size: 11, color: '#9a7a4e', align: 'center', shadow: false });
     } else if (row.kind === 'table') {
       this._tableArt(c, row.t, rr.x + rr.w / 2, rr.y + rr.h / 2, 18);
     } else if (row.r.out) {
       this.icon(c, row.r.out.key, rr.x + rr.w / 2, rr.y + rr.h / 2, 18);
       if (row.r.out.n > 1) {
         text(c, 'x' + row.r.out.n, rr.x + rr.w - 1.5, rr.y + rr.h - 8,
-          { size: 6, color: this.PAL.ink, align: 'right' });
+          { size: 6, color: this.PAP.ink, align: 'right', shadow: false });
       }
     }
   },
@@ -1401,15 +1416,25 @@ const Forge = {
   },
 
   _drawButton: function (c, row, m) {
-    var P = this.PAL, r = this._btnRect(), ok = this.rowOk(row), on = this._in(r, m.x, m.y);
+    var P = this.PAP, r = this._btnRect(), ok = this.rowOk(row), on = this._in(r, m.x, m.y);
 
     // ---- OTTO AT THE BENCH -----------------------------------------------------
     // A little lit window under the 2x2 with the otter actually working in it:
     // his tool cycle while a sweep is running, a slow idle otherwise. It is the
     // one place in the crafting board where something is ALIVE, and it is what
     // makes the panel read as a workshop rather than a form.
-    var wx = this.WX + 34, wy = this.WY + 120, ww = 132, wh = 56;
-    c.fillStyle = '#1d1209';
+    // ...framed the way a photograph is stuck into a notebook: a cream mount,
+    // a drawn edge and two bits of tape. The lit interior stays warm and dark
+    // because Otto is a dark-outlined sprite and needs something to sit against
+    // -- but a bare dark rectangle on cream paper reads as a hole in the page.
+    // A POLAROID. The recipe's name used to be a bare line floating above the
+    // window, where it had 4 units of clearance and ran into the 2x2 above it
+    // and the frame below. A photo mount with a deep bottom border gives the
+    // caption an actual home -- and gives the steadiness gauge somewhere to
+    // live that is not on top of the caption.
+    var wx = this.WX + 34, wy = this.WY + 122, ww = 132, wh = 48;
+    inkBox(c, wx - 4, wy - 4, ww + 8, wh + 22, '#fffbec', 'rgba(146,116,76,0.7)', PIX * 2);
+    c.fillStyle = '#2a1a0d';
     c.fillRect(wx - 1, wy - 1, ww + 2, wh + 2);
     c.fillStyle = this.mini ? '#7a5f3f' : '#5c4632';        // the bench lamp warms up
     c.fillRect(wx, wy, ww, wh);
@@ -1426,12 +1451,25 @@ const Forge = {
       var bobY = this.mini ? Math.abs(Math.sin(this.time * 9)) * 1.6 : Math.sin(this.time * 2) * 0.7;
       c.drawImage(oa, wx + ww / 2 - ow2 / 2, wy + wh - 6 - oh + bobY, ow2, oh);
     }
-    text(c, row ? this._clip(row.name, 26) : 'nothing picked', wx, wy - 11,
-      { size: 7.5, color: row && row.kind === 'locked' ? '#8a7454' : '#5a3a22', shadow: false });
-
-    // ---- the steady-hands bar, right under the window while a sweep is live
-    if (this.mini) {
-      var bx = wx, by = wy + wh + 6, bw = ww, bh = 9;
+    // the tape holding the photo on, one corner each
+    for (var tp = 0; tp < 2; tp++) {
+      c.save();
+      c.translate(tp ? wx + ww + 3 : wx - 3, wy - 3);
+      c.rotate(tp ? 0.6 : -0.6);
+      c.fillStyle = 'rgba(238,230,196,0.78)';
+      c.fillRect(-9, -3.5, 18, 7);
+      c.fillStyle = 'rgba(255,255,255,0.3)';
+      c.fillRect(-9, -3.5, 18, 1.5);
+      c.restore();
+    }
+    // ---- the caption on the mount: the recipe's name, or the steadiness gauge
+    // while a sweep is running. One strip, one thing in it at a time.
+    if (!this.mini) {
+      textFit(c, row ? row.name : 'nothing picked', wx + ww / 2, wy + wh + 5, ww - 4,
+        { size: 7.5, align: 'center', shadow: false,
+          color: row && row.kind === 'locked' ? '#8a7454' : '#5a3a22' });
+    } else {
+      var bx = wx, by = wy + wh + 4, bw = ww, bh = 9;
       uiMeter(c, bx, by, bw, bh, 1, 'rgba(60,40,22,0.9)', false);
       var g0 = bx + bw * (0.5 - this.MINI_WIN), gw = bw * this.MINI_WIN * 2;
       c.fillStyle = '#3f9a58';
@@ -1444,7 +1482,7 @@ const Forge = {
     }
 
     // a pressable wooden button with a shine, not a flat cream slab
-    uiButton(c, r, this.mini ? 'STOP  [E]' : this.rowVerb(row), ok || !!this.mini, on, this.time);
+    inkButton(c, r, this.mini ? 'STOP  [E]' : this.rowVerb(row), ok || !!this.mini, on, this.time);
 
     // the reason, or the flavour line, wrapped by character count the way npc.js,
     // skills.js and inv.js all do it -- Courier is monospace, so it is exact.
@@ -1471,11 +1509,11 @@ const Forge = {
   },
 
   _drawList: function (c, rows, m) {
-    var P = this.PAL, i, r, row, idx, vis = Math.min(this.ROW_VIS, rows.length);
+    var P = this.PAP, i, r, row, idx, vis = Math.min(this.ROW_VIS, rows.length);
 
     if (!rows.length) {
       text(c, this.tab === 1 ? 'a workbench first.' : 'nothing to whittle.',
-        this._listX(), this.WY + 44, { size: 6.5, color: P.dim });
+        this._listX(), this.WY + 58, { size: 6.5, color: P.dim, shadow: false });
       return;
     }
     for (i = 0; i < vis; i++) {
@@ -1484,11 +1522,12 @@ const Forge = {
       if (!row) break;
       r = this._rowRect(i);
       var sel = idx === this.sel, on = this._in(r, m.x, m.y);
-      if (sel || on) rrect(c, r.x, r.y, r.w, r.h, sel ? 'rgba(201,162,113,0.32)' : 'rgba(255,255,255,0.07)');
+      if (sel) inkBox(c, r.x, r.y, r.w, r.h, 'rgba(255,228,150,0.55)', 'rgba(168,118,26,0.7)', PIX * 2);
+      else if (on) inkBox(c, r.x, r.y, r.w, r.h, 'rgba(255,255,255,0.4)', null);
 
       if (row.kind === 'locked') {
         // silhouette: a flat plate where the icon would be
-        c.fillStyle = 'rgba(0,0,0,0.4)';
+        c.fillStyle = 'rgba(120,96,64,0.45)';
         c.fillRect(r.x + 3, r.y + 3, 8, 8);
       } else if (row.kind === 'table') {
         this._tableArt(c, row.t, r.x + 7, r.y + r.h / 2, 11);
@@ -1499,7 +1538,8 @@ const Forge = {
       var ok = this.rowOk(row);
       var built = row.kind === 'table' && this.countPlaced(row.t.key) >= this.MAX_PER;
       text(c, this._clip(row.name, 20), r.x + 15, r.y + 3,
-        { size: 6.5, color: row.kind === 'locked' ? '#7a6a55' : (sel ? P.hi : P.ink) });
+        { size: 6.5, shadow: false,
+          color: row.kind === 'locked' ? '#9a8a70' : (sel ? '#6b4a10' : P.ink) });
       // one pip of status per row: gold already standing, green ready, red short.
       // Drawn, not lettered -- a glyph the font lacks would be a tofu box.
       c.fillStyle = built ? P.hi : (ok ? P.good : 'rgba(255,106,122,0.75)');
@@ -1514,7 +1554,7 @@ const Forge = {
 
   _tri: function (c, r, dir, live) {
     var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
-    c.fillStyle = live ? this.PAL.ink : 'rgba(168,152,120,0.45)';
+    c.fillStyle = live ? this.PAP.ink : 'rgba(168,152,120,0.45)';
     c.beginPath();
     if (dir < 0) { c.moveTo(cx, cy - 3); c.lineTo(cx + 4, cy + 3); c.lineTo(cx - 4, cy + 3); }
     else { c.moveTo(cx, cy + 3); c.lineTo(cx + 4, cy - 3); c.lineTo(cx - 4, cy - 3); }

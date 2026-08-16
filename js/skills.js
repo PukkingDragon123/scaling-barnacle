@@ -798,7 +798,7 @@ const Skills = {
       rr = r + (w ? inkN(cx + i * 13, cy - i * 7) * w : 0);
       x = cx + Math.cos(a) * rr;
       y = cy + Math.sin(a) * rr;
-      if (i === 0) { c.moveTo(x, y); } else if (w) { inkLine(c, px, py, x, y, w * 0.6); } else { c.lineTo(x, y); }
+      if (i === 0) { c.moveTo(x, y); } else if (w) { inkCurveTo(c, px, py, x, y, w * 0.6); } else { c.lineTo(x, y); }
       px = x; py = y;
     }
     c.closePath();
@@ -1212,30 +1212,28 @@ const Skills = {
 
     // ---- the hub: Otto in the middle, with an arc per trade around the rim in
     // that trade's colour, filled by how much of it is learned.
+    // (NO GAUGE ARCS. There were five, one per trade, drawn on a ring at
+    // HR * 1.5 -- which is INSIDE the tier-0 cells, so every one of them was
+    // painted underneath a cell and never seen. The comb already says how far
+    // each arm has come, by how much of it is inked in.)
     c.globalAlpha = 0.5;
-    this._hexPath(c, hub.x + 0.8, hub.y + 1.4, HR * 1.2, 0.8);
-    c.fillStyle = 'rgba(120,92,58,0.45)'; c.fill();
+    this._hexPath(c, hub.x + 0.9, hub.y + 1.6, HR * 1.24, 0.8);
+    c.fillStyle = 'rgba(120,92,58,0.5)'; c.fill();
     c.globalAlpha = 1;
-    this._hexPath(c, hub.x, hub.y, HR * 1.2, 0.8);
-    c.fillStyle = '#f7ecc8'; c.fill();
-    this._hexInk(c, hub.x, hub.y, HR * 1.2, '#6e4d2c', PIX * 3);
-    for (i = 0; i < 5; i++) {
-      var tot = Math.max(1, this.listOf(this.PROFS[i]).length);
-      var frac = this.owned(this.PROFS[i]) / tot;
-      var a0 = this.profAngle(i) - 0.56;
-      c.strokeStyle = 'rgba(140,114,78,0.30)'; c.lineWidth = PIX * 4;
-      c.beginPath(); c.arc(hub.x, hub.y, HR * 1.5, a0, a0 + 1.12); c.stroke();
-      if (frac > 0) {
-        c.strokeStyle = this.ACC[i]; c.lineWidth = PIX * 4;
-        c.beginPath(); c.arc(hub.x, hub.y, HR * 1.5, a0, a0 + 1.12 * frac); c.stroke();
-      }
-    }
-    c.lineWidth = 1;
+    this._hexPath(c, hub.x, hub.y, HR * 1.24, 0.8);
+    c.fillStyle = '#fff6dc'; c.fill();
+    // a warm ring inside the rim, so the queen cell reads as the middle of it all
+    c.save();
+    c.clip();
+    c.fillStyle = 'rgba(255,214,110,0.22)';
+    c.fillRect(hub.x - HR * 1.3, hub.y - HR * 0.1, HR * 2.6, HR * 1.4);
+    c.restore();
+    this._hexInk(c, hub.x, hub.y, HR * 1.24, '#6e4d2c', PIX * 3.5);
     var oimg = ASSETS.o4_0;
     if (oimg && oimg.width) {
       // a slow bob, quantised to the sprite's own texel so it cannot shimmer
       var bob = Math.round(Math.sin(t * 1.7) * 1.2 / APIX) * APIX;
-      var ow = HR * 1.6, oh = ow * oimg.height / oimg.width;
+      var ow = HR * 1.55, oh = ow * oimg.height / oimg.width;
       c.drawImage(oimg, hub.x - ow / 2, hub.y - oh / 2 + 1 + bob, ow, oh);
     }
 
@@ -1258,7 +1256,7 @@ const Skills = {
       // with a pencilled outline and a dot where the icon will go.
       if (!show) {
         this._hexPath(c, pos.x, pos.y, HR * 0.92, 0.9);
-        c.fillStyle = 'rgba(214,198,166,0.34)';
+        c.fillStyle = 'rgba(206,190,158,0.42)';
         c.fill();
         c.globalAlpha = 0.5;
         c.setLineDash([2, 2]);
@@ -1294,9 +1292,9 @@ const Skills = {
 
       // the wax: paper, then a wash of the trade's colour once it is yours
       this._hexPath(c, pos.x, pos.y - lift, HR * k, 0.9);
-      c.fillStyle = owned ? '#f6ead0' : (can ? '#efe1bd' : '#ded0ae');
+      c.fillStyle = owned ? '#fff6dc' : (can ? '#fffaea' : '#d8c9a4');
       c.fill();
-      if (owned) { c.globalAlpha = 0.26; c.fillStyle = acc; c.fill(); c.globalAlpha = 1; }
+      if (owned) { c.globalAlpha = 0.34; c.fillStyle = acc; c.fill(); c.globalAlpha = 1; }
       // a lit top-left facet, so the cell has a thickness
       c.save();
       c.clip();

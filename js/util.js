@@ -366,14 +366,24 @@ function inkN(a, b) {
   return (((s ^ (s >>> 16)) >>> 0) % 1024) / 1023 - 0.5;
 }
 
-// A pen stroke between two points: straight, but bowed by a hair and with the
-// bow fixed by the endpoints, so a link never wriggles.
-function inkLine(ctx, x0, y0, x1, y1, bow = 1) {
+// The bowed segment ALONE, continuing from wherever the pen already is. Path
+// builders must use this one: a moveTo in the middle of a path starts a new
+// subpath, and a shape made of disconnected subpaths still strokes perfectly
+// while silently refusing to fill -- every outline correct, every interior
+// empty, and nothing anywhere reporting an error.
+function inkCurveTo(ctx, x0, y0, x1, y1, bow = 1) {
   const dx = x1 - x0, dy = y1 - y0;
   const len = Math.hypot(dx, dy) || 1;
   const b = inkN(x0 + y1, x1 + y0) * bow * 2;
-  ctx.moveTo(x0, y0);
   ctx.quadraticCurveTo((x0 + x1) / 2 - (dy / len) * b, (y0 + y1) / 2 + (dx / len) * b, x1, y1);
+}
+
+// A pen stroke between two points: straight, but bowed by a hair and with the
+// bow fixed by the endpoints, so a link never wriggles. Standalone -- it lifts
+// the pen first, so it is for STROKING batches of separate lines.
+function inkLine(ctx, x0, y0, x1, y1, bow = 1) {
+  ctx.moveTo(x0, y0);
+  inkCurveTo(ctx, x0, y0, x1, y1, bow);
 }
 
 // A drawn box. Corners land a fraction off where they should, and the outline
@@ -387,8 +397,8 @@ function inkBoxPath(ctx, x, y, w, h, wob = 1.1) {
   ];
   ctx.beginPath();
   ctx.moveTo(p[0][0], p[0][1]);
-  for (let i = 1; i < 4; i++) inkLine(ctx, p[i - 1][0], p[i - 1][1], p[i][0], p[i][1], wob * 0.5);
-  inkLine(ctx, p[3][0], p[3][1], p[0][0], p[0][1], wob * 0.5);
+  for (let i = 1; i < 4; i++) inkCurveTo(ctx, p[i - 1][0], p[i - 1][1], p[i][0], p[i][1], wob * 0.5);
+  inkCurveTo(ctx, p[3][0], p[3][1], p[0][0], p[0][1], wob * 0.5);
   ctx.closePath();
 }
 
@@ -407,6 +417,39 @@ function inkBox(ctx, x, y, w, h, fill, ink, lw = PIX * 2) {
   ctx.stroke();
   ctx.globalAlpha /= 0.4;
   ctx.lineWidth = 1;
+}
+
+// A button somebody drew on the page and coloured in. Live buttons carry a
+// pencil hatch under the bottom edge, the way you would shade a box to make it
+// look like it sticks up; hovering presses it flat against the paper. Same
+// contract as uiButton so the two are interchangeable.
+function inkButton(ctx, r, label, enabled, hover, t = 0) {
+  const dy = (enabled && hover) ? 1 : 0;
+  if (enabled && !hover) {            // the shading under a raised edge
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = '#8a6440';
+    ctx.lineWidth = PIX;
+    ctx.beginPath();
+    for (let i = 0; i < r.w; i += 3) inkLine(ctx, r.x + i, r.y + r.h, r.x + i + 2.5, r.y + r.h + 2.5, 0.5);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 1;
+  }
+  inkBox(ctx, r.x, r.y + dy, r.w, r.h,
+    enabled ? (hover ? '#ffd06a' : '#ffcf7e') : 'rgba(220,208,182,0.55)',
+    enabled ? '#7a4a12' : 'rgba(140,124,96,0.6)', PIX * 3);
+  if (enabled) {                      // a slow shine, so it reads as live
+    const sx = r.x + ((t * 34) % (r.w + 26)) - 13;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(r.x, r.y + dy, r.w, r.h); ctx.clip();
+    ctx.fillStyle = 'rgba(255,255,255,0.30)';
+    ctx.fillRect(sx, r.y + dy, 5, r.h);
+    ctx.restore();
+  }
+  textFit(ctx, label, r.x + r.w / 2, r.y + dy + r.h / 2 - 4, r.w - 10, {
+    size: 7.5, align: 'center', shadow: false,
+    color: enabled ? '#5a3210' : '#9a8d7c',
+  });
 }
 
 // A close button for a paper page: a drawn box with a drawn cross in it, not a
