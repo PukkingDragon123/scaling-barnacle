@@ -69,9 +69,12 @@ const Forge = {
   // Deliberately small. The station screens own the 40..440 x 22..248 box; this
   // one borrows the farm picker's cosy footprint instead so the two never read as
   // the same screen.
-  WX: 118, WY: 48, WW: 244, WH: 172,
+  // FULLSCREEN. A 244x172 box in the middle of the picture is a dialog; the
+  // notebook fills the frame, because that is what you do with a notebook.
+  WX: 16, WY: 12, WW: 448, WH: 246,
+  _openT: 0,          // 0..1, the put-it-down transition
   CELL: 22, CGAP: 3,          // the 2x2 grid
-  ROW_H: 15, ROW_VIS: 7,
+  ROW_H: 18, ROW_VIS: 10,          // a full page holds ten rows now
   FX_MAX: 18,
 
   PAL: {
@@ -843,6 +846,7 @@ const Forge = {
   openHand: function () {
     if (!this.ensure() || !this._allowed()) return false;
     this.open = true;
+    this._openT = 0;              // the page gets put down again every time
     this.tab = 0;
     this.sel = 0;
     this.scroll = 0;
@@ -1016,6 +1020,7 @@ const Forge = {
 
   // ==== update ==============================================================
   update: function (dt) {
+    this._openT = Math.min(1, this._openT + dt * 4.5);
     // the sweep, if one is running. Bounces at the ends so a slow reader still
     // gets a shot at the green rather than one pass and a miss.
     if (this.mini) {
@@ -1095,6 +1100,8 @@ const Forge = {
 
     if (Input.mouse.clicked) this.click(Input.mouse.x, Input.mouse.y);
   },
+
+  _resetOpen: function () { this._openT = 0; },
 
   setTab: function (i) {
     i = i ? 1 : 0;
@@ -1223,18 +1230,18 @@ const Forge = {
 
   // ==== geometry ============================================================
   _in: function (r, x, y) { return !!r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; },
-  _closeRect: function () { return { x: this.WX + this.WW - 24, y: this.WY + 6, w: 17, h: 15 }; },
-  _tabRect: function (i) { return { x: this.WX + 10 + i * 58, y: this.WY + 28, w: 54, h: 15 }; },
+  _closeRect: function () { return { x: this.WX + this.WW - 32, y: this.WY + 10, w: 20, h: 17 }; },
+  _tabRect: function (i) { return { x: this.WX + 34 + i * 74, y: this.WY + 38, w: 70, h: 17 }; },
   _gridCell: function (i) {
     var s = this.CELL + this.CGAP;
-    return { x: this.WX + 12 + (i % 2) * s, y: this.WY + 46 + ((i / 2) | 0) * s, w: this.CELL, h: this.CELL };
+    return { x: this.WX + 34 + (i % 2) * s, y: this.WY + 64 + ((i / 2) | 0) * s, w: this.CELL, h: this.CELL };
   },
-  _resultRect: function () { return { x: this.WX + 74, y: this.WY + 54, w: 26, h: 26 }; },
-  _btnRect: function () { return { x: this.WX + 12, y: this.WY + 143, w: 90, h: 17 }; },
-  _listX: function () { return this.WX + 116; },
-  _listW: function () { return this.WW - 116 - 12; },
+  _resultRect: function () { return { x: this.WX + 136, y: this.WY + 76, w: 32, h: 32 }; },
+  _btnRect: function () { return { x: this.WX + 34, y: this.WY + 206, w: 132, h: 22 }; },
+  _listX: function () { return this.WX + 190; },
+  _listW: function () { return this.WW - 190 - 26; },
   _rowRect: function (i) {
-    return { x: this._listX(), y: this.WY + 40 + i * this.ROW_H, w: this._listW(), h: this.ROW_H - 1 };
+    return { x: this._listX(), y: this.WY + 58 + i * this.ROW_H, w: this._listW(), h: this.ROW_H - 2 };
   },
   _arrowRect: function (dir) {
     var x = this._listX() + this._listW() - 12;
@@ -1291,16 +1298,14 @@ const Forge = {
     var P = this.PAL, m = Input.mouse;
     var rows = this.rows(this.tab), row = this._row();
 
-    uiPanel(c, this.WX, this.WY, this.WW, this.WH, 0.97, false);
-    // a warm inner rule, so the cosy panel does not read as a station screen
-    c.strokeStyle = 'rgba(201,162,113,0.35)';
-    c.lineWidth = PIX * 2;
-    c.strokeRect(this.WX + 3, this.WY + 3, this.WW - 6, this.WH - 6);
+    // the page is put DOWN, not blinked on
+    c.save();
+    uiPageOpen(c, clamp(this._openT, 0, 1), this.WX + this.WW / 2, this.WY + this.WH / 2);
+    uiPage(c, this.WX, this.WY, this.WW, this.WH, 1);
 
-    text(c, 'THE WORKBENCH', this.WX + 10, this.WY + 5, { size: 9, color: '#e9c07a' });
-    text(c, 'what otto can make with what otto has', this.WX + 10, this.WY + 15,
-      { size: 6, color: '#a8895e' });
-    uiRule(c, this.WX + 8, this.WY + 24, this.WW - 16, false);
+    text(c, 'THE WORKBENCH', this.WX + 34, this.WY + 12, { size: 12, color: '#7a5232', shadow: false });
+    text(c, 'what otto can make with what otto has', this.WX + 34, this.WY + 25,
+      { size: 7, color: '#a8895e', shadow: false });
 
     // a real close box, the frame in miniature -- this was a bare lowercase x
     var cr = this._closeRect(), onC = this._in(cr, m.x, m.y);
@@ -1312,6 +1317,7 @@ const Forge = {
     this._drawList(c, rows, m);
     this._drawFooter(c);
     this._drawFx(c);
+    c.restore();
   },
 
   _drawTabs: function (c, m) {
@@ -1358,7 +1364,7 @@ const Forge = {
     }
 
     // arrow
-    var ax = this.WX + 62, ay = this.WY + 66;
+    var ax = this.WX + 118, ay = this.WY + 94;
     c.fillStyle = P.dim;
     c.fillRect(ax, ay - 1, 8, 2);
     c.beginPath();
@@ -1402,7 +1408,7 @@ const Forge = {
     // his tool cycle while a sweep is running, a slow idle otherwise. It is the
     // one place in the crafting board where something is ALIVE, and it is what
     // makes the panel read as a workshop rather than a form.
-    var wx = this.WX + 12, wy = this.WY + 96, ww = 90, wh = 34;
+    var wx = this.WX + 34, wy = this.WY + 120, ww = 132, wh = 56;
     c.fillStyle = '#1d1209';
     c.fillRect(wx - 1, wy - 1, ww + 2, wh + 2);
     c.fillStyle = this.mini ? '#7a5f3f' : '#5c4632';        // the bench lamp warms up
@@ -1420,12 +1426,12 @@ const Forge = {
       var bobY = this.mini ? Math.abs(Math.sin(this.time * 9)) * 1.6 : Math.sin(this.time * 2) * 0.7;
       c.drawImage(oa, wx + ww / 2 - ow2 / 2, wy + wh - 6 - oh + bobY, ow2, oh);
     }
-    text(c, row ? this._clip(row.name, 20) : 'nothing picked', wx, wy - 9,
-      { size: 6.5, color: row && row.kind === 'locked' ? '#7a6a55' : P.ink, shadow: false });
+    text(c, row ? this._clip(row.name, 26) : 'nothing picked', wx, wy - 11,
+      { size: 7.5, color: row && row.kind === 'locked' ? '#8a7454' : '#5a3a22', shadow: false });
 
     // ---- the steady-hands bar, right under the window while a sweep is live
     if (this.mini) {
-      var bx = wx, by = wy + wh + 4, bw = ww, bh = 7;
+      var bx = wx, by = wy + wh + 6, bw = ww, bh = 9;
       uiMeter(c, bx, by, bw, bh, 1, 'rgba(60,40,22,0.9)', false);
       var g0 = bx + bw * (0.5 - this.MINI_WIN), gw = bw * this.MINI_WIN * 2;
       c.fillStyle = '#3f9a58';
@@ -1456,7 +1462,7 @@ const Forge = {
     // through the footer at the bottom edge of the panel.
     var cols = Math.floor(130 / (6 * 0.6));
     var lines = this._wrap(msg, cols), i;
-    var nx = this.WX + 118, ny = this.WY + this.WH - 26;
+    var nx = this._listX(), ny = this.WY + this.WH - 34;
     for (i = 0; i < lines.length && i < 2; i++) {
       c.globalAlpha = this.noteT > 0 ? clamp(this.noteT, 0, 1) : 1;
       text(c, lines[i], nx, ny + i * 8, { size: 6, color: col, shadow: false });
@@ -1520,7 +1526,7 @@ const Forge = {
     var hint = TouchUI.enabled
       ? 'tap a row twice to make it  •  x to close'
       : '[1/2] tabs   arrows pick   [enter] make   [C] close';
-    text(c, hint, this.WX + 10, this.WY + this.WH - 12, { size: 6, color: 'rgba(168,152,120,0.8)' });
+    text(c, hint, this.WX + 34, this.WY + this.WH - 16, { size: 6.5, color: '#8a7454', shadow: false });
   },
 
   // ==== draw: the dock ======================================================

@@ -54,15 +54,31 @@ function resize() {
     availW = host.clientWidth - inset;
     availH = host.clientHeight - inset;
   }
-  // Snap to half-integer scales when upscaling: pixel art stays crisp, and the
-  // shrink-wrapped frame means the leftover space costs nothing visually.
+  // SNAP IN DEVICE PIXELS, NOT CSS PIXELS.
   //
-  // I changed this to fill the screen instead and it was wrong. A non-integer
-  // CSS scale makes texels land on uneven numbers of screen pixels -- some three
-  // wide, some four -- and the whole picture goes soft and irregular. Filling the
-  // frame is not worth what it costs the art. It snaps, and it stays snapped.
+  // Two wrong answers came before this one. Snapping the CSS scale to half steps
+  // keeps texels whole but throws away the screen: a phone in landscape at 844
+  // CSS px computes 1.44 and clamps to 1.00, so the game sat 480 units wide in
+  // the middle of the display with black round it. Not snapping at all fills the
+  // screen but lands texels on uneven numbers of physical pixels, and the whole
+  // picture goes soft -- which is worse.
+  //
+  // Both were solving in the wrong unit. What has to be a whole number is
+  // PHYSICAL pixels per logical unit, and a phone's devicePixelRatio is 2 or 3,
+  // so there are two or three times as many steps available as the CSS scale
+  // suggested. Snapping there gives 844/dpr3: floor(2532/480) = 5 physical
+  // pixels per unit = 1.667 CSS, which fills 800 of the 844 AND is exactly
+  // crisp. Falls back to the old half-step rule when dpr is 1.
+  const dpr = Math.max(1, Math.min(4, window.devicePixelRatio || 1));
   const scaleRaw = Math.min(availW / W, availH / H);
-  const scale = scaleRaw >= 1 ? Math.max(1, Math.floor(scaleRaw * 2) / 2) : Math.max(0.1, scaleRaw);
+  let scale;
+  if (scaleRaw < 1) {
+    scale = Math.max(0.1, scaleRaw);                       // smaller than 1:1: nothing to snap to
+  } else if (dpr > 1) {
+    scale = Math.max(1 / dpr, Math.floor(scaleRaw * dpr) / dpr);
+  } else {
+    scale = Math.max(1, Math.floor(scaleRaw * 2) / 2);
+  }
   canvas.style.width = `${W * scale}px`;
   canvas.style.height = `${H * scale}px`;
 }

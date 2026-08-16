@@ -252,6 +252,104 @@ function uiPanel(ctx, x, y, w, h, alpha = 0.92, light = false) {
   ctx.restore();
 }
 
+// ---- THE NOTEBOOK PAGE -----------------------------------------------------
+//
+// uiPanel is furniture: a carved wooden frame, right for a sign or a tracker
+// hanging on the world. The big menus are not furniture -- they are Otto's
+// NOTEBOOK, and the journal has been drawn that way for a while. This is that
+// page, extracted so the bag, the trades and the crafting board are the same
+// object: torn cream paper, faint blue rules, a red margin down the left, three
+// punched holes, and a strip of tape at each corner holding it to the screen.
+//
+// Everything is fillRect on the art's own texel grid. The "hand-drawn" of it is
+// in the irregularities: the tear along the edges wobbles, the rules stop short
+// of the margin, the tape sits at a slight angle. All of it is derived from x/y
+// so it is stable frame to frame -- a page that shimmered would be worse than a
+// rectangle.
+function uiPage(ctx, x, y, w, h, alpha = 1) {
+  const S = APIX;
+  const snap = (v) => Math.round(v / S) * S;
+  x = snap(x); y = snap(y); w = snap(w); h = snap(h);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  // the shadow the page casts on whatever is behind it
+  ctx.fillStyle = 'rgba(10,14,20,0.30)';
+  ctx.fillRect(x + 3, y + 4, w, h);
+
+  // the paper
+  ctx.fillStyle = '#f6ead0';
+  ctx.fillRect(x, y, w, h);
+  // a warmer wash down the right and along the bottom, so it reads as a sheet
+  // with a curl in it rather than a flat fill
+  ctx.fillStyle = '#eeddb9';
+  ctx.fillRect(x + w - 7 * S, y, 7 * S, h);
+  ctx.fillRect(x, y + h - 5 * S, w, 5 * S);
+
+  // THE TORN EDGE. A wobble derived from the coordinate, so it never crawls.
+  ctx.fillStyle = '#d9c49c';
+  for (let i = 0; i < h; i += S * 2) {
+    const d = ((i * 7919) % 5) * S * 0.5;
+    ctx.fillRect(x, y + i, S + d, S * 2);
+    ctx.fillRect(x + w - S - (((i * 6271) % 5) * S * 0.5), y + i, S * 2, S * 2);
+  }
+  for (let i = 0; i < w; i += S * 2) {
+    const d = ((i * 5381) % 5) * S * 0.5;
+    ctx.fillRect(x + i, y, S * 2, S + d);
+    ctx.fillRect(x + i, y + h - S - (((i * 4409) % 5) * S * 0.5), S * 2, S * 2);
+  }
+
+  // the blue rules, stopping clear of the margin the way ruled paper does
+  ctx.fillStyle = 'rgba(120,150,180,0.28)';
+  for (let ry = y + 22; ry < y + h - 8; ry += 9) ctx.fillRect(x + 26, ry, w - 40, S);
+
+  // the red margin, and the three punched holes on it
+  ctx.fillStyle = 'rgba(200,90,80,0.45)';
+  ctx.fillRect(x + 22, y + 8, S, h - 16);
+  for (let i = 0; i < 3; i++) {
+    const hy = y + h * (0.24 + i * 0.26);
+    ctx.fillStyle = 'rgba(120,96,64,0.35)';
+    ctx.beginPath(); ctx.arc(x + 11, hy + 1, 3.2, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#cbb894';
+    ctx.beginPath(); ctx.arc(x + 11, hy, 3, 0, TAU); ctx.fill();
+  }
+
+  // tape at the corners, at a slight angle, translucent like real tape
+  const tape = (tx, ty, rot) => {
+    ctx.save();
+    ctx.translate(tx, ty);
+    ctx.rotate(rot);
+    ctx.fillStyle = 'rgba(238,230,196,0.72)';
+    ctx.fillRect(-13, -4, 26, 8);
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.fillRect(-13, -4, 26, 2);
+    ctx.fillStyle = 'rgba(150,130,96,0.30)';
+    ctx.fillRect(-13, 2, 26, 1);
+    ctx.restore();
+  };
+  tape(x + 2, y + 2, -0.55);
+  tape(x + w - 2, y + 2, 0.55);
+  tape(x + 2, y + h - 2, 0.55);
+  tape(x + w - 2, y + h - 2, -0.55);
+
+  ctx.restore();
+}
+
+// The open/close transition every big menu shares: a page does not blink on, it
+// is put down. Scale from 0.88 with a small overshoot, fade the backdrop in, and
+// hand back a boolean for "still animating". k is 0..1.
+function uiPageOpen(ctx, k, cx, cy) {
+  const e = k >= 1 ? 1 : 1 - Math.pow(1 - k, 3);
+  const sc = 0.88 + 0.12 * e + Math.sin(Math.min(1, k) * Math.PI) * 0.03;
+  ctx.fillStyle = `rgba(8,12,18,${(0.55 * e).toFixed(3)})`;
+  ctx.fillRect(0, 0, W, H);
+  ctx.translate(cx, cy);
+  ctx.scale(sc, sc);
+  ctx.rotate((1 - e) * -0.05);
+  ctx.translate(-cx, -cy);
+  ctx.globalAlpha = e;
+}
+
 // ---- FX: one recycled pool of pixel particles ------------------------------
 //
 // Every system in this game that wanted a sparkle grew its own array, its own

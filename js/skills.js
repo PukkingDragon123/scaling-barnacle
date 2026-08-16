@@ -243,9 +243,10 @@ const Skills = {
   // -------------------------------------------------------------- geometry ----
   // update() and draw() share every rect through these, so a hit box can never
   // drift from the thing it is drawn under.
-  WX: 40, WY: 24, WW: 400, WH: 222,
-  TX: 46, TY: 92, TW: 200, TH: 142,     // the tree canvas (lower: the header grew a rule and a subtitle)
-  IX: 262, IW: 170,                     // the info column
+  WX: 16, WY: 12, WW: 448, WH: 246,
+  _openT: 0,
+  TX: 34, TY: 70, TW: 250, TH: 170,     // the hive's canvas
+  IX: 300, IW: 148,                     // the info column
   NS: 24,                               // node box, logical units
   ROW: 36,                              // tier spacing
   // Courier is monospace at 0.6em advance, so wrapping by character count is
@@ -724,7 +725,7 @@ const Skills = {
   list: function () { return this._flat || []; },
   listOf: function (prof) { return this.TREES[prof]; },
 
-  _closeRect: function () { return { x: this.WX + this.WW - 26, y: this.WY + 3, w: 22, h: 18 }; },
+  _closeRect: function () { return { x: this.WX + this.WW - 32, y: this.WY + 10, w: 20, h: 17 }; },
 
   _tabRect: function (i) {
     var inner = this.WW - 16, gap = 2;
@@ -748,8 +749,8 @@ const Skills = {
   //
   // Angles start at -90 (straight up) so CLAM is at the top and the rest go
   // clockwise, which is the order the tab strip used to read in.
-  HR: 12,
-  hubXY: function () { return { x: this.WX + this.WW * 0.29, y: this.WY + this.WH * 0.62 }; },
+  HR: 16,
+  hubXY: function () { return { x: this.WX + this.WW * 0.30, y: this.WY + this.WH * 0.60 }; },
   profAngle: function (pi) { return -Math.PI / 2 + pi * TAU / 5; },
 
   // Where a node sits, in screen units. Everything else -- the hit test, the
@@ -830,6 +831,7 @@ const Skills = {
     var k = prof ? this.resolve(prof) : '';
     if (k) this.tab = this.PROFS.indexOf(k);
     this.open = true;
+    this._openT = 0;              // the page gets put down again every time
     this.sel = 0;
     this.hover = '';
     this._note = '';
@@ -888,6 +890,7 @@ const Skills = {
 
   // ----------------------------------------------------------------- update ----
   update: function (dt) {
+    this._openT = Math.min(1, this._openT + dt * 4.5);
     if (!this.ensure()) return;
     // Two layers may end up ticking us; Game.time advances exactly once a frame.
     if (typeof Game !== 'undefined') {
@@ -1004,13 +1007,15 @@ const Skills = {
     c.fillStyle = 'rgba(10,14,20,0.62)';
     c.fillRect(0, 0, W_, H_);
 
-    uiPanel(c, this.WX, this.WY, this.WW, this.WH, 0.95, false);
+    c.save();
+    uiPageOpen(c, clamp(this._openT, 0, 1), this.WX + this.WW / 2, this.WY + this.WH / 2);
+    uiPage(c, this.WX, this.WY, this.WW, this.WH, 1);
 
     var prof = this.prof(), r = G.skills[prof], acc = this.ACC[this.tab];
 
-    text(c, "OTTO'S TRADES", this.WX + 10, this.WY + 5, { size: 9, color: '#e9c07a' });
-    text(c, 'five things worth getting good at', this.WX + 10, this.WY + 16,
-      { size: 6, color: '#a8895e' });
+    text(c, "OTTO'S TRADES", this.WX + 34, this.WY + 12, { size: 12, color: '#7a5232', shadow: false });
+    text(c, 'five things worth getting good at', this.WX + 34, this.WY + 25,
+      { size: 7, color: '#a8895e', shadow: false });
     var total = this.points();
     if (total > 0) {
       // an unspent point is the reason you opened this, so it gets a plate
@@ -1020,7 +1025,7 @@ const Skills = {
       text(c, pt, this.WX + this.WW - 34 - pw / 2, this.WY + 7,
         { size: 7, color: '#4a3020', align: 'center', shadow: false });
     }
-    uiRule(c, this.WX + 8, this.WY + 25, this.WW - 16, false);
+
 
     // ---- close: the frame in miniature, not a bare x
     var cr = this._closeRect();
@@ -1035,9 +1040,10 @@ const Skills = {
     this._drawInfo(c, prof, r);
     this._drawFx(c);
 
+    c.restore();
     text(c, TouchUI.enabled ? 'tap a node to learn it  --  tap x to close'
                             : '[1-5] tab  [arrows] move  [Enter] learn  [Esc] close',
-      this.WX + this.WW / 2, this.WY + this.WH - 11, { size: 6, color: '#8a9484', align: 'center' });
+      this.WX + this.WW / 2, this.WY + this.WH - 16, { size: 6.5, color: '#8a7454', align: 'center', shadow: false });
   },
 
   _drawTabs: function (c) {
@@ -1067,31 +1073,31 @@ const Skills = {
   // canvas (starting at TY): label at +34, bar at +44, caption at +51, whose
   // 6-unit glyph box ends exactly one unit above TY.
   _drawBar: function (c, r, acc) {
-    var x = this.WX + 10, y = this.WY + 48, w = this.WW - 20;
+    var x = this.WX + 34, y = this.WY + 40, w = 200;
     var need = this.need(r.lv);
     var capped = r.lv >= this.MAX_LV;
     var frac = capped ? 1 : (need > 0 ? r.xp / need : 0);
     if (frac < 0) frac = 0;
     if (frac > 1) frac = 1;
 
-    text(c, this.prof() + '  lv ' + r.lv, x, y, { size: 7, color: '#f6e8c9' });
+    text(c, this.prof() + '  lv ' + r.lv, x, y, { size: 8, color: '#5a3a22', shadow: false });
     var right = capped ? 'mastered' : (r.xp + ' / ' + need + ' xp');
-    text(c, right, x + w, y, { size: 7, color: '#a89878', align: 'right' });
+    text(c, right, x + w, y + 1, { size: 7, color: '#8a7454', align: 'right', shadow: false });
 
     // a bevelled trough with a lit fill, not a flat rectangle in a hairline box
     var by = y + 10, bh = 6;
     c.globalAlpha = capped ? 0.85 : 1;
-    uiMeter(c, x, by, w, bh, frac, acc, false);
+    uiMeter(c, x, by, w, bh, frac, acc, true);
     c.globalAlpha = 1;
 
     var pts = r.pts;
     text(c, this.owned(this.prof()) + ' / ' + this.list().length + ' learned',
-      x, by + 7, { size: 6, color: '#8a9484' });
+      x, by + 9, { size: 6.5, color: '#8a7454', shadow: false });
     // (the unspent-point count is on its own plate in the header now; it was
     // printed twice, once there and once here, three lines apart)
     if (pts > 0) {
       text(c, 'a lit ring is one you can afford',
-        x, by + 16, { size: 6, color: '#8a7a5a', shadow: false });
+        x + 100, by + 9, { size: 6.5, color: '#3f7a4e', shadow: false });
     }
   },
 
@@ -1196,7 +1202,7 @@ const Skills = {
 
   _drawInfo: function (c, prof, rec) {
     var x = this.IX, y = this.TY, w = this.IW, h = this.TH;
-    rrect(c, x, y, w, h, 'rgba(0,0,0,0.32)', 'rgba(226,200,150,0.22)');
+    rrect(c, x - 4, y - 4, w, h, 'rgba(255,250,232,0.72)', 'rgba(150,120,80,0.45)');
 
     var key = this.hover || (this.list()[this.sel] ? this.list()[this.sel].key : '');
     var nd = this.node(key);
