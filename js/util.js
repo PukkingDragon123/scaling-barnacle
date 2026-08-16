@@ -49,27 +49,75 @@ function weightedPick(pairs, r) {
 // Courier's box rather than to sit right. 1.15 keeps the face legible at 6pt
 // without shouting at 8.
 const FONT_SCALE = 1.15;
-function _fontFor(size) {
-  const fam = typeof FONT_FAMILY !== 'undefined' ? `'${FONT_FAMILY}', ` : '';
-  return `${Math.round(size * FONT_SCALE * 2) / 2}px ${fam}"Courier New", monospace`;
+
+// ---- TEXT IS A BITMAP FACE NOW --------------------------------------------
+//
+// Text was set in VT323 -- a real font file, so the browser hints and
+// anti-aliases it. At size 6 on a canvas scaled by DPX that means grey glyph
+// edges landing on fractional pixels, over sprites authored at four hard texels
+// per logical unit. It is the loudest non-pixel-art thing on the screen and no
+// amount of styling fixes it, because the blur is the renderer's, not ours.
+//
+// js/pixfont.js is a hand-authored 4x6 face instead: one fillRect per lit
+// pixel, baked to an atlas, blitted with smoothing off. Hard edges at every
+// scale, identical on every machine.
+//
+// THE ONE CONSTRAINT: a line must never come out WIDER than what it replaces.
+// A dozen panels here wrap by character count and size their boxes off
+// textWidth, so a wider face would overflow all of them at once. The font-pixel
+// size is therefore FLOORED out of the old advance (size * FONT_SCALE * 0.6 per
+// character, which is the figure the wrap code already assumes) rather than
+// picked by eye -- every line comes out the same width or slightly narrower,
+// and never longer.
+//
+// _fontPx returns DEVICE pixels per font pixel: an integer, so a glyph can
+// never land on a half pixel however the canvas is scaled.
+function _fontPx(size) {
+  const advance = size * FONT_SCALE * 0.6;                  // logical, per char
+  return clamp(Math.floor(advance / (PixFont.W + PixFont.GAP) * DPX), 2, 14);
 }
+function _advance(size) { return _fontPx(size) * (PixFont.W + PixFont.GAP) / DPX; }
 
 function text(ctx, str, x, y, opts = {}) {
   const { size = 8, color = '#fff', align = 'left', shadow = true } = opts;
-  ctx.font = _fontFor(size);
-  ctx.textAlign = align;
-  ctx.textBaseline = 'top';
-  if (shadow) {
-    ctx.fillStyle = 'rgba(0,0,0,0.75)';
-    ctx.fillText(str, x + 1, y + 1);
+  str = String(str);
+  const px = _fontPx(size);
+  const adv = px * (PixFont.W + PixFont.GAP) / DPX;
+  const gw = px * PixFont.W / DPX, gh = px * PixFont.H / DPX;
+  const total = adv * str.length;
+
+  let sx = x;
+  if (align === 'center') sx = x - total / 2;
+  else if (align === 'right') sx = x - total;
+  // the old em box carried leading above the cap; the bitmap starts at its first
+  // lit row, so nudge down and keep every call site's y meaning what it meant
+  let sy = y + (size * FONT_SCALE - gh) * 0.34;
+  const q = 1 / DPX;
+  sx = Math.round(sx / q) * q;
+  sy = Math.round(sy / q) * q;
+
+  const sm = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;
+  if (shadow) _blit(ctx, str, sx + q, sy + q, px, gw, gh, adv, 'rgba(0,0,0,0.7)');
+  _blit(ctx, str, sx, sy, px, gw, gh, adv, color);
+  ctx.imageSmoothingEnabled = sm;
+}
+
+function _blit(ctx, str, sx, sy, px, gw, gh, adv, colour) {
+  const at = PixFont.atlas(px, colour);
+  const cw = PixFont.W * px, chh = PixFont.H * px;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (ch === ' ') continue;
+    let idx = PixFont._idx[ch];
+    if (idx === undefined) idx = PixFont._idx[ch.toUpperCase()];
+    if (idx === undefined) idx = PixFont._idx['?'];
+    ctx.drawImage(at, idx * cw, 0, cw, chh, sx + i * adv, sy, gw, gh);
   }
-  ctx.fillStyle = color;
-  ctx.fillText(str, x, y);
 }
 
 function textWidth(ctx, str, size = 8) {
-  ctx.font = _fontFor(size);
-  return ctx.measureText(str).width;
+  return _advance(size) * String(str).length;
 }
 
 // TEXT THAT FITS THE BOX IT IS IN.
