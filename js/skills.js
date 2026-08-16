@@ -1430,7 +1430,17 @@ const Skills = {
       this._hexPath(c, pos.x, pos.y - lift, HR * k, 0.9);
       c.fillStyle = owned ? '#fff6dc' : (can ? '#fffaea' : '#d8c9a4');
       c.fill();
-      if (owned) { c.globalAlpha = 0.34; c.fillStyle = acc; c.fill(); c.globalAlpha = 1; }
+      if (owned) {
+        c.globalAlpha = 0.34; c.fillStyle = acc; c.fill();
+        // a shimmer crossing the wax, on a phase per cell so the comb does not
+        // blink in unison
+        var sh = Math.sin(t * 1.3 - i * 0.5);
+        if (sh > 0.86) {
+          c.globalAlpha = (sh - 0.86) * 5;
+          c.fillStyle = UIPAL.w; c.fill();
+        }
+        c.globalAlpha = 1;
+      }
       // a lit top-left facet, so the cell has a thickness
       c.save();
       c.clip();
@@ -1488,6 +1498,13 @@ const Skills = {
 
     this._drawFx(c);        // inside the camera: a burst belongs to its cell
     c.restore();
+
+    // ---- THE EDGE OF THE COMB -----------------------------------------------
+    // The camera clip cuts cells in half at the canvas boundary, which reads as
+    // a rendering fault rather than as 'there is more this way'. Feather it in
+    // steps of the paper's own colours -- dither, not alpha, so it stays pixel
+    // art -- and the comb looks like it carries on under the page instead.
+    this._fade(c);
   },
 
   // The zoom pair. Drawn after the hive and outside its camera, so they stay
@@ -1509,6 +1526,31 @@ const Skills = {
     }
     text(c, 'x' + this.Z.toFixed(2).replace(/0$/, ''), this._zoomRect(1).x - 5,
       this._zoomRect(1).y + 5, { size: 6, color: '#7a4a2a', align: 'right', shadow: false });
+  },
+
+  // Four stepped bands of paper along each edge of the hive's canvas: solid at
+  // the very edge, then two dithered half-tones, then nothing.
+  _fade: function (c) {
+    var S = APIX, n = 4, i, t, x = this.TX, y = this.TY, w = this.TW, h = this.TH;
+    for (i = 0; i < n; i++) {
+      t = S * 2 * (n - i);
+      c.fillStyle = UIPAL.w;
+      c.globalAlpha = (i === 0) ? 1 : 0;
+      if (i === 0) {
+        c.fillRect(x, y, w, S * 2); c.fillRect(x, y + h - S * 2, w, S * 2);
+        c.fillRect(x, y, S * 2, h); c.fillRect(x + w - S * 2, y, S * 2, h);
+        continue;
+      }
+      c.globalAlpha = 1;
+      c.save();
+      c.beginPath();
+      c.rect(x, y + t - S * 2, w, S * 2); c.rect(x, y + h - t, w, S * 2);
+      c.rect(x + t - S * 2, y, S * 2, h); c.rect(x + w - t, y, S * 2, h);
+      c.clip();
+      pixDither(c, x, y, w, h, UIPAL.w, i + 1);
+      c.restore();
+    }
+    c.globalAlpha = 1;
   },
 
   // A little drawn star, for the one node per trade worth planning around.
