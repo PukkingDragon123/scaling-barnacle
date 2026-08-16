@@ -41,14 +41,17 @@ const Inv = {
   // ---- the bag -------------------------------------------------------------
   COLS: 8,
   ROWS: 5,
-  CELL: 22,
-  GAP: 2,
+  CELL: 26,
+  GAP: 3,
   DEF_STACK: 99,
 
-  // bag window: inside the 40..440 x 22..248 box every other panel respects
-  BWX: 44, BWY: 26, BWW: 392, BWH: 218,
-  GX: 54, GY: 50,                     // grid origin
-  CARD_X: 252, CARD_Y: 50, CARD_W: 176, CARD_H: 150,
+  // THE BAG IS A PAGE. It fills the screen down to y 240 and stops there --
+  // the hotbar sits at H - 4 - CELL = 247 and is drawn ON TOP of us, so a page
+  // that ran to the bottom would have the bar lying across its footer.
+  BWX: 16, BWY: 12, BWW: 448, BWH: 228,
+  GX: 50, GY: 50,                     // grid origin
+  CARD_X: 296, CARD_Y: 50, CARD_W: 152, CARD_H: 166,
+  _openT: 0,
 
   // ---- the stations --------------------------------------------------------
   SWX: 44, SWY: 24, SWW: 392, SWH: 222,
@@ -1004,6 +1007,7 @@ const Inv = {
     if (!this.ensure() || !this._allowed()) return false;
     this.mode = 'bag';
     this.open = true;
+    this._openT = 0;
     this.hover = -1;
     this.pick = -1;
     this.drag = null;
@@ -1071,6 +1075,7 @@ const Inv = {
 
   // ==== update ==============================================================
   update: function (dt) {
+    this._openT = Math.min(1, this._openT + (dt || 0) * 4.5);
     if (!this.ensure()) return;
     // Both our own globalUpdate hook and a wiring layer may tick us; Game.time
     // advances exactly once a frame, so the first call in a frame wins.
@@ -1397,38 +1402,42 @@ const Inv = {
   // ---- the bag screen ------------------------------------------------------
   _drawBag: function (c) {
     var w = this._window(), i, r, s;
-    uiPanel(c, w.x, w.y, w.w, w.h, 0.95);
-    this._drawGrain(c, w.x + 2, w.y + 2, w.w - 4, w.h - 4);
+    c.save();
+    uiPageOpen(c, clamp(this._openT, 0, 1), w.x + w.w / 2, w.y + w.h / 2);
+    uiPage(c, w.x, w.y, w.w, w.h, 1);
+    // (NO WOOD GRAIN. The window is paper now; a grain overlay on it read as
+    // dirt rather than as timber.)
 
-    text(c, "otto's bag", w.x + 10, w.y + 6, { size: 8, color: '#ffe66e' });
-    text(c, this.used() + '/' + this.capacity() + ' slots', w.x + w.w - 34, w.y + 7,
-      { size: 7, color: '#d8ccb4', align: 'right' });
+    text(c, "OTTO'S BAG", w.x + 34, w.y + 12, { size: 12, color: '#7a5232', shadow: false });
+    text(c, 'everything he is carrying right now', w.x + 34, w.y + 25,
+      { size: 7, color: '#a8895e', shadow: false });
+    var slots = this.used() + ' / ' + this.capacity() + ' slots';
+    var sw = textWidth(c, slots, 7) + 16;
+    inkBox(c, w.x + w.w - 40 - sw, w.y + 5, sw, 16, '#ffe9a8', '#a8761a', PIX * 2);
+    text(c, slots, w.x + w.w - 40 - sw / 2, w.y + 9.5,
+      { size: 7, color: '#6b4a22', align: 'center', shadow: false });
 
-    // close X
     r = this._closeRect();
-    var overX = this._in(r, Input.mouse.x, Input.mouse.y);
-    uiPanel(c, r.x, r.y, r.w, r.h, overX ? 0.95 : 0.7);
-    text(c, 'x', r.x + r.w / 2, r.y + 4, { size: 8, color: overX ? '#ffe66e' : '#d8ccb4', align: 'center' });
+    inkClose(c, r, this._in(r, Input.mouse.x, Input.mouse.y));
 
-    // the grid
+    // the grid: pockets ruled onto the page
     var mx = Input.mouse.x, my = Input.mouse.y;
     for (i = 0; i < this.capacity(); i++) {
       r = this._cellRect(i);
       s = G.inv.slots[i];
       var on = i === this.hover, sel = i === this.pick;
-      this._cellPath(c, r.x, r.y, r.w, r.h, 2.5);
-      c.fillStyle = on ? 'rgba(96,68,42,0.95)' : (sel ? 'rgba(74,52,32,0.92)' : 'rgba(28,19,12,0.8)');
-      c.fill();
-      c.strokeStyle = sel ? '#ffe66e' : (on ? 'rgba(255,230,110,0.6)' : 'rgba(226,200,150,0.28)');
-      c.lineWidth = sel ? 1.2 : 1;
-      c.stroke();
+      inkBox(c, r.x, r.y, r.w, r.h,
+        sel ? 'rgba(255,228,150,0.62)' : (on ? 'rgba(255,255,255,0.55)' : 'rgba(236,224,196,0.45)'),
+        sel ? '#a8761a' : 'rgba(146,116,76,' + (on ? 0.8 : 0.5) + ')',
+        sel ? PIX * 3 : PIX * 2);
       if (!s) continue;
       // the cell a drag started in reads as lifted, not as empty
       var lifted = this.drag && this.drag.from === i;
       if (lifted) c.globalAlpha = 0.35;
-      this.drawIcon(c, s.key, r.x + r.w / 2, r.y + r.h / 2 - 0.5, 15);
+      this.drawIcon(c, s.key, r.x + r.w / 2, r.y + r.h / 2 - 0.5, 18);
       if (s.n > 1) {
-        text(c, String(s.n), r.x + r.w - 1.6, r.y + r.h - 7.5, { size: 6.5, color: '#fff8e0', align: 'right' });
+        text(c, String(s.n), r.x + r.w - 2, r.y + r.h - 8.5,
+          { size: 6.5, color: '#4a3020', align: 'right', shadow: false });
       }
       if (lifted) c.globalAlpha = 1;
     }
@@ -1438,22 +1447,24 @@ const Inv = {
     this._drawBtn(c, this._btn('stack'), 'stack', mx, my);
     this._drawBtn(c, this._btn('gather'), 'gather', mx, my);
 
-    var iy = this._btn('sort').y + 20;
-    text(c, 'worth ' + this.totalValue() + ' sd', this.GX, iy, { size: 7, color: '#a0f2b4' });
+    var by = this._btn('sort').y;
+    text(c, 'worth ' + this.totalValue() + ' sd', this.GX + 172, by + 4,
+      { size: 7, color: '#3f7a4e', shadow: false });
     if (this.noteT > 0) {
       c.globalAlpha = clamp(this.noteT, 0, 1);
-      text(c, this.note, this.GX, iy + 10, { size: 6.5, color: '#ffe66e' });
+      text(c, this.note, this.GX, by + 21, { size: 6.5, color: '#8a5a24', shadow: false });
       c.globalAlpha = 1;
     }
 
     this._drawDetail(c);
 
-    text(c, 'drag to rearrange  --  click a stack to send it to the bar',
-      w.x + w.w / 2, w.y + w.h - 26, { size: 6.5, color: '#8a9484', align: 'center' });
-    text(c, this._hintText(), w.x + w.w / 2, w.y + w.h - 14, { size: 7, color: '#d8ccb4', align: 'center' });
+    text(c, 'drag to rearrange  --  click a stack to send it to the bar  --  ' + this._hintText(),
+      w.x + w.w / 2, w.y + w.h - 14, { size: 6.5, color: '#8a7454', align: 'center', shadow: false });
+    c.restore();
 
     // The hotbar rides with the HUD, which we replaced -- draw it ourselves so
-    // there is something to drag onto.
+    // there is something to drag onto. OUTSIDE the page transform: it belongs to
+    // the screen, not to the sheet, and it must not slide in with the page.
     var hb = this._hb();
     if (hb && hb.draw) hb.draw(c);
 
@@ -1462,9 +1473,7 @@ const Inv = {
   },
 
   _drawBtn: function (c, r, label, mx, my) {
-    var on = this._in(r, mx, my);
-    uiPanel(c, r.x, r.y, r.w, r.h, on ? 0.98 : 0.85, true);
-    text(c, label, r.x + r.w / 2, r.y + 3.5, { size: 7, color: on ? '#4a3020' : '#6a4420', align: 'center', shadow: false });
+    inkButton(c, r, label, true, this._in(r, mx, my), this.t || 0);
   },
 
   // The detail card doubles as the tooltip body: hover wins, otherwise the last
@@ -1478,7 +1487,7 @@ const Inv = {
 
   _drawDetail: function (c) {
     var r = this._cardRect();
-    uiPanel(c, r.x, r.y, r.w, r.h, 0.95, true);
+    inkBox(c, r.x, r.y, r.w, r.h, 'rgba(255,251,236,0.78)', 'rgba(146,116,76,0.65)', PIX * 2);
     var key = this._detailKey();
     if (!key) {
       text(c, 'nothing picked up', r.x + r.w / 2, r.y + r.h / 2 - 10, { size: 7, color: '#a4805a', align: 'center', shadow: false });
@@ -1518,7 +1527,7 @@ const Inv = {
     var w = textWidth(c, label, 6.5) + 12, h = 13;
     var x = clamp(Input.mouse.x + 8, this.BWX + 2, this.BWX + this.BWW - w - 2);
     var y = clamp(Input.mouse.y - 16, this.BWY + 2, this.BWY + this.BWH - h - 2);
-    uiPanel(c, x, y, w, h, 0.96, true);
+    inkBox(c, x, y, w, h, '#fff6dc', '#8a6440', PIX * 2);
     text(c, label, x + w / 2, y + 3, { size: 6.5, color: '#4a3020', align: 'center', shadow: false });
   },
 
@@ -1528,14 +1537,10 @@ const Inv = {
     if (!s) return;
     var x = Input.mouse.x, y = Input.mouse.y;
     c.globalAlpha = 0.9;
-    this._cellPath(c, x - 10, y - 10, 20, 20, 2.5);
-    c.fillStyle = 'rgba(74,52,32,0.9)';
-    c.fill();
-    c.strokeStyle = '#ffe66e';
-    c.lineWidth = 1;
-    c.stroke();
-    this.drawIcon(c, s.key, x, y, 14);
-    if (s.n > 1) text(c, String(s.n), x + 9, y + 3, { size: 6.5, color: '#fff8e0', align: 'right' });
+    inkBox(c, x - 11, y - 11, 22, 22, '#fff3d2', '#a8761a', PIX * 2.5);
+    this.drawIcon(c, s.key, x, y, 15);
+    if (s.n > 1) text(c, String(s.n), x + 10, y + 3,
+      { size: 6.5, color: '#4a3020', align: 'right', shadow: false });
     c.globalAlpha = 1;
   },
 
