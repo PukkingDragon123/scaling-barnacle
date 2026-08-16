@@ -167,7 +167,8 @@ const Farm = {
   // Sized for the full roster: twelve packets in TWO COLUMNS of six. One column
   // of 24-unit rows only ever fit five -- the old roster's count -- and rows six
   // through twelve would draw clean off the panel.
-  WX: 44, WY: 44, WW: 392, WH: 186,
+  WX: 16, WY: 12, WW: 448, WH: 228,
+  _openT: 0,
   ROW_H: 25, COL_ROWS: 6,
 
   // ---- state plumbing ---------------------------------------------------------------
@@ -730,6 +731,7 @@ const Farm = {
   },
 
   update(dt) {
+    this._openT = Math.min(1, this._openT + (dt || 0) * 4.5);
     if (!this.ensure()) return;
     // self-driven from the Game.globalUpdate hook; ignore a duplicate call in the same frame
     if (Game.time === this._stamp) return;
@@ -1093,6 +1095,7 @@ const Farm = {
   // ---- seed pouch picker (self-contained modal) --------------------------------------
 
   openPicker(i) {
+    this._openT = 0;
     if (!this.ensure()) return;
     if (this._peerOpen()) return;
     if (this.seedTotal() <= 0) {
@@ -1113,11 +1116,13 @@ const Farm = {
   closePicker() { this.open = false; SND.click(); },
 
   _rowRect(i) {
-    const colW = (this.WW - 24) / 2;
+    // +34 on the left, not +8: uiPage puts the punch holes at +11 and the red
+    // margin rule at +22, and a column starting at +8 sat on top of both.
+    const colW = (this.WW - 76) / 2;
     const col = Math.floor(i / this.COL_ROWS), row = i % this.COL_ROWS;
-    return { x: this.WX + 8 + col * (colW + 8), y: this.WY + 28 + row * this.ROW_H, w: colW, h: this.ROW_H - 2 };
+    return { x: this.WX + 34 + col * (colW + 8), y: this.WY + 56 + row * this.ROW_H, w: colW, h: this.ROW_H - 2 };
   },
-  _closeRect() { return { x: this.WX + this.WW - 26, y: this.WY + 2, w: 24, h: 18 }; },
+  _closeRect() { return { x: this.WX + this.WW - 46, y: this.WY + 6, w: 22, h: 18 }; },
   _in(r, mx, my) { return mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h; },
 
   updatePicker(dt) {
@@ -1164,16 +1169,24 @@ const Farm = {
     const X = this.WX, Y = this.WY, WWi = this.WW;
     c.fillStyle = 'rgba(4,10,8,0.66)';
     c.fillRect(0, 0, W, H);
-    uiPanel(c, X, Y, WWi, this.WH, 0.95);
+    c.save();
+    uiPageOpen(c, clamp(this._openT, 0, 1), X + WWi / 2, Y + this.WH / 2);
+    uiPage(c, X, Y, WWi, this.WH, 1);
 
-    text(c, 'SEED POUCH', X + 10, Y + 6, { size: 8, color: '#ffe6b0' });
+    text(c, 'SEED POUCH', X + 34, Y + 12, { size: 12, color: '#7a5232', shadow: false });
+    text(c, 'what otto has to put in the ground', X + 34, Y + 25,
+      { size: 7, color: '#a8895e', shadow: false });
     const p = this._get(this.plot);
-    text(c, p ? `Bed ${this.plot + 1}` : '', X + WWi - 34, Y + 7, { size: 6, color: '#a89878', align: 'right' });
+    if (p) {
+      const bl = `bed ${this.plot + 1}`;
+      const blw = textWidth(c, bl, 7) + 16;
+      inkBox(c, X + WWi - 54 - blw, Y + 6, blw, 16, '#ffe9a8', '#a8761a', PIX * 2);
+      text(c, bl, X + WWi - 54 - blw / 2, Y + 10.5,
+        { size: 7, color: '#6b4a22', align: 'center', shadow: false });
+    }
     const cr = this._closeRect();
-    const overClose = this._in(cr, Input.mouse.x, Input.mouse.y);
-    text(c, 'X', cr.x + cr.w / 2, cr.y + 4, { size: 9, color: overClose ? '#ffe66e' : '#c9a271', align: 'center' });
-    c.fillStyle = 'rgba(226,200,150,0.22)';
-    c.fillRect(X + 8, Y + 22, WWi - 16, PIX);
+    inkClose(c, cr, this._in(cr, Input.mouse.x, Input.mouse.y));
+    uiRule(c, X + 34, Y + 44, WWi - 68, true);
 
     for (let i = 0; i < this.SEEDS.length; i++) {
       const s = this.SEEDS[i];
@@ -1181,7 +1194,9 @@ const Farm = {
       const n = this.seedCount(s.key);
       const r = this._rowRect(i);
       const hot = this._in(r, Input.mouse.x, Input.mouse.y) || this.sel === i;
-      if (hot) rrect(c, r.x, r.y, r.w, r.h, n > 0 ? 'rgba(226,200,150,0.14)' : 'rgba(226,200,150,0.06)');
+      inkBox(c, r.x, r.y, r.w, r.h,
+        hot ? (n > 0 ? 'rgba(255,236,182,0.96)' : 'rgba(246,240,224,0.9)') : 'rgba(247,240,220,0.9)',
+        hot && n > 0 ? '#a8761a' : 'rgba(146,116,76,0.45)', hot && n > 0 ? PIX * 3 : PIX * 2);
 
       const iw = this._widthFor(s.art, 13);
       c.globalAlpha = n > 0 ? 1 : 0.4;
@@ -1189,16 +1204,17 @@ const Farm = {
       c.globalAlpha = 1;
 
       text(c, `${i + 1}. ${cd.name}`, r.x + 22, r.y + 3,
-        { size: 7, color: n > 0 ? '#f6e8c9' : '#8a7a5a' });
+        { size: 7, shadow: false, color: n > 0 ? '#4a3020' : '#a08a68' });
       text(c, `${this.totalDays(s.key)}d  •  ${cd.qty}x$${cd.value}`,
-        r.x + 22, r.y + 12, { size: 6, color: n > 0 ? '#a89878' : '#6a5c44' });
+        r.x + 22, r.y + 12, { size: 6, shadow: false, color: n > 0 ? '#8a7454' : '#b0a084' });
       text(c, n > 0 ? `x${n}` : '—', r.x + r.w - 6, r.y + 6,
-        { size: 7, color: n > 0 ? '#ffe66e' : '#6a5c44', align: 'right' });
+        { size: 7, align: 'right', shadow: false, color: n > 0 ? '#a8761a' : '#b0a084' });
     }
 
     text(c, TouchUI.enabled ? 'tap a packet to plant  •  X to close' : '[1-9] or arrows + Enter   [Esc] close',
-      X + 10, Y + this.WH - 13, { size: 6, color: '#8a9484' });
-    text(c, `$${G.money}`, X + WWi - 10, Y + this.WH - 13, { size: 6, color: '#ffe66e', align: 'right' });
+      X + WWi / 2, Y + this.WH - 15, { size: 6.5, color: '#8a7454', align: 'center', shadow: false });
+    c.restore();
+    text(c, `$${G.money}`, X + WWi - 34, Y + this.WH - 15, { size: 6.5, color: '#3f7a4e', align: 'right', shadow: false });
 
     // Game.drawCursor hides the arrow after 3 idle seconds, only special-cases
     // Shop, and draws nothing at all in a customCursor scene like the ocean — so
