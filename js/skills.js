@@ -251,7 +251,12 @@ const Skills = {
   // envelope 1.902r wide by 1.809r tall -- so HEIGHT is what binds, always. Get
   // HR wrong by four units and the outer cells land off the page, which is
   // exactly what "sprayed ghost hexagons over the paper" looks like.
-  TX: 22, TY: 42, TW: 274, TH: 198,     // the hive's canvas
+  // THE HIVE'S CANVAS. These are ABSOLUTE screen coordinates, and they used to
+  // be TX:22 -- which is left of this page's own punch holes (WX+11 = 27) and
+  // its red margin (WX+22 = 38). The comb was being drawn over the binding and
+  // clipped against the torn edge. Content on this page starts at WX+34, the
+  // same as every other panel, and stops short of the info column.
+  TX: 50, TY: 56, TW: 244, TH: 180,     // the hive's canvas
   IX: 302, IY: 42, IW: 154, IH: 190,    // the info column
   NS: 24,                               // node box, logical units
   ROW: 36,                              // tier spacing
@@ -736,7 +741,7 @@ const Skills = {
 
   // An iPad has no scroll wheel, so the zoom needs something to press.
   _zoomRect: function (d) {
-    return { x: this.TX + this.TW - 40 + (d > 0 ? 0 : 19), y: this.TY + this.TH - 20, w: 17, h: 16 };
+    return { x: this.TX + this.TW - 39 + (d > 0 ? 0 : 20), y: this.TY + this.TH - 19, w: 18, h: 17 };
   },
 
   // Zoom about the middle of the view, so the cell you are looking at stays put.
@@ -1502,8 +1507,8 @@ const Skills = {
       c.fillRect(r.x + r.w / 2 - 4, r.y + r.h / 2 - 1, 8, 2);
       if (d > 0) c.fillRect(r.x + r.w / 2 - 1, r.y + r.h / 2 - 4, 2, 8);
     }
-    text(c, 'x' + this.Z.toFixed(2).replace(/0$/, ''), this._zoomRect(1).x - 4,
-      this._zoomRect(1).y + 4, { size: 6, color: '#8a7454', align: 'right', shadow: false });
+    text(c, 'x' + this.Z.toFixed(2).replace(/0$/, ''), this._zoomRect(1).x - 5,
+      this._zoomRect(1).y + 5, { size: 6, color: '#7a4a2a', align: 'right', shadow: false });
   },
 
   // A little drawn star, for the one node per trade worth planning around.

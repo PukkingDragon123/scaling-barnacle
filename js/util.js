@@ -170,6 +170,57 @@ function rrect(ctx, x, y, w, h, fill, stroke) {
   }
 }
 
+
+// ---- THE UI PALETTE -------------------------------------------------------
+//
+// These are the EXACT nine colours the HUD icon art is painted from (the trophy
+// and satchel grids in js/uibar.js). The chrome is built out of the same ramps
+// so a panel and a button icon look like they were drawn by the same hand on
+// the same day: a hard #2a1b10 outline round everything, a three-step leather
+// ramp, a three-step gold ramp, and one highlight that doubles as the paper.
+//
+// Nothing here blends. Pixel art gets its depth from STEPPED ramps and dither,
+// not from gradients -- a smooth fill at this density reads as a web page with
+// sprites on it.
+const UIPAL = {
+  out: '#2a1b10',   // outline, on everything
+  sh:  '#5a3a18',   // cast shadow
+  b:   '#7a4a2a',   // leather, dark   -- also the body text ink
+  t:   '#b07840',   // leather, mid
+  c:   '#c99a5e',   // leather, light
+  d:   '#8a5a20',   // gold, dark
+  m:   '#e8b84e',   // gold, mid
+  l:   '#ffd66e',   // gold, light
+  w:   '#fff2c8',   // highlight -- and the paper itself
+  p2:  '#f2e2b4',   // paper, one step down (w toward c) for the dither
+  p3:  '#e2cea0',   // paper, two steps down: the curl
+  rule:'#9fb4c6',   // the ruled line, muted so it never fights the ink
+};
+
+// A dither wash: every other texel of `col` on a 2x2 lattice, which is how a
+// pixel artist gets a half-tone without a new colour. Clipped by the caller.
+function pixDither(ctx, x, y, w, h, col, step = 2) {
+  const S = APIX;
+  ctx.fillStyle = col;
+  const x0 = Math.round(x / S) * S, y0 = Math.round(y / S) * S;
+  for (let j = 0; j < h; j += S * step) {
+    for (let i = ((j / (S * step)) & 1) ? S * step / 2 : 0; i < w; i += S * step) {
+      ctx.fillRect(x0 + i, y0 + j, S, S);
+    }
+  }
+}
+
+// A hard pixel border: `n` texels of colour, drawn as four rects, no strokes and
+// no half pixels. This is what makes a panel read as drawn rather than as CSS.
+function pixEdge(ctx, x, y, w, h, col, n = 1) {
+  const S = APIX, t = S * n;
+  ctx.fillStyle = col;
+  ctx.fillRect(x, y, w, t);
+  ctx.fillRect(x, y + h - t, w, t);
+  ctx.fillRect(x, y, t, h);
+  ctx.fillRect(x + w - t, y, t, h);
+}
+
 // ---- hi-density pixel-art helpers ----------------------------------------
 
 function hexRGB(h) {
@@ -321,64 +372,74 @@ function uiPage(ctx, x, y, w, h, alpha = 1) {
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  // the shadow the page casts on whatever is behind it
-  ctx.fillStyle = 'rgba(10,14,20,0.30)';
-  ctx.fillRect(x + 3, y + 4, w, h);
+  // the shadow it casts, two flat steps -- not a blur
+  ctx.fillStyle = 'rgba(20,12,6,0.34)';
+  ctx.fillRect(x + S * 4, y + S * 5, w, h);
+  ctx.fillStyle = 'rgba(20,12,6,0.22)';
+  ctx.fillRect(x + S * 2, y + S * 3, w, h);
 
-  // the paper
-  ctx.fillStyle = '#f6ead0';
+  // the sheet: lit body, one step down along the far edges, dithered between
+  ctx.fillStyle = UIPAL.w;
   ctx.fillRect(x, y, w, h);
-  // a warmer wash down the right and along the bottom, so it reads as a sheet
-  // with a curl in it rather than a flat fill
-  ctx.fillStyle = '#eeddb9';
-  ctx.fillRect(x + w - 7 * S, y, 7 * S, h);
-  ctx.fillRect(x, y + h - 5 * S, w, 5 * S);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  pixDither(ctx, x, y, w, h, UIPAL.p2, 3);          // the grain of the paper
+  ctx.fillStyle = UIPAL.p2;
+  ctx.fillRect(x + w - S * 10, y, S * 10, h);
+  ctx.fillRect(x, y + h - S * 7, w, S * 7);
+  ctx.fillStyle = UIPAL.p3;
+  ctx.fillRect(x + w - S * 4, y, S * 4, h);
+  ctx.fillRect(x, y + h - S * 3, w, S * 3);
+  ctx.restore();
 
-  // THE TORN EDGE. A wobble derived from the coordinate, so it never crawls.
-  ctx.fillStyle = '#d9c49c';
+  // THE TORN EDGE, in the paper's own darker step, wobble hashed off the coord
+  ctx.fillStyle = UIPAL.p3;
   for (let i = 0; i < h; i += S * 2) {
-    const d = ((i * 7919) % 5) * S * 0.5;
-    ctx.fillRect(x, y + i, S + d, S * 2);
-    ctx.fillRect(x + w - S - (((i * 6271) % 5) * S * 0.5), y + i, S * 2, S * 2);
+    ctx.fillRect(x, y + i, S + ((i * 7919) % 5) * S * 0.5, S * 2);
+    ctx.fillRect(x + w - S - ((i * 6271) % 5) * S * 0.5, y + i, S * 2, S * 2);
   }
   for (let i = 0; i < w; i += S * 2) {
-    const d = ((i * 5381) % 5) * S * 0.5;
-    ctx.fillRect(x + i, y, S * 2, S + d);
-    ctx.fillRect(x + i, y + h - S - (((i * 4409) % 5) * S * 0.5), S * 2, S * 2);
+    ctx.fillRect(x + i, y, S * 2, S + ((i * 5381) % 5) * S * 0.5);
+    ctx.fillRect(x + i, y + h - S - ((i * 4409) % 5) * S * 0.5, S * 2, S * 2);
   }
+  // the hard outline that every icon in this game wears
+  pixEdge(ctx, x, y, w, h, UIPAL.out, 1);
 
   // the blue rules, stopping clear of the margin the way ruled paper does
-  ctx.fillStyle = 'rgba(120,150,180,0.28)';
+  ctx.globalAlpha = alpha * 0.5;
+  ctx.fillStyle = UIPAL.rule;
   for (let ry = y + 22; ry < y + h - 8; ry += 9) ctx.fillRect(x + 26, ry, w - 40, S);
+  ctx.globalAlpha = alpha;
 
   // the red margin, and the three punched holes on it
-  ctx.fillStyle = 'rgba(200,90,80,0.45)';
+  ctx.fillStyle = '#b2604a';
   ctx.fillRect(x + 22, y + 8, S, h - 16);
   for (let i = 0; i < 3; i++) {
-    const hy = y + h * (0.24 + i * 0.26);
-    ctx.fillStyle = 'rgba(120,96,64,0.35)';
-    ctx.beginPath(); ctx.arc(x + 11, hy + 1, 3.2, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#cbb894';
-    ctx.beginPath(); ctx.arc(x + 11, hy, 3, 0, TAU); ctx.fill();
+    const hy = snap(y + h * (0.24 + i * 0.26));
+    ctx.fillStyle = UIPAL.out;
+    ctx.fillRect(x + 8, hy - S * 3, S * 6, S * 6);
+    ctx.fillStyle = UIPAL.p3;
+    ctx.fillRect(x + 8 + S, hy - S * 2, S * 4, S * 4);
   }
 
-  // tape at the corners, at a slight angle, translucent like real tape
-  const tape = (tx, ty, rot) => {
+  // tape at the corners: flat, stepped, on the grid
+  const tape = (tx, ty, dir) => {
+    const tw = 26, th = 8;
     ctx.save();
-    ctx.translate(tx, ty);
-    ctx.rotate(rot);
-    ctx.fillStyle = 'rgba(238,230,196,0.72)';
-    ctx.fillRect(-13, -4, 26, 8);
-    ctx.fillStyle = 'rgba(255,255,255,0.28)';
-    ctx.fillRect(-13, -4, 26, 2);
-    ctx.fillStyle = 'rgba(150,130,96,0.30)';
-    ctx.fillRect(-13, 2, 26, 1);
+    ctx.translate(snap(tx), snap(ty));
+    ctx.rotate(dir * 0.55);
+    ctx.fillStyle = 'rgba(255,242,200,0.72)';
+    ctx.fillRect(-tw / 2, -th / 2, tw, th);
+    ctx.fillStyle = 'rgba(255,255,255,0.30)';
+    ctx.fillRect(-tw / 2, -th / 2, tw, S);
+    ctx.fillStyle = 'rgba(90,58,24,0.28)';
+    ctx.fillRect(-tw / 2, th / 2 - S, tw, S);
     ctx.restore();
   };
-  tape(x + 2, y + 2, -0.55);
-  tape(x + w - 2, y + 2, 0.55);
-  tape(x + 2, y + h - 2, 0.55);
-  tape(x + w - 2, y + h - 2, -0.55);
+  tape(x + 2, y + 2, -1);
+  tape(x + w - 2, y + 2, 1);
+  tape(x + 2, y + h - 2, 1);
+  tape(x + w - 2, y + h - 2, -1);
 
   ctx.restore();
 }
@@ -483,23 +544,28 @@ function uiNote(ctx, x, y, w, h, opts = {}) {
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  ctx.fillStyle = 'rgba(10,14,20,0.34)';
-  ctx.fillRect(x + 1.5, y + 2, w, h);
+  ctx.fillStyle = 'rgba(20,12,6,0.32)';
+  ctx.fillRect(x + S * 2, y + S * 3, w, h);
 
-  ctx.fillStyle = '#f6ead0';
+  ctx.fillStyle = UIPAL.w;
   ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = '#ebd9b3';                       // the curl, down the far edges
-  ctx.fillRect(x + w - 3 * S, y, 3 * S, h);
-  ctx.fillRect(x, y + h - 2 * S, w, 2 * S);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  pixDither(ctx, x, y, w, h, UIPAL.p2, 3);
+  ctx.fillStyle = UIPAL.p2;
+  ctx.fillRect(x + w - S * 3, y, S * 3, h);
+  ctx.fillRect(x, y + h - S * 2, w, S * 2);
   if (tint) { ctx.fillStyle = tint; ctx.fillRect(x, y, w, h); }
-
   if (rules) {
-    ctx.fillStyle = 'rgba(120,150,180,0.22)';
+    ctx.globalAlpha = alpha * 0.5;
+    ctx.fillStyle = UIPAL.rule;
     for (let ry = y + 9; ry < y + h - 3; ry += 9) ctx.fillRect(x + 4, ry, w - 8, S);
+    ctx.globalAlpha = alpha;
   }
+  ctx.restore();
 
-  // the torn edge, one texel of jitter hashed off the coordinate
-  ctx.fillStyle = '#d9c49c';
+  // torn edge in the paper's darker step, then the hard outline
+  ctx.fillStyle = UIPAL.p3;
   for (let i = 0; i < h; i += S * 2) {
     ctx.fillRect(x, y + i, S + ((i * 7919) % 3) * S * 0.5, S * 2);
     ctx.fillRect(x + w - S - ((i * 6271) % 3) * S * 0.5, y + i, S * 2, S * 2);
@@ -508,19 +574,20 @@ function uiNote(ctx, x, y, w, h, opts = {}) {
     ctx.fillRect(x + i, y, S * 2, S + ((i * 5381) % 3) * S * 0.5);
     ctx.fillRect(x + i, y + h - S - ((i * 4409) % 3) * S * 0.5, S * 2, S * 2);
   }
+  pixEdge(ctx, x, y, w, h, UIPAL.out, 1);
 
   if (tape) {
-    const tab = (tx, ty, rot) => {
+    const tab = (tx, ty, dir) => {
       ctx.save();
-      ctx.translate(tx, ty); ctx.rotate(rot);
-      ctx.fillStyle = 'rgba(238,230,196,0.72)';
+      ctx.translate(snap(tx), snap(ty)); ctx.rotate(dir * 0.5);
+      ctx.fillStyle = 'rgba(255,242,200,0.72)';
       ctx.fillRect(-8, -2.5, 16, 5);
-      ctx.fillStyle = 'rgba(255,255,255,0.26)';
-      ctx.fillRect(-8, -2.5, 16, 1.5);
+      ctx.fillStyle = 'rgba(255,255,255,0.28)';
+      ctx.fillRect(-8, -2.5, 16, S);
       ctx.restore();
     };
-    tab(x + 3, y + 1, -0.5);
-    tab(x + w - 3, y + 1, 0.5);
+    tab(x + 3, y + 1, -1);
+    tab(x + w - 3, y + 1, 1);
   }
   ctx.restore();
 }
@@ -530,31 +597,37 @@ function uiNote(ctx, x, y, w, h, opts = {}) {
 // look like it sticks up; hovering presses it flat against the paper. Same
 // contract as uiButton so the two are interchangeable.
 function inkButton(ctx, r, label, enabled, hover, t = 0) {
-  const dy = (enabled && hover) ? 1 : 0;
-  if (enabled && !hover) {            // the shading under a raised edge
-    ctx.globalAlpha = 0.5;
-    ctx.strokeStyle = '#8a6440';
-    ctx.lineWidth = PIX;
-    ctx.beginPath();
-    for (let i = 0; i < r.w; i += 3) inkLine(ctx, r.x + i, r.y + r.h, r.x + i + 2.5, r.y + r.h + 2.5, 0.5);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    ctx.lineWidth = 1;
+  const S = APIX;
+  const snap = (v) => Math.round(v / S) * S;
+  const x = snap(r.x), y = snap(r.y + (enabled && hover ? S * 2 : 0));
+  const w = snap(r.w), h = snap(r.h);
+
+  if (enabled && !hover) {                     // it stands off the page
+    ctx.fillStyle = UIPAL.sh;
+    ctx.fillRect(x + S * 2, y + h, w - S * 2, S * 2);
+    ctx.fillRect(x + w, y + S * 2, S * 2, h - S * 2);
   }
-  inkBox(ctx, r.x, r.y + dy, r.w, r.h,
-    enabled ? (hover ? '#ffd06a' : '#ffcf7e') : 'rgba(220,208,182,0.55)',
-    enabled ? '#7a4a12' : 'rgba(140,124,96,0.6)', PIX * 3);
-  if (enabled) {                      // a slow shine, so it reads as live
-    const sx = r.x + ((t * 34) % (r.w + 26)) - 13;
+  // a THREE-STEP ramp, the same one the trophy is painted with: light along the
+  // sun side, mid for the body, dark along the shadow side. No gradient.
+  ctx.fillStyle = enabled ? (hover ? UIPAL.l : UIPAL.m) : '#b8ab92';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = enabled ? UIPAL.l : '#cfc3ab';
+  ctx.fillRect(x, y, w, S * 2);
+  ctx.fillRect(x, y, S * 2, h);
+  ctx.fillStyle = enabled ? UIPAL.d : '#8f8574';
+  ctx.fillRect(x, y + h - S * 2, w, S * 2);
+  ctx.fillRect(x + w - S * 2, y, S * 2, h);
+  if (enabled) {
     ctx.save();
-    ctx.beginPath(); ctx.rect(r.x, r.y + dy, r.w, r.h); ctx.clip();
-    ctx.fillStyle = 'rgba(255,255,255,0.30)';
-    ctx.fillRect(sx, r.y + dy, 5, r.h);
+    ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    pixDither(ctx, x, y, w, h, UIPAL.l, 4);    // a little sparkle in the metal
     ctx.restore();
   }
-  textFit(ctx, label, r.x + r.w / 2, r.y + dy + r.h / 2 - 4, r.w - 10, {
+  pixEdge(ctx, x, y, w, h, UIPAL.out, 1);
+
+  textFit(ctx, label, x + w / 2, y + h / 2 - 4, w - 10, {
     size: 7.5, align: 'center', shadow: false,
-    color: enabled ? '#5a3210' : '#9a8d7c',
+    color: enabled ? UIPAL.out : '#7b7060',
   });
 }
 
