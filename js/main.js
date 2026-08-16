@@ -125,7 +125,7 @@ const TouchUI = {
       // 454..474 at y 24..42, so its bottom two rows sat inside the bag button
       // and a thumb aimed at the bag opened the field guide instead. It goes to
       // the LEFT of the rail, on the rail's own line, clear of all three.
-      b.push({ x: W - 108, y: 42, w: 20, h: 18, tap: 'KeyH', icon: 'help' });
+      // (no help pad: the field guide is gone -- it was never asked for)
     } else if (sc === DiveScene) {
       b.push({ x: W - 46, y: H - 122, w: 40, h: 40, key: 'KeyW', icon: 'up' });
       b.push({ x: W - 46, y: H - 76, w: 40, h: 40, key: 'KeyS', icon: 'down' });
@@ -1091,7 +1091,7 @@ function frame(now) {
   if (G && Game.scene !== TitleScene && typeof Cine !== 'undefined') Cine.draw(ctx);
   TouchUI.draw(ctx);
   Game.drawToasts(ctx);
-  if (Game.helpOpen) Game.drawHelp(ctx);
+  // (the field guide is gone)
   if (Game.fade > 0) {
     ctx.fillStyle = `rgba(0,0,0,${clamp(Game.fade, 0, 1)})`;
     ctx.fillRect(0, 0, W, H);

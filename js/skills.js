@@ -245,7 +245,7 @@ const Skills = {
   // drift from the thing it is drawn under.
   WX: 40, WY: 24, WW: 400, WH: 222,
   TX: 46, TY: 92, TW: 200, TH: 142,     // the tree canvas (lower: the header grew a rule and a subtitle)
-  IX: 258, IW: 174,                     // the info column
+  IX: 262, IW: 170,                     // the info column
   NS: 24,                               // node box, logical units
   ROW: 36,                              // tier spacing
   // Courier is monospace at 0.6em advance, so wrapping by character count is
@@ -294,6 +294,7 @@ const Skills = {
         nd.profIdx = p;
         t = nd.tier < 0 ? 0 : (nd.tier > 3 ? 3 : nd.tier);
         nd.tier = t;
+        nd.prof = prof;                   // the hive draws all five at once
         nd.col = tiers[prof][t].length;   // position inside the row
         tiers[prof][t].push(nd);
         flat.push(nd);
@@ -650,6 +651,16 @@ const Skills = {
     r.pts -= nd.cost;
     r.nodes[key] = true;
     this._recache();
+    // THE HIVE OPENS. The cell you just bought pops, and so does every cell this
+    // purchase has now made visible -- which is the whole point of the layout:
+    // spending somewhere makes its neighbours appear, with a beat you can see.
+    if (!this._revT) this._revT = {};
+    this._revT[key] = this.REV_T;
+    for (var rv = 0; rv < this._flat.length; rv++) {
+      var n2 = this._flat[rv];
+      if (this.has(n2.key) || !n2.req || n2.req.indexOf(key) < 0) continue;
+      if (this.shown(n2)) this._revT[n2.key] = this.REV_T * 1.4;
+    }
     this._applyHearts();
 
     this._say('learned ' + nd.name);
@@ -699,7 +710,19 @@ const Skills = {
 
   // --------------------------------------------------------------- geometry ----
   prof: function () { return this.PROFS[this.tab]; },
-  list: function () { return this.TREES[this.prof()]; },
+  // With one screen and no tabs, `tab` is not a page any more -- it is simply
+  // which trade the header and the xp bar are reporting on, and it follows
+  // whatever cell is selected.
+  _syncTab: function () {
+    var nd = this._flat && this._flat[this.sel];
+    if (!nd) return;
+    var i = this.PROFS.indexOf(nd.prof);
+    if (i >= 0) this.tab = i;
+  },
+  // THE WHOLE HIVE. There are no tabs any more -- every trade is on the one
+  // screen -- so the selection, the hit test and the draw all walk one list.
+  list: function () { return this._flat || []; },
+  listOf: function (prof) { return this.TREES[prof]; },
 
   _closeRect: function () { return { x: this.WX + this.WW - 26, y: this.WY + 3, w: 22, h: 18 }; },
 
@@ -711,11 +734,67 @@ const Skills = {
 
   // A node's box. Rows are tiers; a row of k nodes is spread evenly across TW so
   // the branches read as branches without a hand-authored x per node.
+  // ---- THE HIVE ---------------------------------------------------------------
+  //
+  // ONE SCREEN, five trades, no tabs. The five professions radiate from a hub in
+  // the middle at 72 degrees apart; each one runs outward in four TIERS of two,
+  // and every cell is a flat-top hexagon packed at the pitch its neighbours sit
+  // on, so the whole thing reads as a honeycomb rather than five separate lists
+  // you have to page between.
+  //
+  //   HR      hex radius, centre to corner
+  //   RING    distance between tiers, = sqrt(3) * HR so tiers touch
+  //   SIDE    the sideways offset of the two nodes in a tier, = 0.87 * HR
+  //
+  // Angles start at -90 (straight up) so CLAM is at the top and the rest go
+  // clockwise, which is the order the tab strip used to read in.
+  HR: 12,
+  hubXY: function () { return { x: this.WX + this.WW * 0.29, y: this.WY + this.WH * 0.62 }; },
+  profAngle: function (pi) { return -Math.PI / 2 + pi * TAU / 5; },
+
+  // Where a node sits, in screen units. Everything else -- the hit test, the
+  // links, the reveal animation -- reads this one function.
+  hexAt: function (nd) {
+    var pi = this.PROFS.indexOf(nd.prof);
+    if (pi < 0) pi = 0;
+    var a = this.profAngle(pi);
+    var ring = this.HR * 1.95;          // a hair more than sqrt(3): the cells touch, they do not bite
+    var side = this.HR * 0.87;
+    var r = ring * (nd.tier + 1);
+    var off = ((nd.col || 0) - ((nd.wide || 1) - 1) / 2) * side * 2;
+    var hub = this.hubXY();
+    return {
+      x: hub.x + Math.cos(a) * r - Math.sin(a) * off,
+      y: hub.y + Math.sin(a) * r + Math.cos(a) * off,
+    };
+  },
+
   _nodeRect: function (nd) {
-    var s = this.NS;
-    var cx = this.TX + this.TW * (nd.col + 1) / (nd.wide + 1);
-    var cy = this.TY + 20 + nd.tier * this.ROW;
-    return { x: cx - s / 2, y: cy - s / 2, w: s, h: s };
+    var c = this.hexAt(nd), s = this.HR * 1.7;
+    return { x: c.x - s / 2, y: c.y - s / 2, w: s, h: s };
+  },
+
+  // One hexagon, flat-topped, on the pixel grid. `k` scales it for the reveal pop.
+  _hexPath: function (c, cx, cy, r) {
+    c.beginPath();
+    for (var i = 0; i < 6; i++) {
+      var a = i * Math.PI / 3;
+      var x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+    }
+    c.closePath();
+  },
+
+  // A node is SHOWN once it is learned or every one of its requirements is --
+  // so the hive opens outward as you spend, and an unlock makes its neighbours
+  // appear. _revT holds the per-key pop timer that animation rides on.
+  REV_T: 0.5,
+  _revT: null,
+  shown: function (nd) {
+    if (this.has(nd.key)) return true;
+    if (!nd.req || !nd.req.length) return true;
+    for (var i = 0; i < nd.req.length; i++) if (!this.has(nd.req[i])) return false;
+    return true;
   },
 
   _in: function (r, x, y) { return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; },
@@ -845,20 +924,49 @@ const Skills = {
 
     if (Input.p('Escape') || Input.p('KeyK')) { this.close(); return; }
 
-    for (i = 0; i < 5; i++) if (Input.p('Digit' + (i + 1))) { this.setTab(i); return; }
+    // digits jump the SELECTION to that trade's first cell -- there are no tabs
+    // to switch any more, the whole hive is on screen
+    for (i = 0; i < 5; i++) {
+      if (!Input.p('Digit' + (i + 1))) continue;
+      var f0 = this._flat;
+      for (var z = 0; z < f0.length; z++) {
+        if (f0[z].prof !== this.PROFS[i] || f0[z].tier !== 0) continue;
+        this.sel = z; this.tab = i; break;
+      }
+      return;
+    }
+    if (this._revT) for (var rk in this._revT) if (this._revT[rk] > 0) this._revT[rk] -= dt;
 
-    if (Input.p('ArrowLeft')) this._move(-1, 0);
-    else if (Input.p('ArrowRight')) this._move(1, 0);
-    else if (Input.p('ArrowUp')) this._move(0, -1);
-    else if (Input.p('ArrowDown')) this._move(0, 1);
+    var mvx = 0, mvy = 0;
+    if (Input.p('ArrowLeft')) mvx = -1;
+    else if (Input.p('ArrowRight')) mvx = 1;
+    else if (Input.p('ArrowUp')) mvy = -1;
+    else if (Input.p('ArrowDown')) mvy = 1;
+    if (mvx || mvy) {
+      // NEAREST CELL IN THAT DIRECTION. A hive has no rows and columns to step
+      // through, so the arrows pick the closest cell whose bearing is within
+      // sixty degrees of the way you pressed.
+      var here = this._flat[this.sel];
+      if (here) {
+        var hp = this.hexAt(here), best = -1, bd = 1e9;
+        for (var q2 = 0; q2 < this._flat.length; q2++) {
+          if (q2 === this.sel) continue;
+          var np = this.hexAt(this._flat[q2]);
+          var dx = np.x - hp.x, dy = np.y - hp.y;
+          var len = Math.sqrt(dx * dx + dy * dy) || 1;
+          if ((dx / len) * mvx + (dy / len) * mvy < 0.5) continue;   // wrong way
+          if (len < bd) { bd = len; best = q2; }
+        }
+        if (best >= 0) { this.sel = best; this._syncTab(); this._snd('blip'); }
+      }
+      return;
+    }
 
     if (Input.wheelDelta) {
-      // the wheel walks tabs: there is nothing to scroll, the tree always fits
-      var d = Input.wheelDelta > 0 ? 1 : -1;
-      var t = this.tab + d;
-      if (t < 0) t = 4;
-      if (t > 4) t = 0;
-      this.setTab(t);
+      // the wheel walks the SELECTION now; the hive always fits, nothing scrolls
+      var wl = this._flat.length;
+      this.sel = (this.sel + (Input.wheelDelta > 0 ? 1 : wl - 1)) % wl;
+      this._syncTab();
     }
 
     if (Input.p('Enter')) {
@@ -878,7 +986,7 @@ const Skills = {
       for (i = 0; i < 5; i++) {
         if (this._in(this._tabRect(i), m.x, m.y)) { this.setTab(i); return; }
       }
-      if (idx >= 0) { this.sel = idx; this.buy(this.list()[idx].key); return; }
+      if (idx >= 0) { this.sel = idx; this._syncTab(); this.buy(this.list()[idx].key); return; }
       // a click outside the window closes, the way Craft and Farm's picker do
       if (m.x < this.WX || m.x > this.WX + this.WW || m.y < this.WY || m.y > this.WY + this.WH) {
         this.close();
@@ -919,7 +1027,9 @@ const Skills = {
     var mo = !TouchUI.enabled && this._in(cr, Input.mouse.x, Input.mouse.y);
     uiClose(c, cr, mo, false);
 
-    this._drawTabs(c);
+    // (NO TAB STRIP. The hive is one screen -- all five trades at once -- so
+    // there is nothing to page between. The header reports whichever trade the
+    // selected cell belongs to.)
     this._drawBar(c, r, acc);
     this._drawTree(c, prof);
     this._drawInfo(c, prof, r);
@@ -980,97 +1090,107 @@ const Skills = {
     // (the unspent-point count is on its own plate in the header now; it was
     // printed twice, once there and once here, three lines apart)
     if (pts > 0) {
-      text(c, 'a node with a lit ring is one you can afford',
-        x + w, by + 7, { size: 6, color: '#8a7a5a', align: 'right', shadow: false });
+      text(c, 'a lit ring is one you can afford',
+        x, by + 16, { size: 6, color: '#8a7a5a', shadow: false });
     }
   },
 
   _drawTree: function (c, prof) {
-    var list = this.TREES[prof], i, j, nd, pr, a, b;
+    var list = this._flat, i, nd, pr, j;
+    var hub = this.hubXY();
+    var t = this.time;
 
-    // ---- links first, so nodes sit on top of them. Two passes so the lit links
-    // never hide behind a dim one, and each pass sets its colour exactly once.
+    // ---- the links, first, so cells sit on top of them. A link is lit when the
+    // node it feeds is learned, so a spent branch glows all the way to the hub.
     c.lineWidth = PIX * 2;
     for (j = 0; j < 2; j++) {
-      c.strokeStyle = j ? 'rgba(232,169,60,0.9)' : 'rgba(122,74,48,0.85)';
+      c.strokeStyle = j ? 'rgba(255,240,200,0.55)' : 'rgba(120,96,64,0.30)';
       c.beginPath();
       for (i = 0; i < list.length; i++) {
         nd = list[i];
-        a = this._nodeRect(nd);
+        if (!this.shown(nd)) continue;
+        var a = this.hexAt(nd);
+        if (!nd.req || !nd.req.length) {                 // tier 0 links to the hub
+          if ((this.has(nd.key) ? 1 : 0) !== j) continue;
+          c.moveTo(hub.x, hub.y); c.lineTo(a.x, a.y);
+          continue;
+        }
         for (var q = 0; q < nd.req.length; q++) {
           pr = this.node(nd.req[q]);
           if (!pr) continue;
-          var live = this._own[nd.key] && this._own[pr.key] ? 1 : 0;
-          if (live !== j) continue;
-          b = this._nodeRect(pr);
-          c.moveTo(b.x + b.w / 2, b.y + b.h);
-          c.lineTo(a.x + a.w / 2, a.y);
+          if ((this.has(nd.key) ? 1 : 0) !== j) continue;
+          var b = this.hexAt(pr);
+          c.moveTo(b.x, b.y); c.lineTo(a.x, a.y);
         }
       }
       c.stroke();
     }
+    c.lineWidth = 1;
 
-    var selKey = list[this.sel] ? list[this.sel].key : '';
-    for (i = 0; i < list.length; i++) this._drawNode(c, list[i], list[i].key === selKey);
-  },
-
-  _drawNode: function (c, nd, isSel) {
-    var r = this._nodeRect(nd);
-    var st = this.state(nd.key);
-    var fill, edge, alpha;
-
-    if (st === 'owned') { fill = 'rgba(122,74,48,0.96)'; edge = '#e8a93c'; alpha = 1; }
-    else if (st === 'ready') { fill = 'rgba(109,69,38,0.9)'; edge = '#ffe66e'; alpha = 0.95; }
-    else if (st === 'broke') { fill = 'rgba(90,58,30,0.9)'; edge = '#a4805a'; alpha = 0.55; }
-    else { fill = 'rgba(50,35,23,0.92)'; edge = '#7a5232'; alpha = 0.3; }
-
-    rrect(c, r.x, r.y, r.w, r.h, fill, edge);
-
-    // a keystone gets a cyan corner pip so it reads as different at a glance
-    if (nd.star) {
-      c.fillStyle = '#5ad2f0';
-      c.globalAlpha = st === 'locked' ? 0.45 : 1;
-      c.fillRect(r.x + r.w - 4.5, r.y + 1.5, 3, 3);
-      c.globalAlpha = 1;
+    // ---- the hub: Otto in the middle, with a ring per trade around the rim in
+    // that trade's colour, filled by how much of it is learned
+    this._hexPath(c, hub.x, hub.y, this.HR * 1.15);
+    c.fillStyle = '#f2dfae'; c.fill();
+    c.strokeStyle = '#8a6a44'; c.lineWidth = PIX * 3; c.stroke(); c.lineWidth = 1;
+    for (i = 0; i < 5; i++) {
+      var frac = this.owned(this.PROFS[i]) / Math.max(1, this.listOf(this.PROFS[i]).length);
+      var a0 = this.profAngle(i) - 0.55, a1 = a0 + 1.1 * frac;
+      if (frac <= 0) continue;
+      c.strokeStyle = this.ACC[i]; c.lineWidth = PIX * 4;
+      c.beginPath(); c.arc(hub.x, hub.y, this.HR * 1.42, a0, a1); c.stroke();
+    }
+    c.lineWidth = 1;
+    var oimg = ASSETS.o4_0;
+    if (oimg && oimg.width) {
+      var ow = this.HR * 1.5, oh = ow * oimg.height / oimg.width;
+      c.drawImage(oimg, hub.x - ow / 2, hub.y - oh / 2 + 1, ow, oh);
     }
 
-    // icon: snapped to the device grid so the pixel art stays crisp
-    var cx = Math.round((r.x + r.w / 2) * DPX) / DPX;
-    var cy = r.y + r.h / 2;
-    var box = 15;
-    c.globalAlpha = alpha;
-    var img = typeof ASSETS !== 'undefined' ? ASSETS[nd.art] : null;
-    if (img && img.width) {
-      var w = img.width >= img.height ? box : box * img.width / img.height;
-      var h = img.width >= img.height ? box * img.height / img.width : box;
-      drawAC(c, nd.art, cx, cy, w, h);
-    } else {
-      // missing art is silent in drawA, so ship a glyph. One fillStyle each.
-      c.fillStyle = this.ACC[nd.profIdx];
-      c.beginPath();
-      c.moveTo(cx, cy - 6); c.lineTo(cx + 6, cy); c.lineTo(cx, cy + 6); c.lineTo(cx - 6, cy);
-      c.closePath();
+    // ---- the cells
+    var selNd = list[this.sel], selKey = selNd && selNd.key;
+    for (i = 0; i < list.length; i++) {
+      nd = list[i];
+      var show = this.shown(nd);
+      var pos = this.hexAt(nd);
+      var pi = this.PROFS.indexOf(nd.prof);
+      var acc = this.ACC[pi < 0 ? 0 : pi];
+      var owned = this.has(nd.key);
+      var can = !owned && show && this.points(nd.prof) >= nd.cost;
+
+      if (!show) {                                        // a rumour of a cell
+        c.globalAlpha = 0.16;
+        this._hexPath(c, pos.x, pos.y, this.HR * 0.9);
+        c.strokeStyle = '#8a6a44'; c.lineWidth = PIX * 2; c.stroke(); c.lineWidth = 1;
+        c.globalAlpha = 1;
+        continue;
+      }
+
+      // the reveal pop: set in buy(), eased out here
+      var rv = this._revT && this._revT[nd.key] > 0 ? this._revT[nd.key] : 0;
+      var k = rv > 0 ? 1 + Math.sin(rv / this.REV_T * Math.PI) * 0.35 : 1;
+
+      this._hexPath(c, pos.x, pos.y, this.HR * k);
+      c.fillStyle = owned ? '#f2dfae' : (can ? '#e0cfa4' : '#c2ab84');
       c.fill();
-      c.fillStyle = 'rgba(0,0,0,0.35)';
-      c.fillRect(cx - 2, cy - 2, 4, 4);
-    }
-    c.globalAlpha = 1;
+      // a learnable cell gets its trade's colour as a lit rim that breathes
+      c.strokeStyle = owned ? acc : (can ? acc : 'rgba(122,90,56,0.55)');
+      c.lineWidth = owned ? PIX * 3 : (can ? PIX * 3 : PIX * 2);
+      if (can && !owned) c.globalAlpha = 0.65 + 0.35 * Math.sin(t * 4 + i);
+      c.stroke();
+      c.globalAlpha = 1; c.lineWidth = 1;
 
-    // cost pip, bottom-left, only while it still costs something
-    if (st !== 'owned') {
-      c.fillStyle = st === 'ready' ? '#ffe66e' : '#7a5232';
-      for (var i = 0; i < nd.cost; i++) c.fillRect(r.x + 2 + i * 3.5, r.y + r.h - 4, 2.5, 2.5);
-    } else {
-      c.fillStyle = '#e8a93c';
-      c.fillRect(r.x + 2, r.y + r.h - 4, r.w - 4, PIX * 2);
-    }
-
-    // selection / hover ring
-    var ring = isSel || this.hover === nd.key;
-    if (ring) {
-      c.strokeStyle = this.hover === nd.key ? '#ffe66e' : '#f6e8c9';
-      c.lineWidth = PIX * 2;
-      c.strokeRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4);
+      var img = ASSETS[nd.art];
+      if (img && img.width) {
+        var iw = this.HR * 1.15 * k, ih = iw * img.height / img.width;
+        if (ih > this.HR * 1.3 * k) { ih = this.HR * 1.3 * k; iw = ih * img.width / img.height; }
+        c.globalAlpha = owned ? 1 : 0.72;
+        c.drawImage(img, pos.x - iw / 2, pos.y - ih / 2, iw, ih);
+        c.globalAlpha = 1;
+      }
+      if (nd.key === selKey) {                             // the selection ring
+        this._hexPath(c, pos.x, pos.y, this.HR * k + 3);
+        c.strokeStyle = '#fff3cf'; c.lineWidth = PIX * 2; c.stroke(); c.lineWidth = 1;
+      }
     }
   },
 

@@ -192,9 +192,14 @@ function uiPanel(ctx, x, y, w, h, alpha = 0.92, light = false) {
     // These are the same anatomy with the contrast put back. Stained oak against
     // a dark page, a clear sun side and shadow side, knobs a full step LIGHTER
     // than the frame so they stand proud of it, and real brass in the pins.
-    fill: '#241a12', fill2: '#1a1109', out: '#0f0803',
-    wood: '#6b4526', lit: '#96663c', dim: '#38200f',
-    knob: '#8a5a30', knobLit: '#c08a52', pin: '#e9b455',
+    // LIGHTER. This was a very dark page (#241a12) in a dark frame, and every
+    // big menu in the game uses it -- the bag, the trades, the crafting board --
+    // so the whole interior of the game read as brown gloom. Warm driftwood and
+    // a sand-coloured page instead: still clearly the darker of the two panels,
+    // still high enough contrast for pale ink, but it is a lit room now.
+    fill: '#4a3a2c', fill2: '#3d2f23', out: '#1d1209',
+    wood: '#8a6440', lit: '#b98a5a', dim: '#54341c',
+    knob: '#a8764a', knobLit: '#d8a870', pin: '#ffd48a',
   };
 
   ctx.save();
