@@ -245,12 +245,18 @@ const Skills = {
   // drift from the thing it is drawn under.
   WX: 16, WY: 12, WW: 448, WH: 246,
   _openT: 0,
-  TX: 34, TY: 70, TW: 250, TH: 170,     // the hive's canvas
-  IX: 300, IW: 148,                     // the info column
+  // THE HIVE'S CANVAS, and the whole reason the geometry below is written down
+  // rather than guessed at. Four tiers radiating from a hub need
+  //   2 * (4 * RING + HR)  of room, and the five spokes at 72 degrees make the
+  // envelope 1.902r wide by 1.809r tall -- so HEIGHT is what binds, always. Get
+  // HR wrong by four units and the outer cells land off the page, which is
+  // exactly what "sprayed ghost hexagons over the paper" looks like.
+  TX: 22, TY: 42, TW: 274, TH: 198,     // the hive's canvas
+  IX: 302, IY: 42, IW: 154, IH: 190,    // the info column
   NS: 24,                               // node box, logical units
   ROW: 36,                              // tier spacing
   // Courier is monospace at 0.6em advance, so wrapping by character count is
-  // exact and needs no measuring: (IW - 12 padding) / (6px * 0.6) = 37.
+  // exact and needs no measuring: (IW - 16 padding) / (6px * 0.6) = 38.
   COLS: 37,
   FX_MAX: 24,
 
@@ -744,13 +750,19 @@ const Skills = {
   // you have to page between.
   //
   //   HR      hex radius, centre to corner
-  //   RING    distance between tiers, = sqrt(3) * HR so tiers touch
+  //   RING    distance between tiers. Cells in a hex grid are sqrt(3)*HR apart,
+  //           so anything under 1.732 * HR makes neighbouring tiers OVERLAP.
   //   SIDE    the sideways offset of the two nodes in a tier, = 0.87 * HR
+  //
+  // With TH = 198 of room and an envelope of 1.809 * (4 * RING) + 2 * HR, HR = 12
+  // at RING = 1.8 * HR fills the canvas and stays inside it. That pair is not
+  // taste, it is the largest cell the page has room for.
   //
   // Angles start at -90 (straight up) so CLAM is at the top and the rest go
   // clockwise, which is the order the tab strip used to read in.
-  HR: 16,
-  hubXY: function () { return { x: this.WX + this.WW * 0.30, y: this.WY + this.WH * 0.60 }; },
+  HR: 12,
+  RING: 1.8,
+  hubXY: function () { return { x: this.WX + 142, y: this.WY + 136 }; },
   profAngle: function (pi) { return -Math.PI / 2 + pi * TAU / 5; },
 
   // Where a node sits, in screen units. Everything else -- the hit test, the
@@ -759,7 +771,7 @@ const Skills = {
     var pi = this.PROFS.indexOf(nd.prof);
     if (pi < 0) pi = 0;
     var a = this.profAngle(pi);
-    var ring = this.HR * 1.95;          // a hair more than sqrt(3): the cells touch, they do not bite
+    var ring = this.HR * this.RING;     // a hair more than sqrt(3): the cells touch, they do not bite
     var side = this.HR * 0.87;
     var r = ring * (nd.tier + 1);
     var off = ((nd.col || 0) - ((nd.wide || 1) - 1) / 2) * side * 2;
@@ -771,19 +783,42 @@ const Skills = {
   },
 
   _nodeRect: function (nd) {
-    var c = this.hexAt(nd), s = this.HR * 1.7;
+    var c = this.hexAt(nd), s = this.HR * 1.8;
     return { x: c.x - s / 2, y: c.y - s / 2, w: s, h: s };
   },
 
-  // One hexagon, flat-topped, on the pixel grid. `k` scales it for the reveal pop.
-  _hexPath: function (c, cx, cy, r) {
+  // One hexagon. `wob` is how far the pen wanders off the true corner -- it is
+  // hashed from the CENTRE, so a given cell wobbles identically on every frame.
+  // A wobble reseeded per frame is a crawling outline, which reads as a bug.
+  _hexPath: function (c, cx, cy, r, wob) {
+    var w = wob || 0, i, a, rr, x, y, px = 0, py = 0;
     c.beginPath();
-    for (var i = 0; i < 6; i++) {
-      var a = i * Math.PI / 3;
-      var x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
-      if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+    for (i = 0; i <= 6; i++) {
+      a = (i % 6) * Math.PI / 3;
+      rr = r + (w ? inkN(cx + i * 13, cy - i * 7) * w : 0);
+      x = cx + Math.cos(a) * rr;
+      y = cy + Math.sin(a) * rr;
+      if (i === 0) { c.moveTo(x, y); } else if (w) { inkLine(c, px, py, x, y, w * 0.6); } else { c.lineTo(x, y); }
+      px = x; py = y;
     }
     c.closePath();
+  },
+
+  // Outline a hex the way a pen does: once firmly, once lightly and a shade off
+  // register. Two passes is the whole trick -- one clean stroke always reads as
+  // vector art no matter how much the corners wobble.
+  _hexInk: function (c, cx, cy, r, col, lw) {
+    this._hexPath(c, cx, cy, r, 0.9);
+    c.strokeStyle = col;
+    c.lineWidth = lw;
+    c.stroke();
+    var a = c.globalAlpha;
+    c.globalAlpha = a * 0.38;
+    this._hexPath(c, cx + 0.45, cy + 0.4, r, 1.3);
+    c.lineWidth = lw * 0.66;
+    c.stroke();
+    c.globalAlpha = a;
+    c.lineWidth = 1;
   },
 
   // A node is SHOWN once it is learned or every one of its requirements is --
@@ -986,9 +1021,9 @@ const Skills = {
       // most specific first, and return after the first hit so one click can
       // never fire two actions
       if (this._in(this._closeRect(), m.x, m.y)) { this.close(); return; }
-      for (i = 0; i < 5; i++) {
-        if (this._in(this._tabRect(i), m.x, m.y)) { this.setTab(i); return; }
-      }
+      // (NO TAB HIT TEST. The strip is not drawn any more, and an invisible row
+      // of rects across the top of the page silently ate clicks meant for the
+      // title band.)
       if (idx >= 0) { this.sel = idx; this._syncTab(); this.buy(this.list()[idx].key); return; }
       // a click outside the window closes, the way Craft and Farm's picker do
       if (m.x < this.WX || m.x > this.WX + this.WW || m.y < this.WY || m.y > this.WY + this.WH) {
@@ -1018,19 +1053,26 @@ const Skills = {
       { size: 7, color: '#a8895e', shadow: false });
     var total = this.points();
     if (total > 0) {
-      // an unspent point is the reason you opened this, so it gets a plate
+      // an unspent point is the reason you opened this, so it gets a drawn
+      // sticky note -- circled in pencil, the way you would mark it yourself
       var pt = total + (total > 1 ? ' points to spend' : ' point to spend');
-      var pw = textWidth(c, pt, 7) + 12;
-      uiPanel(c, this.WX + this.WW - 34 - pw, this.WY + 4, pw, 15, 0.96, true);
-      text(c, pt, this.WX + this.WW - 34 - pw / 2, this.WY + 7,
-        { size: 7, color: '#4a3020', align: 'center', shadow: false });
+      var pw = textWidth(c, pt, 7) + 16;
+      var px = this.WX + this.WW - 40 - pw, py = this.WY + 5;
+      c.globalAlpha = 0.85 + 0.15 * Math.sin(this.time * 3);
+      inkBox(c, px, py, pw, 16, '#ffe9a8', '#a8761a', PIX * 2);
+      c.globalAlpha = 1;
+      text(c, pt, px + pw / 2, py + 4.5,
+        { size: 7, color: '#6b4a22', align: 'center', shadow: false });
     }
-
 
     // ---- close: the frame in miniature, not a bare x
     var cr = this._closeRect();
     var mo = !TouchUI.enabled && this._in(cr, Input.mouse.x, Input.mouse.y);
-    uiClose(c, cr, mo, false);
+    inkClose(c, cr, mo);
+
+    // ---- the note pinned beside the comb, drawn once so the bar and the node
+    // detail share one card rather than sitting on two
+    inkBox(c, this.IX, this.IY, this.IW, this.IH, 'rgba(255,251,236,0.78)', 'rgba(146,116,76,0.65)', PIX * 2);
 
     // (NO TAB STRIP. The hive is one screen -- all five trades at once -- so
     // there is nothing to page between. The header reports whichever trade the
@@ -1040,10 +1082,10 @@ const Skills = {
     this._drawInfo(c, prof, r);
     this._drawFx(c);
 
+    text(c, TouchUI.enabled ? 'tap a cell to learn it  --  tap x to close'
+                            : '[1-5] jump  [arrows] move  [Enter] learn  [Esc] close',
+      this.WX + this.WW / 2, this.WY + this.WH - 15, { size: 6.5, color: '#8a7454', align: 'center', shadow: false });
     c.restore();
-    text(c, TouchUI.enabled ? 'tap a node to learn it  --  tap x to close'
-                            : '[1-5] tab  [arrows] move  [Enter] learn  [Esc] close',
-      this.WX + this.WW / 2, this.WY + this.WH - 16, { size: 6.5, color: '#8a7454', align: 'center', shadow: false });
   },
 
   _drawTabs: function (c) {
@@ -1069,87 +1111,132 @@ const Skills = {
     }
   },
 
-  // Three rows in the 24 units between the tabs (ending at WY+33) and the tree
-  // canvas (starting at TY): label at +34, bar at +44, caption at +51, whose
-  // 6-unit glyph box ends exactly one unit above TY.
+  // The head of the info column: which trade the selection belongs to, its
+  // level, and how far along the track is. It lives in the right column rather
+  // than across the top because the hive needs every unit of the page's HEIGHT
+  // and none of its right-hand width.
   _drawBar: function (c, r, acc) {
-    var x = this.WX + 34, y = this.WY + 40, w = 200;
+    var x = this.IX + 8, y = this.IY + 7, w = this.IW - 16;
     var need = this.need(r.lv);
     var capped = r.lv >= this.MAX_LV;
     var frac = capped ? 1 : (need > 0 ? r.xp / need : 0);
     if (frac < 0) frac = 0;
     if (frac > 1) frac = 1;
 
-    text(c, this.prof() + '  lv ' + r.lv, x, y, { size: 8, color: '#5a3a22', shadow: false });
-    var right = capped ? 'mastered' : (r.xp + ' / ' + need + ' xp');
-    text(c, right, x + w, y + 1, { size: 7, color: '#8a7454', align: 'right', shadow: false });
+    text(c, this.prof(), x, y, { size: 8, color: '#5a3a22', shadow: false });
+    text(c, 'lv ' + r.lv, x + w, y, { size: 8, color: '#7a5232', align: 'right', shadow: false });
 
-    // a bevelled trough with a lit fill, not a flat rectangle in a hairline box
-    var by = y + 10, bh = 6;
+    var by = y + 12, bh = 6;
     c.globalAlpha = capped ? 0.85 : 1;
     uiMeter(c, x, by, w, bh, frac, acc, true);
     c.globalAlpha = 1;
 
-    var pts = r.pts;
-    text(c, this.owned(this.prof()) + ' / ' + this.list().length + ' learned',
+    text(c, capped ? 'mastered' : (r.xp + ' / ' + need + ' xp'),
       x, by + 9, { size: 6.5, color: '#8a7454', shadow: false });
-    // (the unspent-point count is on its own plate in the header now; it was
-    // printed twice, once there and once here, three lines apart)
-    if (pts > 0) {
-      text(c, 'a lit ring is one you can afford',
-        x + 100, by + 9, { size: 6.5, color: '#3f7a4e', shadow: false });
-    }
+    text(c, this.owned(this.prof()) + ' / ' + this.listOf(this.prof()).length + ' learned',
+      x + w, by + 9, { size: 6.5, color: '#8a7454', align: 'right', shadow: false });
   },
 
+  // THE HIVE, painted. Everything here is clipped to TX/TY/TW/TH: a cell that
+  // lands outside its canvas is a geometry bug, and clipping means it reads as
+  // one instead of quietly spraying hexagons across the page.
   _drawTree: function (c, prof) {
-    var list = this._flat, i, nd, pr, j;
+    var list = this._flat, i, nd, pr, j, q;
     var hub = this.hubXY();
     var t = this.time;
+    var HR = this.HR;
 
-    // ---- the links, first, so cells sit on top of them. A link is lit when the
-    // node it feeds is learned, so a spent branch glows all the way to the hub.
-    c.lineWidth = PIX * 2;
+    c.save();
+    c.beginPath();
+    c.rect(this.TX, this.TY, this.TW, this.TH);
+    c.clip();
+
+    // (NO WATERMARK HONEYCOMB. There was a decorative hex lattice drawn under
+    // all this, and because it could not line up with a RADIAL layout it just
+    // competed with the unopened cells at a second pitch. The unopened cells ARE
+    // the comb -- drawing them properly is what makes the shape legible.)
+
+    // ---- the links. Two passes: everything unspent as a dashed pencil line,
+    // everything learned as a firm bowed stroke. A learned branch therefore
+    // reads as inked-in all the way back to the hub.
     for (j = 0; j < 2; j++) {
-      c.strokeStyle = j ? 'rgba(255,240,200,0.55)' : 'rgba(120,96,64,0.30)';
+      if (j) {
+        c.setLineDash([]);
+        c.strokeStyle = 'rgba(120,88,52,0.85)';
+        c.lineWidth = PIX * 3;
+      } else {
+        c.setLineDash([2, 2.5]);
+        c.strokeStyle = 'rgba(140,116,84,0.42)';
+        c.lineWidth = PIX * 2;
+      }
       c.beginPath();
       for (i = 0; i < list.length; i++) {
         nd = list[i];
         if (!this.shown(nd)) continue;
+        if ((this.has(nd.key) ? 1 : 0) !== j) continue;
         var a = this.hexAt(nd);
-        if (!nd.req || !nd.req.length) {                 // tier 0 links to the hub
-          if ((this.has(nd.key) ? 1 : 0) !== j) continue;
-          c.moveTo(hub.x, hub.y); c.lineTo(a.x, a.y);
-          continue;
-        }
-        for (var q = 0; q < nd.req.length; q++) {
+        if (!nd.req || !nd.req.length) { inkLine(c, hub.x, hub.y, a.x, a.y, 1.6); continue; }
+        for (q = 0; q < nd.req.length; q++) {
           pr = this.node(nd.req[q]);
           if (!pr) continue;
-          if ((this.has(nd.key) ? 1 : 0) !== j) continue;
           var b = this.hexAt(pr);
-          c.moveTo(b.x, b.y); c.lineTo(a.x, a.y);
+          inkLine(c, b.x, b.y, a.x, a.y, 1.6);
         }
       }
       c.stroke();
     }
+    c.setLineDash([]);
     c.lineWidth = 1;
 
-    // ---- the hub: Otto in the middle, with a ring per trade around the rim in
-    // that trade's colour, filled by how much of it is learned
-    this._hexPath(c, hub.x, hub.y, this.HR * 1.15);
-    c.fillStyle = '#f2dfae'; c.fill();
-    c.strokeStyle = '#8a6a44'; c.lineWidth = PIX * 3; c.stroke(); c.lineWidth = 1;
+    // ---- beads running outward along the learned links: the branch is live.
+    // Brightness is a wave in distance-from-hub, so the whole comb pulses from
+    // the middle out rather than every link blinking on its own clock.
+    for (i = 0; i < list.length; i++) {
+      nd = list[i];
+      if (!this.has(nd.key)) continue;
+      var na = this.hexAt(nd);
+      var src = (nd.req && nd.req.length) ? this.node(nd.req[0]) : null;
+      var nb = src ? this.hexAt(src) : hub;
+      for (q = 1; q <= 3; q++) {
+        var u = q / 4;
+        var bx = nb.x + (na.x - nb.x) * u, by = nb.y + (na.y - nb.y) * u;
+        var d = Math.hypot(bx - hub.x, by - hub.y);
+        var w2 = Math.sin(t * 2.6 - d * 0.05);
+        if (w2 <= 0.2) continue;
+        c.globalAlpha = (w2 - 0.2) * 0.9;
+        c.fillStyle = '#fff0c0';
+        c.fillRect(bx - PIX, by - PIX, PIX * 2.5, PIX * 2.5);
+      }
+    }
+    c.globalAlpha = 1;
+
+    // ---- the hub: Otto in the middle, with an arc per trade around the rim in
+    // that trade's colour, filled by how much of it is learned.
+    c.globalAlpha = 0.5;
+    this._hexPath(c, hub.x + 0.8, hub.y + 1.4, HR * 1.2, 0.8);
+    c.fillStyle = 'rgba(120,92,58,0.45)'; c.fill();
+    c.globalAlpha = 1;
+    this._hexPath(c, hub.x, hub.y, HR * 1.2, 0.8);
+    c.fillStyle = '#f7ecc8'; c.fill();
+    this._hexInk(c, hub.x, hub.y, HR * 1.2, '#6e4d2c', PIX * 3);
     for (i = 0; i < 5; i++) {
-      var frac = this.owned(this.PROFS[i]) / Math.max(1, this.listOf(this.PROFS[i]).length);
-      var a0 = this.profAngle(i) - 0.55, a1 = a0 + 1.1 * frac;
-      if (frac <= 0) continue;
-      c.strokeStyle = this.ACC[i]; c.lineWidth = PIX * 4;
-      c.beginPath(); c.arc(hub.x, hub.y, this.HR * 1.42, a0, a1); c.stroke();
+      var tot = Math.max(1, this.listOf(this.PROFS[i]).length);
+      var frac = this.owned(this.PROFS[i]) / tot;
+      var a0 = this.profAngle(i) - 0.56;
+      c.strokeStyle = 'rgba(140,114,78,0.30)'; c.lineWidth = PIX * 4;
+      c.beginPath(); c.arc(hub.x, hub.y, HR * 1.5, a0, a0 + 1.12); c.stroke();
+      if (frac > 0) {
+        c.strokeStyle = this.ACC[i]; c.lineWidth = PIX * 4;
+        c.beginPath(); c.arc(hub.x, hub.y, HR * 1.5, a0, a0 + 1.12 * frac); c.stroke();
+      }
     }
     c.lineWidth = 1;
     var oimg = ASSETS.o4_0;
     if (oimg && oimg.width) {
-      var ow = this.HR * 1.5, oh = ow * oimg.height / oimg.width;
-      c.drawImage(oimg, hub.x - ow / 2, hub.y - oh / 2 + 1, ow, oh);
+      // a slow bob, quantised to the sprite's own texel so it cannot shimmer
+      var bob = Math.round(Math.sin(t * 1.7) * 1.2 / APIX) * APIX;
+      var ow = HR * 1.6, oh = ow * oimg.height / oimg.width;
+      c.drawImage(oimg, hub.x - ow / 2, hub.y - oh / 2 + 1 + bob, ow, oh);
     }
 
     // ---- the cells
@@ -1162,11 +1249,25 @@ const Skills = {
       var acc = this.ACC[pi < 0 ? 0 : pi];
       var owned = this.has(nd.key);
       var can = !owned && show && this.points(nd.prof) >= nd.cost;
+      var isSel = nd.key === selKey;
+      var isHov = this.hover === nd.key;
 
-      if (!show) {                                        // a rumour of a cell
-        c.globalAlpha = 0.16;
-        this._hexPath(c, pos.x, pos.y, this.HR * 0.9);
-        c.strokeStyle = '#8a6a44'; c.lineWidth = PIX * 2; c.stroke(); c.lineWidth = 1;
+      // A CELL THAT IS STILL CAPPED. These are most of the comb for most of the
+      // game, and they are what makes the hive read as a hive rather than as a
+      // handful of loose badges -- so they get drawn properly: a waxed-over cell
+      // with a pencilled outline and a dot where the icon will go.
+      if (!show) {
+        this._hexPath(c, pos.x, pos.y, HR * 0.92, 0.9);
+        c.fillStyle = 'rgba(214,198,166,0.34)';
+        c.fill();
+        c.globalAlpha = 0.5;
+        c.setLineDash([2, 2]);
+        this._hexPath(c, pos.x, pos.y, HR * 0.92, 0.9);
+        c.strokeStyle = '#8a6a44'; c.lineWidth = PIX * 2; c.stroke();
+        c.setLineDash([]);
+        c.lineWidth = 1;
+        c.fillStyle = '#8a6a44';
+        c.fillRect(pos.x - 1, pos.y - 1, 2, 2);
         c.globalAlpha = 1;
         continue;
       }
@@ -1174,88 +1275,175 @@ const Skills = {
       // the reveal pop: set in buy(), eased out here
       var rv = this._revT && this._revT[nd.key] > 0 ? this._revT[nd.key] : 0;
       var k = rv > 0 ? 1 + Math.sin(rv / this.REV_T * Math.PI) * 0.35 : 1;
+      if (isSel) k *= 1.06;
+      var lift = (isSel || isHov) ? 1 : 0;                // the cell picks up off the page
 
-      this._hexPath(c, pos.x, pos.y, this.HR * k);
-      c.fillStyle = owned ? '#f2dfae' : (can ? '#e0cfa4' : '#c2ab84');
+      // an affordable cell breathes a ring outward: "spend here"
+      if (can) {
+        var pu = (t * 0.85 + i * 0.11) % 1;
+        c.globalAlpha = (1 - pu) * 0.5;
+        this._hexPath(c, pos.x, pos.y - lift, HR * k * (1 + pu * 0.45), 0.7);
+        c.strokeStyle = acc; c.lineWidth = PIX * 2; c.stroke(); c.lineWidth = 1;
+        c.globalAlpha = 1;
+      }
+
+      // the shadow it casts on the paper
+      this._hexPath(c, pos.x + 0.7, pos.y + 1.3 + lift, HR * k, 0.8);
+      c.fillStyle = 'rgba(116,88,54,' + (lift ? 0.32 : 0.2) + ')';
       c.fill();
-      // a learnable cell gets its trade's colour as a lit rim that breathes
-      c.strokeStyle = owned ? acc : (can ? acc : 'rgba(122,90,56,0.55)');
-      c.lineWidth = owned ? PIX * 3 : (can ? PIX * 3 : PIX * 2);
-      if (can && !owned) c.globalAlpha = 0.65 + 0.35 * Math.sin(t * 4 + i);
-      c.stroke();
-      c.globalAlpha = 1; c.lineWidth = 1;
+
+      // the wax: paper, then a wash of the trade's colour once it is yours
+      this._hexPath(c, pos.x, pos.y - lift, HR * k, 0.9);
+      c.fillStyle = owned ? '#f6ead0' : (can ? '#efe1bd' : '#ded0ae');
+      c.fill();
+      if (owned) { c.globalAlpha = 0.26; c.fillStyle = acc; c.fill(); c.globalAlpha = 1; }
+      // a lit top-left facet, so the cell has a thickness
+      c.save();
+      c.clip();
+      c.fillStyle = 'rgba(255,255,255,0.30)';
+      c.fillRect(pos.x - HR, pos.y - lift - HR, HR * 2, HR * 0.55);
+      c.fillStyle = 'rgba(120,92,58,0.13)';
+      c.fillRect(pos.x - HR, pos.y - lift + HR * 0.42, HR * 2, HR * 0.6);
+      c.restore();
+
+      // the outline, gone over twice. Learnable rims breathe in their colour.
+      if (can) c.globalAlpha = 0.72 + 0.28 * Math.sin(t * 4 + i);
+      this._hexInk(c, pos.x, pos.y - lift, HR * k,
+        owned ? acc : (can ? acc : 'rgba(122,90,56,0.6)'),
+        (owned || can) ? PIX * 3 : PIX * 2);
+      c.globalAlpha = 1;
 
       var img = ASSETS[nd.art];
       if (img && img.width) {
-        var iw = this.HR * 1.15 * k, ih = iw * img.height / img.width;
-        if (ih > this.HR * 1.3 * k) { ih = this.HR * 1.3 * k; iw = ih * img.width / img.height; }
-        c.globalAlpha = owned ? 1 : 0.72;
-        c.drawImage(img, pos.x - iw / 2, pos.y - ih / 2, iw, ih);
+        var iw = HR * 1.2 * k, ih = iw * img.height / img.width;
+        if (ih > HR * 1.32 * k) { ih = HR * 1.32 * k; iw = ih * img.width / img.height; }
+        c.globalAlpha = owned ? 1 : 0.7;
+        c.drawImage(img, pos.x - iw / 2, pos.y - lift - ih / 2, iw, ih);
         c.globalAlpha = 1;
       }
-      if (nd.key === selKey) {                             // the selection ring
-        this._hexPath(c, pos.x, pos.y, this.HR * k + 3);
-        c.strokeStyle = '#fff3cf'; c.lineWidth = PIX * 2; c.stroke(); c.lineWidth = 1;
+
+      // a keystone wears a drawn star; a learned cell gets a pen tick
+      if (nd.star) this._star(c, pos.x + HR * 0.66, pos.y - lift - HR * 0.62, 3.1, owned ? acc : '#9a7a4e');
+      if (owned) {
+        c.strokeStyle = '#3f7a4e'; c.lineWidth = PIX * 2; c.lineCap = 'round';
+        c.beginPath();
+        c.moveTo(pos.x - HR * 0.62, pos.y - lift + HR * 0.44);
+        c.lineTo(pos.x - HR * 0.34, pos.y - lift + HR * 0.68);
+        c.lineTo(pos.x + HR * 0.16, pos.y - lift + HR * 0.16);
+        c.stroke();
+        c.lineCap = 'butt'; c.lineWidth = 1;
+      } else {
+        // the price, as pips along the bottom edge
+        for (q = 0; q < nd.cost; q++) {
+          var qx = pos.x + (q - (nd.cost - 1) / 2) * 3.4;
+          c.fillStyle = can ? '#c8922e' : 'rgba(122,90,56,0.5)';
+          c.fillRect(qx - 1, pos.y - lift + HR * 0.6, 2, 2);
+        }
+      }
+
+      if (isSel) {                                         // the selection ring
+        c.setLineDash([3, 2.5]);
+        c.lineDashOffset = -t * 9;
+        this._hexPath(c, pos.x, pos.y - lift, HR * k + 3.4, 0);
+        c.strokeStyle = '#8a5a24'; c.lineWidth = PIX * 2; c.stroke();
+        c.setLineDash([]);
+        c.lineDashOffset = 0;
+        c.lineWidth = 1;
       }
     }
+
+    c.restore();
   },
 
+  // A little drawn star, for the one node per trade worth planning around.
+  _star: function (c, x, y, r, col) {
+    var i, a, rr;
+    c.beginPath();
+    for (i = 0; i < 10; i++) {
+      a = -Math.PI / 2 + i * Math.PI / 5;
+      rr = (i & 1) ? r * 0.44 : r;
+      if (i === 0) c.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+      else c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    c.closePath();
+    c.fillStyle = col; c.fill();
+    c.strokeStyle = 'rgba(90,64,34,0.7)'; c.lineWidth = PIX; c.stroke(); c.lineWidth = 1;
+  },
+
+  // A note pinned beside the comb. INK ON CREAM -- every colour here used to be
+  // the light-on-dark palette the panel wore before it became a page, which is
+  // why it read as washed out: pale text on pale paper.
   _drawInfo: function (c, prof, rec) {
-    var x = this.IX, y = this.TY, w = this.IW, h = this.TH;
-    rrect(c, x - 4, y - 4, w, h, 'rgba(255,250,232,0.72)', 'rgba(150,120,80,0.45)');
+    var x = this.IX, y = this.IY + 48, w = this.IW, h = this.IH - 48;
 
     var key = this.hover || (this.list()[this.sel] ? this.list()[this.sel].key : '');
     var nd = this.node(key);
-    var tx = x + 6, ty = y + 6, cols = this.COLS, i, lines;
+    var tx = x + 8, ty = y + 8, cols = this.COLS, i, lines;
+
+    uiRule(c, x + 6, y - 8, w - 12, true);
 
     if (!nd) {
-      text(c, prof, tx, ty, { size: 7, color: '#ffe6b0' });
+      text(c, prof, tx, ty, { size: 7, color: '#5a3a22', shadow: false });
       lines = this._wrap(this.BLURB[this.tab], cols);
       for (i = 0; i < lines.length; i++)
-        text(c, lines[i], tx, ty + 12 + i * 8, { size: 6, color: '#d8ccb4' });
+        text(c, lines[i], tx, ty + 12 + i * 8, { size: 6, color: '#7a6244', shadow: false });
       return;
     }
 
     var st = this.state(key);
-    text(c, nd.name, tx, ty, { size: 7, color: nd.star ? '#5ad2f0' : '#ffe6b0' });
+    // the node's own icon, so the note and the cell you are looking at match
+    var img = ASSETS[nd.art];
+    var nx = tx;
+    if (img && img.width) {
+      var ih = 13, iw = ih * img.width / img.height;
+      if (iw > 14) { iw = 14; ih = iw * img.height / img.width; }
+      c.drawImage(img, tx, ty - 2, iw, ih);
+      nx = tx + 17;
+    }
+    text(c, nd.name, nx, ty, { size: 7, color: nd.star ? '#8a5a24' : '#4a3020', shadow: false });
 
     var tag = st === 'owned' ? 'learned'
       : st === 'locked' ? 'locked'
-      : nd.cost + (nd.cost > 1 ? ' points' : ' point');
-    var tagCol = st === 'owned' ? '#a0f2b4' : st === 'ready' ? '#ffe66e' : st === 'broke' ? '#e8a93c' : '#8a9484';
-    text(c, tag, x + w - 6, ty, { size: 6, color: tagCol, align: 'right' });
+      : nd.cost + (nd.cost > 1 ? ' pts' : ' pt');
+    var tagCol = st === 'owned' ? '#3f7a4e' : st === 'ready' ? '#a8761a' : st === 'broke' ? '#b2601c' : '#907c5c';
+    text(c, tag, x + w - 8, ty + 1, { size: 6, color: tagCol, align: 'right', shadow: false });
 
-    var ly = ty + 11;
+    var ly = ty + 14;
     if (nd.star) {
-      text(c, 'keystone', tx, ly, { size: 6, color: '#5ad2f0' });
-      ly += 8;
+      this._star(c, tx + 3, ly + 3, 3.2, '#e0a72c');
+      text(c, 'keystone', tx + 9, ly, { size: 6, color: '#8a5a24', shadow: false });
+      ly += 9;
     }
 
     lines = this._wrap(nd.desc, cols);
     for (i = 0; i < lines.length; i++) {
-      text(c, lines[i], tx, ly, { size: 6, color: '#d8ccb4' });
+      text(c, lines[i], tx, ly, { size: 6, color: '#6b573c', shadow: false });
       ly += 8;
     }
 
     // the numbers, spelled out, so nobody has to trust the prose
-    ly += 2;
+    ly += 3;
     var b = nd.buff, name;
     if (b) {
       for (name in b) {
         if (!Object.prototype.hasOwnProperty.call(b, name)) continue;
-        if (ly > y + h - 34) break;   // never encroach on the state line below
-        text(c, this._buffLine(name, b[name]), tx, ly, { size: 6, color: '#a4805a' });
-        ly += 7.5;
+        if (ly > y + h - 32) break;   // never encroach on the state line below
+        c.fillStyle = '#3f7a4e';
+        c.fillRect(tx, ly + 2.5, 2, 2);
+        text(c, this._buffLine(name, b[name]), tx + 6, ly, { size: 6, color: '#4e6f52', shadow: false });
+        ly += 8;
       }
     }
 
     if (st === 'locked') {
-      text(c, 'needs ' + this._reqNames(nd), tx, y + h - 24, { size: 6, color: '#e8434c' });
+      lines = this._wrap('needs ' + this._reqNames(nd), cols);
+      for (i = 0; i < lines.length && i < 2; i++)
+        text(c, lines[i], tx, y + h - 30 + i * 7.5, { size: 6, color: '#b23a34', shadow: false });
     } else if (st === 'broke') {
-      text(c, 'otto has ' + rec.pts + ' of ' + nd.cost, tx, y + h - 24, { size: 6, color: '#e8a93c' });
+      text(c, 'otto has ' + rec.pts + ' of ' + nd.cost, tx, y + h - 30, { size: 6, color: '#b2601c', shadow: false });
     } else if (st === 'ready') {
-      text(c, TouchUI.enabled ? 'tap the node to learn' : '[Enter] to learn',
-        tx, y + h - 24, { size: 6, color: '#a0f2b4' });
+      text(c, TouchUI.enabled ? 'tap the cell to learn' : '[Enter] to learn',
+        tx, y + h - 30, { size: 6, color: '#3f7a4e', shadow: false });
     }
 
     if (this._noteT > 0) {
@@ -1263,7 +1451,7 @@ const Skills = {
       lines = this._wrap(this._note, cols);
       // only the last two lines fit above the bottom edge
       for (i = 0; i < lines.length && i < 2; i++)
-        text(c, lines[i], tx, y + h - 16 + i * 7.5, { size: 6, color: '#ffe66e' });
+        text(c, lines[i], tx, y + h - 17 + i * 7.5, { size: 6, color: '#8a5a24', shadow: false });
       c.globalAlpha = 1;
     }
   },

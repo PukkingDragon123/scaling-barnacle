@@ -350,6 +350,82 @@ function uiPageOpen(ctx, k, cx, cy) {
   ctx.globalAlpha = e;
 }
 
+// ---- hand-drawn ink -------------------------------------------------------
+//
+// A pen wobbles. A rectangle drawn on a notebook page never has four straight
+// sides and never closes exactly where it started, and that is the entire
+// difference between "a UI box on top of a paper texture" and "somebody drew
+// this box". Everything below wobbles by a hash of the COORDINATE it is drawn
+// at, so the same box wobbles the same way on every frame -- a wobble reseeded
+// per frame is a crawling outline, which reads as broken rather than hand-made.
+//
+// inkN(a, b) -> -0.5..0.5. Two integers in, one stable fraction out.
+function inkN(a, b) {
+  let s = (Math.round(a) * 374761393 + Math.round(b) * 668265263) | 0;
+  s = Math.imul(s ^ (s >>> 13), 1274126177);
+  return (((s ^ (s >>> 16)) >>> 0) % 1024) / 1023 - 0.5;
+}
+
+// A pen stroke between two points: straight, but bowed by a hair and with the
+// bow fixed by the endpoints, so a link never wriggles.
+function inkLine(ctx, x0, y0, x1, y1, bow = 1) {
+  const dx = x1 - x0, dy = y1 - y0;
+  const len = Math.hypot(dx, dy) || 1;
+  const b = inkN(x0 + y1, x1 + y0) * bow * 2;
+  ctx.moveTo(x0, y0);
+  ctx.quadraticCurveTo((x0 + x1) / 2 - (dy / len) * b, (y0 + y1) / 2 + (dx / len) * b, x1, y1);
+}
+
+// A drawn box. Corners land a fraction off where they should, and the outline
+// overshoots at the start the way a pen does when you go round twice.
+function inkBoxPath(ctx, x, y, w, h, wob = 1.1) {
+  const p = [
+    [x + inkN(x, y) * wob, y + inkN(y, x) * wob],
+    [x + w + inkN(x + w, y) * wob, y + inkN(y, x + w) * wob],
+    [x + w + inkN(x + w, y + h) * wob, y + h + inkN(y + h, x + w) * wob],
+    [x + inkN(x, y + h) * wob, y + h + inkN(y + h, x) * wob],
+  ];
+  ctx.beginPath();
+  ctx.moveTo(p[0][0], p[0][1]);
+  for (let i = 1; i < 4; i++) inkLine(ctx, p[i - 1][0], p[i - 1][1], p[i][0], p[i][1], wob * 0.5);
+  inkLine(ctx, p[3][0], p[3][1], p[0][0], p[0][1], wob * 0.5);
+  ctx.closePath();
+}
+
+// The whole thing: a drawn box, filled and outlined, with the outline gone over
+// twice at slightly different weights so it reads as pencil rather than vector.
+function inkBox(ctx, x, y, w, h, fill, ink, lw = PIX * 2) {
+  inkBoxPath(ctx, x, y, w, h);
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (!ink) return;
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = lw;
+  ctx.stroke();
+  ctx.globalAlpha *= 0.4;          // the second pass, lighter and a touch off
+  inkBoxPath(ctx, x + 0.4, y + 0.35, w, h, 1.4);
+  ctx.lineWidth = lw * 0.7;
+  ctx.stroke();
+  ctx.globalAlpha /= 0.4;
+  ctx.lineWidth = 1;
+}
+
+// A close button for a paper page: a drawn box with a drawn cross in it, not a
+// wooden plaque. Same rect contract as uiClose so they are interchangeable.
+function inkClose(ctx, r, hover) {
+  inkBox(ctx, r.x, r.y, r.w, r.h, hover ? '#ffe0b8' : 'rgba(255,251,236,0.7)',
+    hover ? '#8a4a1a' : 'rgba(146,116,76,0.75)', PIX * 2);
+  const cx = r.x + r.w / 2, cy = r.y + r.h / 2, s = Math.min(r.w, r.h) * 0.26;
+  ctx.strokeStyle = hover ? '#8a4a1a' : '#6b4a22';
+  ctx.lineWidth = PIX * 2.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  inkLine(ctx, cx - s, cy - s, cx + s, cy + s, 0.7);
+  inkLine(ctx, cx + s, cy - s, cx - s, cy + s, 0.7);
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+  ctx.lineWidth = 1;
+}
+
 // ---- FX: one recycled pool of pixel particles ------------------------------
 //
 // Every system in this game that wanted a sparkle grew its own array, its own
