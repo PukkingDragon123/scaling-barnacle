@@ -76,7 +76,8 @@ const Stock = {
 
   // ---- window geometry (the pen board) -------------------------------------------
   // Inside the 40..440 x 22..248 box every other modal respects.
-  WX: 56, WY: 30, WW: 368, WH: 196,
+  WX: 16, WY: 12, WW: 448, WH: 228,
+  _openT: 0,
   ROW_H: 34,
 
   // ---- runtime state (never persisted) -------------------------------------------
@@ -561,6 +562,7 @@ const Stock = {
   // ---- per-frame -----------------------------------------------------------------
 
   update(dt) {
+    this._openT = Math.min(1, this._openT + (dt || 0) * 4.5);
     if (!this.ensure()) return;
     // The wiring layer ticks us from Game.globalUpdate and so does our own hook;
     // whichever runs first in a frame does the work and the other returns.
@@ -884,6 +886,7 @@ const Stock = {
     this.pen = clamp(p | 0, 0, pens - 1);
     this.sel = 0;
     this.open = true;
+    this._openT = 0;
     SND.blip();
     if (!G.flags.seenPen) {
       G.flags.seenPen = true;
@@ -894,14 +897,15 @@ const Stock = {
   close() { this.open = false; SND.click(); },
 
   // ---- board geometry: one source of truth for update AND draw -------------------
-  _closeRect() { return { x: this.WX + this.WW - 26, y: this.WY + 3, w: 22, h: 17 }; },
-  _tabRect(i) { return { x: this.WX + 8 + i * 54, y: this.WY + 22, w: 50, h: 14 }; },
-  _rowRect(i) { return { x: this.WX + 8, y: this.WY + 40 + i * this.ROW_H, w: this.WW - 16, h: this.ROW_H - 2 }; },
+  _closeRect() { return { x: this.WX + this.WW - 46, y: this.WY + 6, w: 22, h: 18 }; },
+  // +34, not +8: uiPage puts the punch holes at +11 and the red margin at +22.
+  _tabRect(i) { return { x: this.WX + 34 + i * 54, y: this.WY + 40, w: 50, h: 14 }; },
+  _rowRect(i) { return { x: this.WX + 34, y: this.WY + 62 + i * this.ROW_H, w: this.WW - 68, h: this.ROW_H - 2 }; },
   _collectRect(i) { const r = this._rowRect(i); return { x: r.x + r.w - 70, y: r.y + 3, w: 66, h: 12 }; },
   _feedRect(i) { const r = this._rowRect(i); return { x: r.x + r.w - 70, y: r.y + 17, w: 32, h: 12 }; },
   _petRect(i) { const r = this._rowRect(i); return { x: r.x + r.w - 36, y: r.y + 17, w: 32, h: 12 }; },
-  _feedAllRect() { return { x: this.WX + 8, y: this.WY + this.WH - 17, w: 58, h: 13 }; },
-  _collectAllRect() { return { x: this.WX + 70, y: this.WY + this.WH - 17, w: 74, h: 13 }; },
+  _feedAllRect() { return { x: this.WX + 34, y: this.WY + this.WH - 24, w: 58, h: 14 }; },
+  _collectAllRect() { return { x: this.WX + 96, y: this.WY + this.WH - 24, w: 74, h: 14 }; },
   _in(r, mx, my) { return mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h; },
 
   _tap() { if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} } },
@@ -981,29 +985,33 @@ const Stock = {
 
     c.fillStyle = 'rgba(6,14,18,0.70)';
     c.fillRect(0, 0, W, H);
-    uiPanel(c, X, Y, WWi, HHi, 0.95);
+    c.save();
+    uiPageOpen(c, clamp(this._openT, 0, 1), X + WWi / 2, Y + HHi / 2);
+    uiPage(c, X, Y, WWi, HHi, 1);
 
     // ---- title bar -----------------------------------------------------------
-    text(c, 'FISH PENS', X + 10, Y + 6, { size: 8, color: '#ffe6b0' });
-    text(c, `${berths.length}/${this.PEN_CAP} berths`, X + WWi - 34, Y + 7,
-      { size: 6, color: '#a89878', align: 'right' });
+    text(c, 'FISH PENS', X + 34, Y + 12, { size: 12, color: '#7a5232', shadow: false });
+    text(c, 'four berths, and everything in them', X + 34, Y + 25,
+      { size: 7, color: '#a8895e', shadow: false });
+    const bl = `${berths.length}/${this.PEN_CAP} berths`;
+    const blw = textWidth(c, bl, 7) + 16;
+    inkBox(c, X + WWi - 54 - blw, Y + 6, blw, 16, '#ffe9a8', '#a8761a', PIX * 2);
+    text(c, bl, X + WWi - 54 - blw / 2, Y + 10.5,
+      { size: 7, color: '#6b4a22', align: 'center', shadow: false });
     const cr = this._closeRect();
-    text(c, 'X', cr.x + cr.w / 2, cr.y + 4,
-      { size: 9, color: this._in(cr, mx, my) ? '#ffe66e' : '#c9a271', align: 'center' });
+    inkClose(c, cr, this._in(cr, mx, my));
 
     // ---- pen tabs (a single pen still gets its chip, so nothing shifts) ------
     for (let i = 0; i < pens; i++) {
       const r = this._tabRect(i);
       const sel = i === this.pen;
       const hov = this._in(r, mx, my);
-      rrect(c, r.x, r.y, r.w, r.h,
-        sel ? 'rgba(226,200,150,0.20)' : (hov ? 'rgba(226,200,150,0.10)' : 'rgba(226,200,150,0.05)'),
-        sel ? 'rgba(226,200,150,0.55)' : null);
+      inkBox(c, r.x, r.y, r.w, r.h,
+        sel ? '#ffe9a8' : (hov ? 'rgba(255,253,244,0.96)' : 'rgba(240,231,206,0.9)'),
+        sel ? '#a8761a' : 'rgba(146,116,76,0.55)', sel ? PIX * 3 : PIX * 2);
       text(c, `PEN ${i + 1}`, r.x + r.w / 2, r.y + 3.5,
-        { size: 6.5, color: sel ? '#ffe6b0' : '#a89878', align: 'center', shadow: false });
+        { size: 6.5, color: sel ? '#6b4a10' : '#7a6244', align: 'center', shadow: false });
     }
-    c.fillStyle = 'rgba(226,200,150,0.22)';
-    c.fillRect(X + 8, Y + 38, WWi - 16, PIX);
 
     // ---- berths --------------------------------------------------------------
     for (let i = 0; i < this.PEN_CAP; i++) {
@@ -1011,20 +1019,22 @@ const Stock = {
       const idx = berths[i];
       if (idx === undefined) { this._drawEmptyBerth(c, r); continue; }
       const a = this.get(idx);
-      if (this.sel === i || this._in(r, mx, my)) rrect(c, r.x, r.y, r.w, r.h, 'rgba(226,200,150,0.10)');
+      inkBox(c, r.x, r.y, r.w, r.h,
+        this.sel === i ? 'rgba(255,236,182,0.96)' : (this._in(r, mx, my) ? 'rgba(255,253,244,0.96)' : 'rgba(247,240,220,0.92)'),
+        this.sel === i ? '#a8761a' : 'rgba(146,116,76,0.45)', this.sel === i ? PIX * 3 : PIX * 2);
 
       // portrait: a fixed frame per state, so the list does not flicker
       const art = `stock_${a.species}_${a.product ? 7 : (this.adult(a) ? 4 : 1)}`;
-      rrect(c, r.x + 2, r.y + 3, 26, 26, 'rgba(12,28,36,0.55)', 'rgba(226,200,150,0.22)');
+      inkBox(c, r.x + 2, r.y + 3, 26, 26, 'rgba(255,251,236,0.85)', 'rgba(146,116,76,0.45)', PIX);
       const pw = Math.min(24, this._fitW(art, 22));
       drawAC(c, art, r.x + 15, r.y + 16, pw, assetH(art, pw));
 
       const sp = this.byKey(a.species);
-      text(c, a.name, r.x + 33, r.y + 3, { size: 7.5, color: '#f6e8c9' });
+      text(c, a.name, r.x + 33, r.y + 3, { size: 7.5, color: '#4a3020', shadow: false });
       text(c, `${sp.name}  •  ${this.adult(a) ? 'adult' : 'fry'}`,
-        r.x + 39 + textWidth(c, a.name, 7.5), r.y + 4, { size: 6, color: '#8a7a5a' });
+        r.x + 39 + textWidth(c, a.name, 7.5), r.y + 4, { size: 6, color: '#8a7454', shadow: false });
       text(c, this._status(a), r.x + 33, r.y + 12,
-        { size: 6, color: a.product ? '#a0f2b4' : (a.fed ? '#a89878' : '#e8a93c') });
+        { size: 6, shadow: false, color: a.product ? '#3f7a4e' : (a.fed ? '#8a7454' : '#b2601c') });
 
       // happiness as five hearts — the relationship, at a glance
       for (let h = 0; h < 5; h++) {
@@ -1033,7 +1043,7 @@ const Stock = {
         drawHeart(c, r.x + 33 + h * 8, r.y + 21, kind);
       }
       text(c, a.petted ? 'petted today' : 'wants a scratch', r.x + 78, r.y + 21.5,
-        { size: 6, color: a.petted ? '#8a9484' : '#c9a271' });
+        { size: 6, shadow: false, color: a.petted ? '#8a9484' : '#a8761a' });
 
       this._drawBtn(c, this._collectRect(i), a.product ? 'COLLECT' : 'NOTHING YET', !!a.product, mx, my, '#a0f2b4');
       this._drawBtn(c, this._feedRect(i), a.fed ? 'FED' : 'FEED', !a.fed, mx, my, '#bfe8f5');
@@ -1046,28 +1056,30 @@ const Stock = {
     this._drawBtn(c, this._feedAllRect(), 'FEED ALL', hungry > 0, mx, my, '#bfe8f5');
     this._drawBtn(c, this._collectAllRect(), 'COLLECT ALL', ready > 0, mx, my, '#a0f2b4');
     text(c, TouchUI.enabled ? 'tap a berth, then FEED / PET / COLLECT' : '[F] feed  [P] pet  [C] collect  [Esc] close',
-      X + 152, Y + HHi - 14, { size: 6, color: '#8a9484' });
-    text(c, `$${G.money}`, X + WWi - 10, Y + HHi - 14, { size: 6, color: '#ffe66e', align: 'right' });
+      X + 180, Y + HHi - 21, { size: 6.5, color: '#8a7454', shadow: false });
+    text(c, `$${G.money}`, X + WWi - 34, Y + HHi - 21, { size: 6.5, color: '#3f7a4e', align: 'right', shadow: false });
+    c.restore();
   },
 
   _drawEmptyBerth(c, r) {
-    c.strokeStyle = 'rgba(226,200,150,0.20)';
-    c.lineWidth = PIX;
-    c.setLineDash([2, 2]);
+    c.strokeStyle = 'rgba(146,116,76,0.5)';
+    c.lineWidth = PIX * 2;
+    c.setLineDash([2.5, 2.5]);
     c.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
     c.setLineDash([]);
-    text(c, 'empty berth', r.x + 10, r.y + 8, { size: 7, color: '#8a7a5a' });
-    text(c, "buy fry at Sprout's Stall", r.x + 10, r.y + 17, { size: 6, color: '#6a5c44' });
+    c.lineWidth = 1;
+    text(c, 'empty berth', r.x + 10, r.y + 8, { size: 7, color: '#8a7454', shadow: false });
+    text(c, "buy fry at Sprout's Stall", r.x + 10, r.y + 17, { size: 6, color: '#a08a68', shadow: false });
   },
 
   _drawBtn(c, r, label, active, mx, my, col) {
     const hov = active && this._in(r, mx, my);
-    rrect(c, r.x, r.y, r.w, r.h,
-      active ? (hov ? 'rgba(226,200,150,0.22)' : 'rgba(226,200,150,0.10)') : 'rgba(226,200,150,0.05)',
-      active ? col : 'rgba(226,200,150,0.20)');
+    inkBox(c, r.x, r.y, r.w, r.h,
+      active ? (hov ? '#ffd98a' : '#ffe9a8') : 'rgba(228,218,192,0.8)',
+      active ? '#8a5a24' : 'rgba(150,132,102,0.6)', active ? PIX * 2.5 : PIX * 2);
     text(c, label, r.x + r.w / 2, r.y + 3, {
       size: 6.5, align: 'center', shadow: false,
-      color: active ? col : 'rgba(226,200,150,0.30)',
+      color: active ? '#5a3210' : 'rgba(140,124,96,0.85)',
     });
   },
 
