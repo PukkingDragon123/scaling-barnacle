@@ -1079,7 +1079,7 @@ const Battle = {
     if (this.retreatT > 0 && this.mode === 'fight') {
       const msg = TouchUI.enabled ? 'tap the corner again to retreat' : 'press [Esc] again to retreat';
       const w = textWidth(ctx, msg, 7) + 14;
-      uiPanel(ctx, W / 2 - w / 2, 222, w, 13, 0.95, true);
+      uiNote(ctx, W / 2 - w / 2, 222, w, 13, {});
       text(ctx, msg, W / 2, 225, { size: 7, color: '#7a5232', align: 'center', shadow: false });
     }
 
@@ -1479,9 +1479,9 @@ const Battle = {
     const c = this.crab;
     // sits just under the HUD strip (y 6..36) so nothing overlaps
     const bx = 96, by = 40, bw = 288, bh = 9;
-    uiPanel(ctx, bx - 4, by - 12, bw + 8, bh + 16, 0.86);
-    text(ctx, 'CRAB PUNK', bx, by - 10, { size: 8, color: '#e8434c' });
-    text(ctx, `WAVE ${this.wave}`, bx + bw, by - 10, { size: 7, color: '#c9a271', align: 'right' });
+    uiNote(ctx, bx - 4, by - 12, bw + 8, bh + 16, {});
+    text(ctx, 'CRAB PUNK', bx, by - 10, { size: 8, color: '#b23a34', shadow: false });
+    text(ctx, `WAVE ${this.wave}`, bx + bw, by - 10, { size: 7, color: '#7a5232', align: 'right', shadow: false });
 
     rrect(ctx, bx, by, bw, bh, 'rgba(16,10,8,0.85)');
     const fShown = clamp(c.hpShown / c.hpMax, 0, 1);
@@ -1513,7 +1513,7 @@ const Battle = {
 
   _drawAmmo(ctx) {
     const n = this.ammo();
-    uiPanel(ctx, 6, 40, 74, 20, 0.88, true);
+    uiNote(ctx, 6, 40, 74, 20, { alpha: 0.88, });
     // an iron ball, drawn rather than borrowed: no asset in the manifest is one
     ctx.fillStyle = n > 0 ? '#2a2f33' : 'rgba(42,47,51,0.35)';
     ctx.beginPath(); ctx.arc(16, 50, 5, 0, TAU); ctx.fill();
@@ -1551,7 +1551,7 @@ const Battle = {
     const keys = this.loot.keys || [];
     const h = 46 + keys.length * 13;
     const w = 176, x = W / 2 - w / 2, y = 118;
-    uiPanel(ctx, x, y, w, h, 0.95, true);
+    uiNote(ctx, x, y, w, h, {});
     text(ctx, 'SPOILS OF THE DOCK', x + w / 2, y + 6, { size: 8, color: '#7a5232', align: 'center', shadow: false });
     drawAC(ctx, 'shell_pearl', x + 16, y + 24, 12);
     text(ctx, `+${this.loot.money} sand dollars`, x + 26, y + 20, { size: 8, color: '#4a3020', shadow: false });

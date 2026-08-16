@@ -98,7 +98,8 @@ const Tame = {
   // ---- the roster panel -------------------------------------------------------
   // Inside the 40..440 x 22..248 box every other panel respects, so it never
   // fights the HUD strip or the touch pads.
-  WX: 48, WY: 26, WW: 384, WH: 216,
+  WX: 16, WY: 12, WW: 448, WH: 228,
+  _openT: 0,
   ROW_Y: 60, ROW_H: 36, VIS: 4,
   BW: 44, BH: 13, BGAP: 3,
   REL_T: 2.4,              // press "free" twice inside this to actually do it
@@ -1741,6 +1742,7 @@ const Tame = {
   // dt, and Otto's centre in world units. js/integrate.js calls this from its
   // Ocean.update wrapper.
   update: function (dt, px, py) {
+    this._openT = Math.min(1, this._openT + (dt || 0) * 4.5);
     if (!this.ensure()) return;
     // A wiring layer and a self-installed hook may both tick us; Game.time
     // advances exactly once per frame, so the first call in a frame wins.
@@ -2305,8 +2307,8 @@ const Tame = {
         ? (canFeed ? 'tap to offer food' : 'tap to pet')
         : (canFeed ? '[T] offer food' : '[E] pet');
       var tw = textWidth(ctx, label, 7) + 10;
-      uiPanel(ctx, o.x - tw / 2, oy - 2, tw, 12, 0.86);
-      text(ctx, label, o.x, oy + 1, { size: 7, color: '#ffe6b0', align: 'center' });
+      uiNote(ctx, o.x - tw / 2, oy - 2, tw, 12, {});
+      text(ctx, label, o.x, oy + 1, { size: 7, color: '#4a3020', align: 'center', shadow: false });
     }
   },
 
@@ -2423,6 +2425,7 @@ const Tame = {
     if (typeof Skills !== 'undefined' && Skills.open) return;
     if (typeof Battle !== 'undefined' && Battle.active) return;
     this.open = true;
+    this._openT = 0;
     this.sel = clamp(this.sel, 0, Math.max(0, G.tame.pets.length - 1));
     this._clampScroll();
     this._relIdx = -1;
@@ -2582,9 +2585,11 @@ const Tame = {
     // one flat dim, never a gradient
     c.fillStyle = 'rgba(6,12,18,0.5)';
     c.fillRect(0, 0, W, H);
-    uiPanel(c, WX, WY, WW, WH, 0.94);
+    c.save();
+    uiPageOpen(c, clamp(this._openT, 0, 1), WX + WW / 2, WY + WH / 2);
+    uiPage(c, WX, WY, WW, WH, 1);
 
-    text(c, "the tide pool", WX + 10, WY + 5, { size: 9, color: '#ffe6b0' });
+    text(c, 'THE TIDE POOL', WX + 34, WY + 12, { size: 12, color: '#7a5232', shadow: false });
     var pets = G.tame.pets;
     var favs = this.favours();
     var sub = pets.length + '/' + this.MAX_PETS + ' companions';
@@ -2594,10 +2599,10 @@ const Tame = {
       for (var q = 0; q < favs.length; q++) names += (q ? ', ' : '') + this.FAVOURS[favs[q]].name;
       sub += '   favours: ' + names;
     }
-    text(c, sub, WX + 10, WY + 17, { size: 7, color: '#8a9484' });
+    text(c, sub, WX + 34, WY + 26, { size: 7, color: '#a8895e', shadow: false });
 
     var cr = this._closeRect();
-    text(c, 'x', cr.x + cr.w / 2, cr.y + 4, { size: 9, color: '#d8ccb4', align: 'center' });
+    inkClose(c, cr, this._in && this._in(cr, Input.mouse.x, Input.mouse.y));
 
     if (!pets.length) {
       text(c, 'nothing lives here yet.', WX + 20, this.ROW_Y + 14, { size: 8, color: '#d8ccb4' });
@@ -2625,9 +2630,10 @@ const Tame = {
     }
 
     if (this._noteT > 0 && this._note)
-      text(c, this._note, WX + 10, WY + WH - 30, { size: 7, color: '#f6e8c9' });
+      text(c, this._note, WX + 34, WY + WH - 30, { size: 7, color: '#8a5a24', shadow: false });
     text(c, this._touch() ? 'tap x to close' : '[Esc] or [T] close',
-      WX + WW - 10, WY + WH - 14, { size: 7, color: '#8a9484', align: 'right' });
+      WX + WW - 34, WY + WH - 16, { size: 7, color: '#8a7454', align: 'right', shadow: false });
+    c.restore();
   },
 
   _arrow: function (c, r, d, on) {

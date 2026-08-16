@@ -250,7 +250,7 @@ const Quests = {
     c.fillStyle = 'rgba(6,10,16,0.6)';
     c.fillRect(0, 0, W, H);
     const w = 380, h = 216, x = (W - w) / 2, y = (H - h) / 2;
-    uiPanel(c, x, y, w, h, 0.98, true);
+    uiNote(c, x, y, w, h, { tape: true, rules: true });
 
     // header: the star, the name, the count, and a real close box
     c.fillStyle = '#e8a93c';

@@ -523,7 +523,7 @@ const Game = {
   drawHUD(c) {
     // left: hearts + purse
     const pw = Math.max(G.maxHearts * 10 + 14, 62);
-    uiPanel(c, 6, 6, pw, 30, 0.9, true);
+    uiNote(c, 6, 6, pw, 30, { alpha: 0.9, });
     for (let i = 0; i < G.maxHearts; i++) {
       const kind = G.hearts >= i + 1 ? 'full' : (G.hearts >= i + 0.5 ? 'half' : 'empty');
       drawHeart(c, 11 + i * 10, 10, kind);
@@ -532,7 +532,7 @@ const Game = {
     text(c, `${G.money}`, 24, 22.5, { size: 9, color: '#6a4420', shadow: false });
 
     // right: day + time dial
-    uiPanel(c, W - 74, 6, 68, 20, 0.9, true);
+    uiNote(c, W - 74, 6, 68, 20, { alpha: 0.9, });
     text(c, `Day ${G.day}`, W - 12, 11, { size: 8, color: '#6a4420', align: 'right', shadow: false });
     const dx = W - 60, dy = 20, dr = 8;
     c.strokeStyle = 'rgba(122,74,48,0.4)'; c.lineWidth = 1;
@@ -575,7 +575,7 @@ const Game = {
         c.fillRect(tx - 2, ty - 2, tw + 4, th + 4);
         c.globalAlpha = 1;
       }
-      uiPanel(c, tx, ty, tw, th, 0.94, true);
+      uiNote(c, tx, ty, tw, th, { alpha: 0.94, });
       // the little star, then the chapter name, clipped to the panel
       c.save();
       c.beginPath(); c.rect(tx + 4, ty + 3, tw - 8, th - 6); c.clip();
@@ -620,7 +620,7 @@ const Game = {
           const sp = Side.prog(show);
           const ey = ty + th + 4;
           this._sideRect = { x: tx, y: ey, w: tw, h: 24 };
-          uiPanel(c, tx, ey, tw, 24, 0.94, true);
+          uiNote(c, tx, ey, tw, 24, { alpha: 0.94, });
           c.save();
           c.beginPath(); c.rect(tx + 4, ey + 3, tw - 8, 18); c.clip();
           c.fillStyle = ready ? '#3f9a58' : '#8a6a44';
@@ -919,7 +919,7 @@ const TitleScene = {
     c.translate(W / 2, sy);
     c.rotate(sway * 0.0035);
     c.translate(-W / 2, -sy);
-    uiPanel(c, sx, sy, sw, sh, 0.97, true);
+    uiNote(c, sx, sy, sw, sh, {});
     text(c, "MR. OTTO'S", W / 2, sy + 8, { size: 14, color: '#7a5232', align: 'center', shadow: false });
     text(c, 'CLAM FARM', W / 2, sy + 24, { size: 22, color: '#3f6d86', align: 'center', shadow: false });
     // a rule and the tagline, on the sign where a sign would carry it
@@ -934,7 +934,7 @@ const TitleScene = {
     const rows = this._rows();
     const bw = 168, bh = 24 + rows.length * 17;
     const bx2 = this._boardX(), by2 = this._rowY(0) - 12;
-    uiPanel(c, bx2, by2, bw, bh, 0.97, true);
+    uiNote(c, bx2, by2, bw, bh, {});
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       const y = this._rowY(i);

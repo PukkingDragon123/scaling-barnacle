@@ -1127,7 +1127,7 @@ const Craft = {
       const def = this.BUFFS[b.key];
       if (!def) continue;
       const w = 40;
-      uiPanel(ctx, x, y, w, 13, 0.86);
+      uiNote(ctx, x, y, w, 13, {});
       // a fat pip in the buff's colour, then the seconds left
       ctx.fillStyle = def.color;
       ctx.fillRect(x + 3, y + 4, 4, 5);

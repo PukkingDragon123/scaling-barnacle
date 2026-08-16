@@ -835,7 +835,7 @@ const DiveScene = {
       const p = this.pry;
       const bx = clamp(p.n.x, 60, W - 60);
       const by = p.n.y - this.camY - p.n.r - 18;
-      uiPanel(ctx, bx - 30, by - 2, 60, 12, 0.92);
+      uiNote(ctx, bx - 30, by - 2, 60, 12, {});
       // green window
       const halfW = 26;
       const winPx = p.win * halfW;
@@ -1022,7 +1022,7 @@ const DiveScene = {
     // depth chart along the right edge — where you are in the deep
     const gx = W - 13, gy0 = 46, gy1 = H - 50;
     const yFor = (d) => gy0 + (gy1 - gy0) * Math.sqrt(Math.min(1, d / 2400));
-    uiPanel(ctx, gx - 5, gy0 - 7, 17, gy1 - gy0 + 16, 0.6);
+    uiNote(ctx, gx - 5, gy0 - 7, 17, gy1 - gy0 + 16, { alpha: 0.9 });
     const zones = [[0, '#7ad2e8'], [300, '#3f9ab8'], [800, '#1f5c86'], [1600, '#0c2c48']];
     for (let i = 0; i < zones.length; i++) {
       const top = yFor(zones[i][0]);
@@ -1045,9 +1045,9 @@ const DiveScene = {
     const o2Frac = clamp(this.air / this.airMax, 0, 1);
     const low = this.air <= 12;
     const o2Pulse = low && Math.sin(this.time * 10) > 0;
-    uiPanel(ctx, 6, H - 28, 108, 15, 0.85);
+    uiNote(ctx, 6, H - 28, 108, 15, {});
     // bubble icon
-    ctx.strokeStyle = o2Pulse ? '#ff5a4a' : '#bfe8f5'; ctx.lineWidth = 1;
+    ctx.strokeStyle = o2Pulse ? '#b23a34' : '#2a6a8a'; ctx.lineWidth = PIX * 2;
     ctx.beginPath(); ctx.arc(15, H - 20.5, 3.5, 0, TAU); ctx.stroke();
     ctx.beginPath(); ctx.arc(18.5, H - 24, 1.4, 0, TAU); ctx.stroke();
     rrect(ctx, 24, H - 24.5, 84, 8, '#08141c', '#2c4654');
@@ -1062,7 +1062,7 @@ const DiveScene = {
     const cap = BAGS[G.gear.bag].cap;
     const bagFull = this.bagCount >= cap;
     const bp = this.bagPulse > 0 ? 1 + this.bagPulse * 1.2 : 1;
-    uiPanel(ctx, W - 74, H - 28, 68, 15, 0.85);
+    uiNote(ctx, W - 74, H - 28, 68, 15, {});
     ctx.save();
     ctx.translate(W - 63, H - 20);
     ctx.scale(bp, bp);
@@ -1077,10 +1077,10 @@ const DiveScene = {
     ctx.fillStyle = '#5a4526';
     ctx.fillRect(-4.5, -6.5, 9, 2);
     ctx.restore();
-    text(ctx, `${this.bagCount}/${cap}`, W - 52, H - 24, { size: 8, color: bagFull ? '#ff5a4a' : '#ffe6b0' });
+    text(ctx, `${this.bagCount}/${cap}`, W - 52, H - 24, { size: 8, shadow: false, color: bagFull ? '#b23a34' : '#4a3020' });
     // depth panel
-    uiPanel(ctx, W - 46, 26, 42, 13, 0.75);
-    text(ctx, `${Math.round((this.camY + H * 0.5) / 12)}m`, W - 9, 29, { size: 8, color: '#9fc4d4', align: 'right' });
+    uiNote(ctx, W - 46, 26, 42, 13, {});
+    text(ctx, `${Math.round((this.camY + H * 0.5) / 12)}m`, W - 9, 29, { size: 8, color: '#2a5068', align: 'right', shadow: false });
     ctx.fillStyle = '#5ad2f0';
     ctx.beginPath(); ctx.moveTo(W - 41, 30); ctx.lineTo(W - 38, 35.5); ctx.lineTo(W - 35, 30); ctx.closePath(); ctx.fill();
     // near the top: the surface itself shimmers into view + kick-up prompt

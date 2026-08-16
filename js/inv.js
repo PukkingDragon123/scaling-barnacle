@@ -2145,7 +2145,7 @@ const Inv = {
     if (this.jobReady(j)) {
       var pulse = 0.6 + 0.4 * Math.sin(this.time * 5);
       c.globalAlpha = pulse;
-      uiPanel(c, bx - 2, by - 4, 28, 10, 0.9, true);
+      uiNote(c, bx - 2, by - 4, 28, 10, {});
       text(c, 'ready', bx + 12, by - 1.5, { size: 6, color: '#4a3020', align: 'center', shadow: false });
       c.globalAlpha = 1;
     } else {

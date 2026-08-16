@@ -3286,9 +3286,9 @@ const Ocean = {
     // air + depth capsule. Above the pads on touch, bottom-left otherwise --
     // either way clear of the hotbar, which owns x 133..347 at the very bottom.
     const gy = touch ? H - 74 : H - 28;
-    uiPanel(ctx, 6, gy, 126, 15, 0.85);
-    ctx.strokeStyle = pulse ? '#ff5a4a' : '#bfe8f5';
-    ctx.lineWidth = 1;
+    uiNote(ctx, 6, gy, 126, 15, {});
+    ctx.strokeStyle = pulse ? '#b23a34' : '#2a6a8a';
+    ctx.lineWidth = PIX * 2;
     ctx.beginPath(); ctx.arc(15, gy + 7.5, 3.5, 0, TAU); ctx.stroke();
     ctx.beginPath(); ctx.arc(18.5, gy + 4, 1.4, 0, TAU); ctx.stroke();
     rrect(ctx, 24, gy + 3.5, 62, 8, '#08141c', '#2c4654');
@@ -3298,7 +3298,7 @@ const Ocean = {
     ctx.fillRect(25, gy + 4.5, 60 * frac, 1.5);
     ctx.fillStyle = 'rgba(8,20,28,0.7)';
     for (let i = 1; i < 3; i++) ctx.fillRect(24 + i * 20.6, gy + 4, PIX * 2, 7);
-    text(ctx, `${Math.round(this.depth())}m`, 128, gy + 4, { size: 8, color: '#9fc4d4', align: 'right' });
+    text(ctx, `${Math.round(this.depth())}m`, 128, gy + 4, { size: 8, color: '#2a5068', align: 'right', shadow: false });
 
     // (The dash/roll readiness pips used to sit here, stacked on top of the air
     // gauge. Sprint is a CURRENT now -- the water carries you, there is no key
@@ -3311,7 +3311,7 @@ const Ocean = {
     const full = this.bagCount >= cap;
     const by = touch ? 58 : H - 28;   // clear of the help tab at y 24..42
     const bp = this.bagPulse > 0 ? 1 + this.bagPulse * 1.1 : 1;
-    uiPanel(ctx, W - 74, by, 68, 15, 0.85);
+    uiNote(ctx, W - 74, by, 68, 15, {});
     ctx.save();
     ctx.translate(W - 63, by + 7.5);
     ctx.scale(bp, bp);
@@ -3355,7 +3355,7 @@ const Ocean = {
           (d > 0 ? ' \u25b6' : '');
         const lw = textWidth(ctx, lbl, 7) + 16;
         ctx.globalAlpha = 0.9;
-        uiPanel(ctx, W / 2 - lw / 2, 36, lw, 15, 0.9, true);
+        uiNote(ctx, W / 2 - lw / 2, 36, lw, 15, { alpha: 0.9, });
         text(ctx, lbl, W / 2, 39, { size: 7, color: '#5a3a22', align: 'center', shadow: false });
         ctx.globalAlpha = 1;
       }
@@ -3368,14 +3368,14 @@ const Ocean = {
       const a = clamp(this.msgT, 0, 1);
       ctx.globalAlpha = a;
       const w = textWidth(ctx, this.msg, 8) + 16;
-      uiPanel(ctx, W / 2 - w / 2, H * 0.28, w, 15, 0.86);
-      text(ctx, this.msg, W / 2, H * 0.28 + 4, { size: 8, color: '#ffe6b0', align: 'center' });
+      uiNote(ctx, W / 2 - w / 2, H * 0.28, w, 15, { tape: true });
+      text(ctx, this.msg, W / 2, H * 0.28 + 4, { size: 8, color: '#4a3020', align: 'center', shadow: false });
       ctx.globalAlpha = 1;
     }
   },
 
   _pip(ctx, x, y, glyph, ready, cd) {
-    uiPanel(ctx, x, y, 26, 12, 0.8);
+    uiNote(ctx, x, y, 26, 12, {});
     if (!ready) {
       // the cooldown drains right to left inside the chip
       ctx.fillStyle = 'rgba(90,210,240,0.22)';

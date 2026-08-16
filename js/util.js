@@ -419,6 +419,64 @@ function inkBox(ctx, x, y, w, h, fill, ink, lw = PIX * 2) {
   ctx.lineWidth = 1;
 }
 
+// A SLIP OF PAPER, for everything that is not a full page: the dialogue box,
+// the quest card, the HUD plates, the interact prompt, toasts.
+//
+// uiPage is a whole sheet out of the notebook -- punch holes, a red margin, tape
+// at four corners -- and all of that is nonsense at 120x30. This is the same
+// paper with only the details that survive being small: a torn edge, a warm
+// curl down two sides, and (optionally) the ruling. Everything wobbles by its
+// COORDINATE so a note that is redrawn every frame holds still.
+function uiNote(ctx, x, y, w, h, opts = {}) {
+  const { alpha = 1, rules = false, tape = false, tint = null } = opts;
+  const S = APIX;
+  const snap = (v) => Math.round(v / S) * S;
+  x = snap(x); y = snap(y); w = snap(w); h = snap(h);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  ctx.fillStyle = 'rgba(10,14,20,0.34)';
+  ctx.fillRect(x + 1.5, y + 2, w, h);
+
+  ctx.fillStyle = '#f6ead0';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = '#ebd9b3';                       // the curl, down the far edges
+  ctx.fillRect(x + w - 3 * S, y, 3 * S, h);
+  ctx.fillRect(x, y + h - 2 * S, w, 2 * S);
+  if (tint) { ctx.fillStyle = tint; ctx.fillRect(x, y, w, h); }
+
+  if (rules) {
+    ctx.fillStyle = 'rgba(120,150,180,0.22)';
+    for (let ry = y + 9; ry < y + h - 3; ry += 9) ctx.fillRect(x + 4, ry, w - 8, S);
+  }
+
+  // the torn edge, one texel of jitter hashed off the coordinate
+  ctx.fillStyle = '#d9c49c';
+  for (let i = 0; i < h; i += S * 2) {
+    ctx.fillRect(x, y + i, S + ((i * 7919) % 3) * S * 0.5, S * 2);
+    ctx.fillRect(x + w - S - ((i * 6271) % 3) * S * 0.5, y + i, S * 2, S * 2);
+  }
+  for (let i = 0; i < w; i += S * 2) {
+    ctx.fillRect(x + i, y, S * 2, S + ((i * 5381) % 3) * S * 0.5);
+    ctx.fillRect(x + i, y + h - S - ((i * 4409) % 3) * S * 0.5, S * 2, S * 2);
+  }
+
+  if (tape) {
+    const tab = (tx, ty, rot) => {
+      ctx.save();
+      ctx.translate(tx, ty); ctx.rotate(rot);
+      ctx.fillStyle = 'rgba(238,230,196,0.72)';
+      ctx.fillRect(-8, -2.5, 16, 5);
+      ctx.fillStyle = 'rgba(255,255,255,0.26)';
+      ctx.fillRect(-8, -2.5, 16, 1.5);
+      ctx.restore();
+    };
+    tab(x + 3, y + 1, -0.5);
+    tab(x + w - 3, y + 1, 0.5);
+  }
+  ctx.restore();
+}
+
 // A button somebody drew on the page and coloured in. Live buttons carry a
 // pencil hatch under the bottom edge, the way you would shade a box to make it
 // look like it sticks up; hovering presses it flat against the paper. Same

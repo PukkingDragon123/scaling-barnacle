@@ -893,8 +893,8 @@ const Mining = {
     var noPick = this.ensure() && !G.mining.hasPick && n.kind !== 'wood' && n.kind !== 'stone';
     var label = noPick ? 'needs a pick' : '[E] mine';
     var tw = textWidth(ctx, label, 7) + 9;
-    uiPanel(ctx, n.x - tw * 0.5, y - 10, tw, 13, 0.86, false);
-    text(ctx, label, n.x, y - 7, { size: 7, color: '#ffe6b0', align: 'center' });
+    uiNote(ctx, n.x - tw * 0.5, y - 10, tw, 13, {});
+    text(ctx, label, n.x, y - 7, { size: 7, color: '#4a3020', align: 'center', shadow: false });
   },
 
   // THE TIMING BAR, over the node you are on. The good zone and its core are drawn
@@ -1352,8 +1352,8 @@ const Mining = {
       ctx.save();
       ctx.globalAlpha = this.noteT > 0.4 ? 1 : this.noteT / 0.4;
       var tw = textWidth(ctx, this.note, 7) + 10;
-      uiPanel(ctx, this.noteX - tw * 0.5, this.noteY - 11, tw, 13, 0.9, false);
-      text(ctx, this.note, this.noteX, this.noteY - 8, { size: 7, color: '#ff5a4a', align: 'center' });
+      uiNote(ctx, this.noteX - tw * 0.5, this.noteY - 11, tw, 13, {});
+      text(ctx, this.note, this.noteX, this.noteY - 8, { size: 7, color: '#b23a34', align: 'center', shadow: false });
       ctx.restore();
     }
   },

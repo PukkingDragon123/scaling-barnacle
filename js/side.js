@@ -315,7 +315,7 @@ const Side = {
     const x = 10, y = 34;
     c.save();
     c.globalAlpha = a;
-    uiPanel(c, x, y, w, h, 0.97, true);
+    uiNote(c, x, y, w, h, {});
     text(c, 'ERRAND DONE', x + 10, y + 7, { size: 7.5, color: '#3f7a4e', shadow: false });
     text(c, f.name, x + 10, y + 17, { size: 7, color: '#4a3020', shadow: false });
     let ry = y + 28;

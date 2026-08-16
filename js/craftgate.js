@@ -1627,7 +1627,7 @@ const Forge = {
     if (I.jobReady && I.jobReady(j)) {
       var pulse = 0.6 + 0.4 * Math.sin(this.time * 5);
       c.globalAlpha = pulse;
-      uiPanel(c, bx - 2, by - 4, 28, 10, 0.9, true);
+      uiNote(c, bx - 2, by - 4, 28, 10, {});
       text(c, 'ready', bx + 12, by - 1.5, { size: 6, color: '#4a3020', align: 'center', shadow: false });
       c.globalAlpha = 1;
     } else if (j.dur > 0) {
@@ -1689,7 +1689,7 @@ const Forge = {
     var p = this.placing, t = this.table(p.key), P = this.PAL;
     if (!t) return;
     var b = this._placeBar(), ok = !p.why, m = Input.mouse;
-    uiPanel(c, b.x, b.y, b.w, b.h, 0.9, true);
+    uiNote(c, b.x, b.y, b.w, b.h, {});
     text(c, (p.moveIdx >= 0 ? 'Moving ' : 'Placing ') + t.short, b.x + 8, b.y + 4,
       { size: 7, color: '#4a3020', shadow: false });
     // When the spot is refused, say which way to walk -- the green strips on the

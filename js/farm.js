@@ -1088,7 +1088,7 @@ const Farm = {
     const touch = (typeof TouchUI !== 'undefined' && TouchUI.enabled);
     const label = (touch ? '' : '[E] ') + this.label(this.reach);
     const w = textWidth(ctx, label, 7) + 14;
-    uiPanel(ctx, W / 2 - w / 2, H - 46, w, 13, 0.92, true);
+    uiNote(ctx, W / 2 - w / 2, H - 46, w, 13, {});
     text(ctx, label, W / 2, H - 43, { size: 7, color: '#4a3020', align: 'center', shadow: false });
   },
 

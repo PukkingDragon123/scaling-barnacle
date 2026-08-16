@@ -741,7 +741,7 @@ const NPCs = {
 
     c.fillStyle = 'rgba(6,10,16,0.58)';
     c.fillRect(0, 0, W, H);
-    uiPanel(c, r.x, r.y, r.w, r.h, 0.97, true);
+    uiNote(c, r.x, r.y, r.w, r.h, { tape: true, rules: true });
 
     // ---- portrait ----------------------------------------------------------------
     const bx = r.x + 8, by = r.y + 8, bw = 68, bh = r.h - 16;
@@ -778,7 +778,7 @@ const NPCs = {
     drawAC(c, art, bx + bw / 2, by + bh / 2 + bob, Math.min(bw - 6, bh - 4));
     c.restore();
     // the frame goes on AFTER the clip is released, so its stroke is not clipped
-    rrect(c, bx, by, bw, bh, 'rgba(0,0,0,0)', 'rgba(122,74,48,0.40)');
+    inkBox(c, bx - 2, by - 2, bw + 4, bh + 4, null, 'rgba(122,74,48,0.6)', PIX * 2);
 
     // ---- name + role -------------------------------------------------------------
     const tx = r.x + 84;
@@ -871,9 +871,9 @@ const NPCs = {
       const rc = this._giftRect(i);
       const hov = this._in(rc, mx, my);
       if (hov) hoverName = `${this._itemName(k)}  x${G.storage[k]}`;
-      rrect(c, rc.x, rc.y, rc.w, rc.h,
-        hov ? 'rgba(255,246,222,0.95)' : 'rgba(122,74,48,0.08)',
-        hov ? '#8a5a2c' : 'rgba(122,74,48,0.35)');
+      inkBox(c, rc.x, rc.y, rc.w, rc.h,
+        hov ? 'rgba(255,236,182,0.96)' : 'rgba(247,240,220,0.86)',
+        hov ? '#a8761a' : 'rgba(146,116,76,0.5)', hov ? PIX * 3 : PIX * 2);
       this._icon(c, k, rc.x + rc.w / 2, rc.y + rc.h / 2 - 3, 20);
       text(c, 'x' + (G.storage[k] || 0), rc.x + rc.w - 3, rc.y + rc.h - 9, {
         size: 6.5, align: 'right', color: '#6a4420', shadow: false });
@@ -893,14 +893,7 @@ const NPCs = {
   },
 
   _button(c, rc, label, enabled, mx, my) {
-    const hov = enabled && this._in(rc, mx, my);
-    rrect(c, rc.x, rc.y, rc.w, rc.h,
-      hov ? '#8a5a2c' : (enabled ? 'rgba(122,74,48,0.14)' : 'rgba(122,74,48,0.06)'),
-      enabled ? '#8a5a2c' : 'rgba(122,74,48,0.30)');
-    text(c, label, rc.x + rc.w / 2, rc.y + rc.h / 2 - 4, {
-      size: 7.5, align: 'center', shadow: false,
-      color: hov ? '#f6e8c9' : (enabled ? '#6a4420' : '#b09a7c'),
-    });
+    inkButton(c, rc, label, enabled, enabled && this._in(rc, mx, my), this.animT || 0);
   },
 
   // Item art, in resolution order: an ITEMS key, then a raw asset name (crops and
@@ -911,7 +904,7 @@ const NPCs = {
     const img = ASSETS[key];
     if (img && img.width) { drawAC(c, key, cx, cy, s); return; }
     if (key === 'tea' || key === 'teaLeaf' || key === 'crop_tea_p') { this._teacup(c, cx, cy, s); return; }
-    rrect(c, cx - s / 2, cy - s / 2, s, s, 'rgba(122,74,48,0.14)', 'rgba(122,74,48,0.4)');
+    inkBox(c, cx - s / 2, cy - s / 2, s, s, 'rgba(247,240,220,0.8)', 'rgba(146,116,76,0.5)', PIX * 2);
     text(c, String(key).charAt(0).toUpperCase(), cx, cy - s / 2 + 2, {
       size: s * 0.7, align: 'center', color: '#6a4420', shadow: false });
   },
@@ -1057,7 +1050,7 @@ const NPCs = {
         // nothing: the prompt says it better from two paces
       } else if (this.rec(n.key).talkDay !== G.day && far) {
         const my = DECK_Y - n.h - 10 - bob + Math.sin(t * 3 + i) * 0.8;
-        uiPanel(c, n.x - 5, my, 10, 11, 0.92, true);
+        uiNote(c, n.x - 5, my, 10, 11, {});
         text(c, '!', n.x, my + 2, { size: 7.5, color: '#8a5a2c', align: 'center', shadow: false });
       }
     }

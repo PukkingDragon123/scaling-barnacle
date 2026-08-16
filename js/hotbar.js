@@ -443,25 +443,22 @@ const Hotbar = {
     const hov = TouchUI.enabled ? -1 : this.hit(mx, my);
 
     ctx.save();
-    // backing plank
-    uiPanel(ctx, x0 - 3, y0 - 2, this.barW() + 6, C + 4, 0.72);
+    // the strip of paper the pockets are ruled onto
+    uiNote(ctx, x0 - 3, y0 - 2, this.barW() + 6, C + 4, { alpha: 0.94 });
 
     for (let i = 0; i < this.SLOTS; i++) {
       const s = G.hotbar[i];
       const on = i === sel;
       const cx = this.cellX(i), cy = y0 - (on ? this.LIFT : 0);
 
-      this._cellPath(ctx, cx, cy, C, C, 2.5);
-      ctx.fillStyle = on ? 'rgba(94,66,40,0.95)' : (i === hov ? 'rgba(46,32,20,0.9)' : 'rgba(30,20,12,0.78)');
-      ctx.fill();
-      ctx.strokeStyle = on ? '#ffe66e' : 'rgba(226,200,150,0.32)';
-      ctx.lineWidth = on ? 1.2 : 1;
-      ctx.stroke();
+      inkBox(ctx, cx, cy, C, C,
+        on ? 'rgba(255,236,182,0.96)' : (i === hov ? 'rgba(255,253,244,0.94)' : 'rgba(240,231,206,0.88)'),
+        on ? '#a8761a' : 'rgba(146,116,76,0.5)', on ? PIX * 3 : PIX * 2);
 
       // key hint, top-left, dimmed so it never fights the art
       if (!TouchUI.enabled) {
         text(ctx, String((i + 1) % 10), cx + 1.6, cy + 1, {
-          size: 5, color: on ? 'rgba(255,230,110,0.85)' : 'rgba(226,200,150,0.4)', shadow: false });
+          size: 5, color: on ? 'rgba(138,90,36,0.95)' : 'rgba(146,116,76,0.6)', shadow: false });
       }
 
       if (this.isEmpty(s)) continue;
@@ -480,7 +477,7 @@ const Hotbar = {
       ctx.restore();
       if (s.kind === 'item' && s.n > 1) {
         text(ctx, String(s.n), cx + C - 1.6, cy + C - 7.5, {
-          size: 6.5, color: '#fff8e0', align: 'right' });
+          size: 6.5, color: '#4a3020', align: 'right', shadow: false });
       }
     }
 
@@ -488,8 +485,9 @@ const Hotbar = {
     const gx = this.cellX(sel), gy = y0 - this.LIFT;
     ctx.globalAlpha = 0.35 + 0.15 * Math.sin(Game.time * 3);
     this._cellPath(ctx, gx - 1, gy - 1, C + 2, C + 2, 3.5);
-    ctx.strokeStyle = '#ffe66e'; ctx.lineWidth = 1;
+    ctx.strokeStyle = '#c8922e'; ctx.lineWidth = PIX * 2;
     ctx.stroke();
+    ctx.lineWidth = 1;
     ctx.globalAlpha = 1;
 
     // floating name, fading out over the last 0.4 s
@@ -500,7 +498,7 @@ const Hotbar = {
       const nx = clamp(gx + C / 2 - w / 2, 4, W - 4 - w);
       const ny = gy - 15;
       ctx.globalAlpha = clamp(this.nameT / 0.4, 0, 1);
-      uiPanel(ctx, nx, ny, w, 13, 0.95, true);
+      uiNote(ctx, nx, ny, w, 13, {});
       text(ctx, name, nx + w / 2, ny + 3, { size: 7, color: '#4a3020', align: 'center', shadow: false });
       ctx.globalAlpha = 1;
     }

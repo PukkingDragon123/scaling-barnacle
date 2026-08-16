@@ -1582,14 +1582,14 @@ const Hood = {
       var label = (touch ? '' : '[E] ') + best.label;
       var lw = textWidth(ctx, label, 7) + 12;
       var bx = clamp(this.px, lw / 2 + 4, W - lw / 2 - 4);
-      uiPanel(ctx, bx - lw / 2, FLOOR - 52, lw, 13, 0.95, true);
+      uiNote(ctx, bx - lw / 2, FLOOR - 52, lw, 13, {});
       text(ctx, label, bx, FLOOR - 49, { size: 7, color: '#4a3020', align: 'center', shadow: false });
     }
 
     // ---- a name plate, so you always know whose porch you are standing on
     var nm = home.name;
     var nw = textWidth(ctx, nm, 7) + 14;
-    uiPanel(ctx, W - nw - 8, 44, nw, 13, 0.9, true);
+    uiNote(ctx, W - nw - 8, 44, nw, 13, { alpha: 0.9, });
     text(ctx, nm, W - nw / 2 - 8, 47, { size: 7, color: '#6a4420', align: 'center', shadow: false });
 
     if (nite > 0.05) {
@@ -2039,7 +2039,7 @@ const Hood = {
     cy = clamp(cy, r0 + bh + 3, r0 + H - 3);
     var bx = cx - bw / 2, by = cy - bh;
     ctx.globalAlpha = alpha;
-    uiPanel(ctx, bx, by, bw, bh, 0.95, true);
+    uiNote(ctx, bx, by, bw, bh, {});
     // the little tail
     ctx.fillStyle = 'rgba(246,232,201,0.95)';
     ctx.beginPath();
@@ -2121,7 +2121,7 @@ const Hood = {
     }
     var w = textWidth(ctx, label, 7) + 14;
     var x = W / 2 - w / 2;
-    uiPanel(ctx, x, H - 46, w, 13, 0.92, true);
+    uiNote(ctx, x, H - 46, w, 13, { alpha: 0.92, });
     text(ctx, label, W / 2, H - 43, { size: 7, color: '#4a3020', align: 'center', shadow: false });
   },
 
