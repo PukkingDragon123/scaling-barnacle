@@ -120,9 +120,9 @@ const PixIcons = {
       'offffddffffo', '.offffffffo.', '..oooooooo..', '............',
     ],
     plus: [
-      '............', '.....oo.....', '.....hh.....', '.....hh.....',
-      '.ooohhhhooo.', '.ohhhhhhhho.', '.ohhhhhhhho.', '.ooohhhhooo.',
-      '.....hh.....', '.....hh.....', '.....oo.....', '............',
+      '............', '....oooo....', '....ohho....', '....ohho....',
+      '.oooohhoooo.', '.ohhhhhhhho.', '.ohhhhhhhho.', '.oooohhoooo.',
+      '....ohho....', '....ohho....', '....oooo....', '............',
     ],
     minus: [
       '............', '............', '............', '............',
@@ -210,7 +210,7 @@ const PixIcons = {
     const o = opts || {};
     // an integer number of device pixels per icon pixel: that is what keeps the
     // art crisp, so the requested size is honoured to the nearest whole texel
-    const px = Math.max(1, Math.round(size / this.S * DPX));
+    const px = Math.max(1, Math.floor(size / this.S * DPX));
     const rec = this.sheet(px);
     const w = px * this.S / DPX;
 

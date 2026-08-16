@@ -1251,7 +1251,11 @@ const Skills = {
     if (frac < 0) frac = 0;
     if (frac > 1) frac = 1;
 
-    text(c, this.prof(), x, y, { size: 8, color: '#662907', shadow: false });
+    // the trade's own drawn badge, so the column is never just words
+    var MARK = ['shell', 'pick', 'sword', 'seed', 'fish'];
+    PixIcons.draw(c, MARK[this.tab] || 'shell', x + 6, y + 4, 13,
+      { t: this.time, phase: this.tab, fx: 'bob' });
+    text(c, this.prof(), x + 15, y, { size: 8, color: '#662907', shadow: false });
     text(c, 'lv ' + r.lv, x + w, y, { size: 8, color: '#662907', align: 'right', shadow: false });
 
     var by = y + 12, bh = 6;
@@ -1467,15 +1471,10 @@ const Skills = {
       }
 
       // a keystone wears a drawn star; a learned cell gets a pen tick
-      if (nd.star) this._star(c, pos.x + HR * 0.66, pos.y - lift - HR * 0.62, 3.1, owned ? acc : '#9a7a4e');
+      if (nd.star) PixIcons.draw(c, 'star', pos.x + HR * 0.62, pos.y - lift - HR * 0.6, 9,
+        { t: t, phase: i, fx: owned ? 'pulse' : null, alpha: owned ? 1 : 0.65 });
       if (owned) {
-        c.strokeStyle = '#3f7a4e'; c.lineWidth = PIX * 2; c.lineCap = 'round';
-        c.beginPath();
-        c.moveTo(pos.x - HR * 0.62, pos.y - lift + HR * 0.44);
-        c.lineTo(pos.x - HR * 0.34, pos.y - lift + HR * 0.68);
-        c.lineTo(pos.x + HR * 0.16, pos.y - lift + HR * 0.16);
-        c.stroke();
-        c.lineCap = 'butt'; c.lineWidth = 1;
+        PixIcons.draw(c, 'check', pos.x - HR * 0.42, pos.y - lift + HR * 0.5, 10, { t: t });
       } else {
         // the price, as pips along the bottom edge
         for (q = 0; q < nd.cost; q++) {
@@ -1519,10 +1518,8 @@ const Skills = {
       inkBox(c, r.x, r.y, r.w, r.h,
         can ? (on ? '#f0a52c' : 'rgba(255,247,226,0.92)') : 'rgba(230,220,196,0.65)',
         can ? '#662907' : 'rgba(150,132,102,0.55)', PIX * 2);
-      lbl = can ? '#30150a' : 'rgba(140,124,96,0.8)';
-      c.fillStyle = lbl;
-      c.fillRect(r.x + r.w / 2 - 4, r.y + r.h / 2 - 1, 8, 2);
-      if (d > 0) c.fillRect(r.x + r.w / 2 - 1, r.y + r.h / 2 - 4, 2, 8);
+      PixIcons.draw(c, d > 0 ? 'plus' : 'minus', r.x + r.w / 2, r.y + r.h / 2, 12,
+        { t: this.time, fx: on ? 'pulse' : null, alpha: can ? 1 : 0.4 });
     }
     text(c, 'x' + this.Z.toFixed(2).replace(/0$/, ''), this._zoomRect(1).x - 5,
       this._zoomRect(1).y + 5, { size: 6, color: '#7a4a2a', align: 'right', shadow: false });
@@ -1608,8 +1605,8 @@ const Skills = {
 
     var ly = ty + 14;
     if (nd.star) {
-      this._star(c, tx + 3, ly + 3, 3.2, '#e0a72c');
-      text(c, 'keystone', tx + 9, ly, { size: 6, color: '#662907', shadow: false });
+      PixIcons.draw(c, 'star', tx + 5, ly + 3, 11, { t: this.time, fx: 'pulse' });
+      text(c, 'keystone', tx + 12, ly, { size: 6, color: '#662907', shadow: false });
       ly += 9;
     }
 

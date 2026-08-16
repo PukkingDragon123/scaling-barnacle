@@ -648,18 +648,10 @@ function inkButton(ctx, r, label, enabled, hover, t = 0) {
 // A close button for a paper page: a drawn box with a drawn cross in it, not a
 // wooden plaque. Same rect contract as uiClose so they are interchangeable.
 function inkClose(ctx, r, hover) {
-  inkBox(ctx, r.x, r.y, r.w, r.h, hover ? '#ffe0b8' : 'rgba(255,251,236,0.7)',
-    hover ? '#8a4a1a' : 'rgba(146,116,76,0.75)', PIX * 2);
-  const cx = r.x + r.w / 2, cy = r.y + r.h / 2, s = Math.min(r.w, r.h) * 0.26;
-  ctx.strokeStyle = hover ? '#8a4a1a' : '#6b4a22';
-  ctx.lineWidth = PIX * 2.5;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  inkLine(ctx, cx - s, cy - s, cx + s, cy + s, 0.7);
-  inkLine(ctx, cx + s, cy - s, cx - s, cy + s, 0.7);
-  ctx.stroke();
-  ctx.lineCap = 'butt';
-  ctx.lineWidth = 1;
+  inkBox(ctx, r.x, r.y, r.w, r.h,
+    hover ? UIPAL.lit : UIPAL.hi, hover ? UIPAL.dark : UIPAL.mid, PIX * 2);
+  PixIcons.draw(ctx, 'close', r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) - 3, {
+    t: (typeof Game !== 'undefined' ? Game.time : 0), fx: hover ? 'tick' : null });
 }
 
 // ---- FX: one recycled pool of pixel particles ------------------------------
