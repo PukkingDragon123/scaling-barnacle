@@ -11,6 +11,7 @@ const SKY = {
   glints: [],
   birds: [],
   _cv: null, _ctx: null, _key: -1,
+  _cloudCv: null, _cloudKey: -1, _cloudPad: 0,
 
   // ---- palette keyed to the day cycle -----------------------------------------
   // [skyTop, skyMid, skyLow, seaFar, seaMid, seaNear, sunCol, hazeCol]
@@ -71,6 +72,75 @@ const SKY = {
     for (let i = 0; i < 26; i++)
       this.glints.push({ x: rng() * W, row: Math.floor(rng() * 11), ph: rng() * TAU, sp: 0.6 + rng() * 1.4 });
     this.birds = [];
+  },
+
+  // ---- CLOUDS, AS PIXELS ---------------------------------------------------
+  //
+  // These were ctx.arc() discs: anti-aliased circles, three per puff, drawn live
+  // every frame. Soft round blobs are the one thing on screen that is not pixel
+  // art, and against sprites authored at four texels per unit they read as a
+  // different game showing through.
+  //
+  // So each cloud is RASTERISED ONCE into its own little canvas, by horizontal
+  // spans snapped to the sprite grid -- the same stair-stepped edge a hand-drawn
+  // cloud has -- and then blitted. Baking is what makes it affordable: a span
+  // rasteriser over ~10 clouds x 6 puffs x 3 layers is thousands of fillRects,
+  // which is fine once per sunrise and absurd once per frame. The bake is keyed
+  // on the palette, so it redraws only when the light actually changes.
+  _disc(c, cx, cy, r) {
+    const S = APIX;
+    if (r <= S) return;
+    const q = (v) => Math.round(v / S) * S;
+    for (let dy = -r; dy <= r; dy += S) {
+      const hw = Math.sqrt(Math.max(0, r * r - dy * dy));
+      if (hw < S * 0.5) continue;
+      c.fillRect(q(cx - hw), q(cy + dy), q(hw * 2), S);
+    }
+  },
+
+  cloudCanvas(cloudC) {
+    // QUANTISE THE KEY. pal() interpolates the light continuously, so an exact
+    // colour key would re-rasterise the whole bank almost every frame at dawn
+    // and dusk -- thousands of spans over a 5600px canvas, per frame. Rounding
+    // each channel to the nearest 8 caps a full day at a couple of dozen bakes
+    // and no one can see the difference.
+    const q8 = (v) => (v + 4) >> 3;
+    const key = (q8(cloudC[0]) << 16) | (q8(cloudC[1]) << 8) | q8(cloudC[2]);
+    if (this._cloudKey === key && this._cloudCv) return this._cloudCv;
+    this.init();
+
+    // one strip wide enough for the whole bank, tall enough for the tallest tower
+    let tall = 0;
+    for (const cl of this.clouds)
+      for (const p of cl.puffs) tall = Math.max(tall, p.r - p.dy);
+    const pad = Math.ceil(tall) + 6;
+    this._cloudPad = pad;
+
+    if (!this._cloudCv) {
+      this._cloudCv = document.createElement('canvas');
+      this._cloudCv.width = this.BANK_W * DPX;
+      this._cloudCv.height = (pad + 12) * DPX;
+    }
+    const c = this._cloudCv.getContext('2d');
+    c.setTransform(DPX, 0, 0, DPX, 0, 0);
+    c.clearRect(0, 0, this.BANK_W, pad + 12);
+
+    const cLit = rgbLerp([255, 255, 255], cloudC, 0.10);
+    const cBody = rgbLerp(cloudC, [206, 226, 244], 0.55);
+    const cDark = rgbLerp(cloudC, [150, 182, 214], 0.75);
+
+    for (const cl of this.clouds) {
+      const layer = (col, dy, shrink) => {
+        c.fillStyle = cssRGB(col);
+        for (const p of cl.puffs) this._disc(c, cl.x + p.dx, pad + p.dy + dy, p.r - shrink);
+        c.fillRect(cl.x - 1, pad + dy - 1, cl.w + 2, Math.max(APIX, 3 - shrink * 0.4));
+      };
+      layer(cDark, 1.5, 0);
+      layer(cBody, 0, 1.5);
+      layer(cLit, -2, 3.5);
+    }
+    this._cloudKey = key;
+    return this._cloudCv;
   },
 
   // a 4-point pixel star, like the reference sparkles
@@ -283,28 +353,28 @@ const SKY = {
     }
 
     // ---- the cloud bank on the horizon --------------------------------------------
-    const cLit = rgbLerp([255, 255, 255], cloudC, 0.10);
-    const cBody = rgbLerp(cloudC, [206, 226, 244], 0.55);
-    const cDark = rgbLerp(cloudC, [150, 182, 214], 0.75);
-    for (const cl of this.clouds) {
-      const par = cl.layer ? 0.30 : 0.13;
-      const baseY = HZ - (cl.layer ? 3 : 9);
-      const drift = time * (cl.layer ? 2.6 : 1.3) + cam * par;
-      const cx = ((cl.x - drift) % this.BANK_W + this.BANK_W) % this.BANK_W - 90;
-      if (cx > W + 90) continue;
-      const puff = (col, dy, shrink) => {
-        ctx.fillStyle = cssRGB(col);
-        for (const p of cl.puffs) {
-          const r = p.r - shrink;
-          if (r <= 0.4) continue;
-          ctx.beginPath(); ctx.arc(cx + p.dx, baseY + p.dy + dy, r, 0, TAU); ctx.fill();
-        }
-        ctx.fillRect(cx - 1, baseY + dy - 1, cl.w + 2, Math.max(1, 3 - shrink * 0.4));
-      };
-      puff(cDark, 1.4, 0);
-      puff(cBody, 0, 1.1);
-      puff(cLit, -1.6, 2.8);
+    // THE BANK, blitted twice at two speeds so it still parallaxes. Positions
+    // land on the sprite grid: a cloud on a fractional x is resampled every
+    // frame by the nearest-neighbour blit and its whole edge shimmers.
+    const bank = this.cloudCanvas(cloudC);
+    const pad = this._cloudPad;
+    const sm = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    const snap = (v) => Math.round(v / APIX) * APIX;
+    for (let L = 0; L < 2; L++) {
+      const par = L ? 0.30 : 0.13;
+      const baseY = HZ - (L ? 3 : 9) - pad;
+      const drift = time * (L ? 2.6 : 1.3) + cam * par;
+      const off = ((drift % this.BANK_W) + this.BANK_W) % this.BANK_W;
+      ctx.globalAlpha = L ? 1 : 0.82;            // the far bank sits back
+      for (let t = -1; t <= 1; t++) {
+        const x = snap(-off + t * this.BANK_W - 90);
+        if (x > W || x + this.BANK_W < 0) continue;
+        ctx.drawImage(bank, x, snap(baseY), this.BANK_W, bank.height / DPX);
+      }
     }
+    ctx.globalAlpha = 1;
+    ctx.imageSmoothingEnabled = sm;
 
     // ---- distant birds ----
     for (const b of this.birds) {
