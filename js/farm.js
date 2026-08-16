@@ -1007,7 +1007,7 @@ const Farm = {
     const iw = this._widthFor(art, 7);
     drawA(ctx, art, x - iw / 2, iy, iw, assetH(art, iw));
 
-    ctx.fillStyle = '#ffe66e';
+    ctx.fillStyle = '#e08a1a';
     for (let i = 0; i < 3; i++) {
       const a = this.time * 1.6 + i * (TAU / 3);
       const s = 0.9 + 0.7 * Math.abs(Math.sin(this.time * 3.4 + i * 1.7));
@@ -1060,7 +1060,7 @@ const Farm = {
   _drawFx(ctx, camX, camY) {
     if (!this.fx.length) return;
     // one fillStyle per kind — never build a colour string inside the loop
-    const PAL = ['#cfeef8', '#b3a58a', '#ffe66e'];
+    const PAL = ['#cfeef8', '#b3a58a', '#e08a1a'];
     for (let k = 0; k < 3; k++) {
       let first = true;
       for (const p of this.fx) {
@@ -1089,7 +1089,7 @@ const Farm = {
     const label = (touch ? '' : '[E] ') + this.label(this.reach);
     const w = textWidth(ctx, label, 7) + 14;
     uiNote(ctx, W / 2 - w / 2, H - 46, w, 13, {});
-    text(ctx, label, W / 2, H - 43, { size: 7, color: '#4a3020', align: 'center', shadow: false });
+    text(ctx, label, W / 2, H - 43, { size: 7, color: '#30150a', align: 'center', shadow: false });
   },
 
   // ---- seed pouch picker (self-contained modal) --------------------------------------
@@ -1173,16 +1173,16 @@ const Farm = {
     uiPageOpen(c, clamp(this._openT, 0, 1), X + WWi / 2, Y + this.WH / 2);
     uiPage(c, X, Y, WWi, this.WH, 1);
 
-    text(c, 'SEED POUCH', X + 34, Y + 12, { size: 12, color: '#7a5232', shadow: false });
+    text(c, 'SEED POUCH', X + 34, Y + 12, { size: 12, color: '#662907', shadow: false });
     text(c, 'what otto has to put in the ground', X + 34, Y + 25,
-      { size: 7, color: '#a8895e', shadow: false });
+      { size: 7, color: '#914007', shadow: false });
     const p = this._get(this.plot);
     if (p) {
       const bl = `bed ${this.plot + 1}`;
       const blw = textWidth(c, bl, 7) + 16;
-      inkBox(c, X + WWi - 54 - blw, Y + 6, blw, 16, '#ffe9a8', '#a8761a', PIX * 2);
+      inkBox(c, X + WWi - 54 - blw, Y + 6, blw, 16, '#e08a1a', '#c56906', PIX * 2);
       text(c, bl, X + WWi - 54 - blw / 2, Y + 10.5,
-        { size: 7, color: '#6b4a22', align: 'center', shadow: false });
+        { size: 7, color: '#662907', align: 'center', shadow: false });
     }
     const cr = this._closeRect();
     inkClose(c, cr, this._in(cr, Input.mouse.x, Input.mouse.y));
@@ -1195,8 +1195,8 @@ const Farm = {
       const r = this._rowRect(i);
       const hot = this._in(r, Input.mouse.x, Input.mouse.y) || this.sel === i;
       inkBox(c, r.x, r.y, r.w, r.h,
-        hot ? (n > 0 ? 'rgba(255,236,182,0.96)' : 'rgba(246,240,224,0.9)') : 'rgba(247,240,220,0.9)',
-        hot && n > 0 ? '#a8761a' : 'rgba(146,116,76,0.45)', hot && n > 0 ? PIX * 3 : PIX * 2);
+        hot ? (n > 0 ? '#e08a1a' : 'rgba(246,240,224,0.9)') : '#e3ab61',
+        hot && n > 0 ? '#c56906' : '#914007', hot && n > 0 ? PIX * 3 : PIX * 2);
 
       const iw = this._widthFor(s.art, 13);
       c.globalAlpha = n > 0 ? 1 : 0.4;
@@ -1204,15 +1204,15 @@ const Farm = {
       c.globalAlpha = 1;
 
       text(c, `${i + 1}. ${cd.name}`, r.x + 22, r.y + 3,
-        { size: 7, shadow: false, color: n > 0 ? '#4a3020' : '#a08a68' });
+        { size: 7, shadow: false, color: n > 0 ? '#30150a' : '#914007' });
       text(c, `${this.totalDays(s.key)}d  •  ${cd.qty}x$${cd.value}`,
-        r.x + 22, r.y + 12, { size: 6, shadow: false, color: n > 0 ? '#8a7454' : '#b0a084' });
+        r.x + 22, r.y + 12, { size: 6, shadow: false, color: n > 0 ? '#914007' : '#b0a084' });
       text(c, n > 0 ? `x${n}` : '—', r.x + r.w - 6, r.y + 6,
-        { size: 7, align: 'right', shadow: false, color: n > 0 ? '#a8761a' : '#b0a084' });
+        { size: 7, align: 'right', shadow: false, color: n > 0 ? '#c56906' : '#b0a084' });
     }
 
     text(c, TouchUI.enabled ? 'tap a packet to plant  •  X to close' : '[1-9] or arrows + Enter   [Esc] close',
-      X + WWi / 2, Y + this.WH - 15, { size: 6.5, color: '#8a7454', align: 'center', shadow: false });
+      X + WWi / 2, Y + this.WH - 15, { size: 6.5, color: '#914007', align: 'center', shadow: false });
     c.restore();
     text(c, `$${G.money}`, X + WWi - 34, Y + this.WH - 15, { size: 6.5, color: '#3f7a4e', align: 'right', shadow: false });
 

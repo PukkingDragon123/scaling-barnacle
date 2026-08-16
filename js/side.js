@@ -317,7 +317,7 @@ const Side = {
     c.globalAlpha = a;
     uiNote(c, x, y, w, h, {});
     text(c, 'ERRAND DONE', x + 10, y + 7, { size: 7.5, color: '#3f7a4e', shadow: false });
-    text(c, f.name, x + 10, y + 17, { size: 7, color: '#4a3020', shadow: false });
+    text(c, f.name, x + 10, y + 17, { size: 7, color: '#30150a', shadow: false });
     let ry = y + 28;
     for (const r of rows) {
       text(c, r, x + 12, ry, { size: 6.5, color: r.charAt(0) === '+' ? '#3f9a58' : '#7a5c3c', shadow: false });

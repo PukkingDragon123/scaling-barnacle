@@ -1583,14 +1583,14 @@ const Hood = {
       var lw = textWidth(ctx, label, 7) + 12;
       var bx = clamp(this.px, lw / 2 + 4, W - lw / 2 - 4);
       uiNote(ctx, bx - lw / 2, FLOOR - 52, lw, 13, {});
-      text(ctx, label, bx, FLOOR - 49, { size: 7, color: '#4a3020', align: 'center', shadow: false });
+      text(ctx, label, bx, FLOOR - 49, { size: 7, color: '#30150a', align: 'center', shadow: false });
     }
 
     // ---- a name plate, so you always know whose porch you are standing on
     var nm = home.name;
     var nw = textWidth(ctx, nm, 7) + 14;
     uiNote(ctx, W - nw - 8, 44, nw, 13, { alpha: 0.9, });
-    text(ctx, nm, W - nw / 2 - 8, 47, { size: 7, color: '#6a4420', align: 'center', shadow: false });
+    text(ctx, nm, W - nw / 2 - 8, 47, { size: 7, color: '#662907', align: 'center', shadow: false });
 
     if (nite > 0.05) {
       // one flat pass, alpha rather than a built colour string
@@ -1805,7 +1805,7 @@ const Hood = {
     var img = ASSETS.kit_ladder;
     var W_ = 11;
     if (!img || !img.width) {
-      ctx.fillStyle = '#a4805a';
+      ctx.fillStyle = '#914007';
       ctx.fillRect(cx - 5, top, 1.6, bot - top);
       ctx.fillRect(cx + 3.4, top, 1.6, bot - top);
       ctx.fillStyle = '#c9a271';
@@ -2050,7 +2050,7 @@ const Hood = {
     ctx.fill();
     for (i = 0; i < lines.length; i++) {
       text(ctx, lines[i], bx + bw / 2, by + 4 + i * 8, {
-        size: size, color: '#4a3020', align: 'center', shadow: false,
+        size: size, color: '#30150a', align: 'center', shadow: false,
       });
     }
     ctx.globalAlpha = 1;
@@ -2122,7 +2122,7 @@ const Hood = {
     var w = textWidth(ctx, label, 7) + 14;
     var x = W / 2 - w / 2;
     uiNote(ctx, x, H - 46, w, 13, { alpha: 0.92, });
-    text(ctx, label, W / 2, H - 43, { size: 7, color: '#4a3020', align: 'center', shadow: false });
+    text(ctx, label, W / 2, H - 43, { size: 7, color: '#30150a', align: 'center', shadow: false });
   },
 
   // =============================================================================

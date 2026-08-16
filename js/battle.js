@@ -28,7 +28,7 @@ const BAT_CRAB_FACES_LEFT = true;
 // Particle colours. Kept to eight so the draw pass can set fillStyle once per
 // colour and never build a colour string inside the loop.
 const BAT_PCOL = [
-  '#ffe66e',   // 0 muzzle gold
+  '#e08a1a',   // 0 muzzle gold
   '#ff9a3c',   // 1 ember
   '#e8434c',   // 2 blood-red / danger
   '#f6e8c9',   // 3 cream smoke
@@ -95,7 +95,7 @@ const Battle = {
   invT: 0, hitsTaken: 0, shotsFired: 0, hitsLanded: 0,
   shakeT: 0, shakeMag: 0, stopT: 0, slowT: 0,
   flash: 0, flashCol: '255,255,255',
-  banner: '', bannerT: 0, bannerLife: 1, bannerCol: '#ffe66e',
+  banner: '', bannerT: 0, bannerLife: 1, bannerCol: '#e08a1a',
   retreatT: 0, ammoWarnT: 0,
   crab: null,
   balls: null, parts: null, nums: null, marks: null,
@@ -260,7 +260,7 @@ const Battle = {
 
   _say(msg, life, col) {
     this.banner = msg; this.bannerT = life; this.bannerLife = life;
-    this.bannerCol = col || '#ffe66e';
+    this.bannerCol = col || '#e08a1a';
   },
 
   // ---- host-driven input -------------------------------------------------------
@@ -669,7 +669,7 @@ const Battle = {
     c.st = 'stagger'; c.t = this.STAGGER_T; c.sub = 0;
     c.stagCd = this.STAGGER_T + this.STAGGER_CD;
     c.shots = 0;
-    this._say('STAGGERED!  HIT HIM', 1.1, '#ffe66e');
+    this._say('STAGGERED!  HIT HIM', 1.1, '#e08a1a');
     SND.ding();
     for (let i = 0; i < 10; i++)
       this._pp(c.x + rand(-10, 10), DECK_Y - 34, rand(-24, 24), rand(-40, -12), rand(0.5, 0.9), rand(1.2, 2), 0, BAT_K_DOT, 40, false);
@@ -732,7 +732,7 @@ const Battle = {
         c.walk += dt * 8;
         if (Math.random() < dt * 12)
           this._pp(c.x + rand(-10, 10), DECK_Y - 1, rand(-30, 10), rand(-30, -6), rand(0.3, 0.6), rand(1, 2), 4, BAT_K_DOT, 120, false);
-        if (c.t <= 0) { this._say('FIGHT!', 1.2, '#ffe66e'); this._toScuttle(0.9); }
+        if (c.t <= 0) { this._say('FIGHT!', 1.2, '#e08a1a'); this._toScuttle(0.9); }
         break;
       }
 
@@ -1080,7 +1080,7 @@ const Battle = {
       const msg = TouchUI.enabled ? 'tap the corner again to retreat' : 'press [Esc] again to retreat';
       const w = textWidth(ctx, msg, 7) + 14;
       uiNote(ctx, W / 2 - w / 2, 222, w, 13, {});
-      text(ctx, msg, W / 2, 225, { size: 7, color: '#7a5232', align: 'center', shadow: false });
+      text(ctx, msg, W / 2, 225, { size: 7, color: '#662907', align: 'center', shadow: false });
     }
 
     if (this.flash > 0) {
@@ -1197,7 +1197,7 @@ const Battle = {
 
     // stagger stars, and the guard shimmer during a taunt
     if (c.st === 'stagger') {
-      ctx.fillStyle = '#ffe66e';
+      ctx.fillStyle = '#e08a1a';
       for (let i = 0; i < 3; i++) {
         const ang = this.time * 4 + i * TAU / 3;
         const sx = c.x + Math.cos(ang) * 12, sy = DECK_Y - 38 + Math.sin(ang) * 3;
@@ -1329,10 +1329,10 @@ const Battle = {
       ctx.fillStyle = 'rgba(255,230,110,0.35)';
       ctx.fillRect(mx + 1 + (mw - 2) * this.SWEET_LO, my + 1, (mw - 2) * (this.SWEET_HI - this.SWEET_LO), 2);
       const sweet = f >= this.SWEET_LO && f <= this.SWEET_HI;
-      ctx.fillStyle = sweet ? '#ffe66e' : (f >= 1 ? '#ff9a3c' : '#5ad2f0');
+      ctx.fillStyle = sweet ? '#e08a1a' : (f >= 1 ? '#ff9a3c' : '#5ad2f0');
       ctx.fillRect(mx + 1, my + 1, (mw - 2) * f, 2);
       if (sweet) {
-        text(ctx, 'NOW', px, my - 9, { size: 7, color: '#ffe66e', align: 'center' });
+        text(ctx, 'NOW', px, my - 9, { size: 7, color: '#e08a1a', align: 'center' });
       }
     }
   },
@@ -1350,7 +1350,7 @@ const Battle = {
         continue;
       }
       if (b.kind === 0) {
-        ctx.fillStyle = b.perfect ? '#ffe66e' : '#2a2f33';
+        ctx.fillStyle = b.perfect ? '#e08a1a' : '#2a2f33';
         ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.fill();
         ctx.fillStyle = b.perfect ? '#fff8e0' : '#6a747c';
         ctx.fillRect(b.x - b.r * 0.5, b.y - b.r * 0.7, b.r * 0.7, b.r * 0.5);
@@ -1423,7 +1423,7 @@ const Battle = {
       const size = n.crit ? 13 - f * 2 : 9;
       text(ctx, n.txt, n.x, n.y, {
         size, align: 'center',
-        color: n.crit ? '#ffe66e' : '#f6e8c9',
+        color: n.crit ? '#e08a1a' : '#f6e8c9',
       });
       ctx.globalAlpha = 1;
     }
@@ -1453,7 +1453,7 @@ const Battle = {
     // Two passes, dark under bright: a single pale colour vanished completely
     // against the bright painted sky, which is most of where the arc lives.
     for (let pass = 0; pass < 2; pass++) {
-      ctx.fillStyle = pass === 0 ? '#14202a' : (hit ? '#ffe66e' : '#fff8e0');
+      ctx.fillStyle = pass === 0 ? '#14202a' : (hit ? '#e08a1a' : '#fff8e0');
       const s = pass === 0 ? 2.6 : 1.7;
       for (let i = 0; i < n; i++) {
         if (i % 3) continue;                     // dotted, not a solid line
@@ -1465,7 +1465,7 @@ const Battle = {
     // landing marker
     if (n > 0) {
       const lx = this._prx[n - 1], ly = this._pry[n - 1];
-      ctx.strokeStyle = hit ? '#ffe66e' : 'rgba(191,232,245,0.7)';
+      ctx.strokeStyle = hit ? '#e08a1a' : 'rgba(191,232,245,0.7)';
       ctx.lineWidth = PIX * 2;
       ctx.beginPath();
       ctx.moveTo(lx - 3, ly - 3); ctx.lineTo(lx + 3, ly + 3);
@@ -1481,7 +1481,7 @@ const Battle = {
     const bx = 96, by = 40, bw = 288, bh = 9;
     uiNote(ctx, bx - 4, by - 12, bw + 8, bh + 16, {});
     text(ctx, 'CRAB PUNK', bx, by - 10, { size: 8, color: '#b23a34', shadow: false });
-    text(ctx, `WAVE ${this.wave}`, bx + bw, by - 10, { size: 7, color: '#7a5232', align: 'right', shadow: false });
+    text(ctx, `WAVE ${this.wave}`, bx + bw, by - 10, { size: 7, color: '#662907', align: 'right', shadow: false });
 
     rrect(ctx, bx, by, bw, bh, 'rgba(16,10,8,0.85)');
     const fShown = clamp(c.hpShown / c.hpMax, 0, 1);
@@ -1489,7 +1489,7 @@ const Battle = {
     // the chip bar lags behind, so a big hit reads as a chunk coming off
     ctx.fillStyle = '#f6e8c9';
     ctx.fillRect(bx + 1, by + 1, (bw - 2) * fShown, bh - 2);
-    ctx.fillStyle = c.st === 'stagger' ? '#ffe66e' : '#e8434c';
+    ctx.fillStyle = c.st === 'stagger' ? '#e08a1a' : '#e8434c';
     ctx.fillRect(bx + 1, by + 1, (bw - 2) * fReal, bh - 2);
     ctx.fillStyle = 'rgba(255,255,255,0.18)';
     ctx.fillRect(bx + 1, by + 1, (bw - 2) * fReal, 2);
@@ -1504,11 +1504,11 @@ const Battle = {
     // phase pips
     for (let i = 0; i < 3; i++) {
       const on = this.phase >= 3 - i;
-      ctx.fillStyle = on ? '#ffe66e' : 'rgba(226,200,150,0.25)';
+      ctx.fillStyle = on ? '#e08a1a' : 'rgba(226,200,150,0.25)';
       ctx.fillRect(bx + bw - 4 - i * 6, by + bh + 2.5, 4, 3);
     }
     if (c.st === 'stagger')
-      text(ctx, 'x2 DAMAGE', bx + bw / 2, by + bh + 2, { size: 7, color: '#ffe66e', align: 'center' });
+      text(ctx, 'x2 DAMAGE', bx + bw / 2, by + bh + 2, { size: 7, color: '#e08a1a', align: 'center' });
   },
 
   _drawAmmo(ctx) {
@@ -1521,10 +1521,10 @@ const Battle = {
       ctx.fillStyle = '#6a747c';
       ctx.fillRect(13.5, 46.8, 2.6, 1.8);
     }
-    const col = n > 0 ? '#4a3020' : '#e8434c';
+    const col = n > 0 ? '#30150a' : '#e8434c';
     text(ctx, n > 0 ? `x${n}` : 'EMPTY', 26, 46.5, { size: 8, color: col, shadow: false });
     if (n <= 0)
-      text(ctx, 'scrap shot', 26, 53.5, { size: 6, color: '#7a5232', shadow: false });
+      text(ctx, 'scrap shot', 26, 53.5, { size: 6, color: '#662907', shadow: false });
   },
 
   _drawBanner(ctx) {
@@ -1552,9 +1552,9 @@ const Battle = {
     const h = 46 + keys.length * 13;
     const w = 176, x = W / 2 - w / 2, y = 118;
     uiNote(ctx, x, y, w, h, {});
-    text(ctx, 'SPOILS OF THE DOCK', x + w / 2, y + 6, { size: 8, color: '#7a5232', align: 'center', shadow: false });
+    text(ctx, 'SPOILS OF THE DOCK', x + w / 2, y + 6, { size: 8, color: '#662907', align: 'center', shadow: false });
     drawAC(ctx, 'shell_pearl', x + 16, y + 24, 12);
-    text(ctx, `+${this.loot.money} sand dollars`, x + 26, y + 20, { size: 8, color: '#4a3020', shadow: false });
+    text(ctx, `+${this.loot.money} sand dollars`, x + 26, y + 20, { size: 8, color: '#30150a', shadow: false });
     let ly = y + 36;
     for (const k of keys) {
       if (typeof ITEMS !== 'undefined' && ITEMS[k]) {
@@ -1568,7 +1568,7 @@ const Battle = {
         ctx.fillStyle = '#c9a271';
         ctx.fillRect(x + 14.5, ly + 2.5, 3, 3);
       }
-      text(ctx, `${this._matName(k)} x${this.loot.mats[k]}`, x + 26, ly, { size: 8, color: '#4a3020', shadow: false });
+      text(ctx, `${this._matName(k)} x${this.loot.mats[k]}`, x + 26, ly, { size: 8, color: '#30150a', shadow: false });
       ly += 13;
     }
     if (this.loot.flawless)

@@ -2261,7 +2261,7 @@ const Tame = {
     var x0 = camX - 40, x1 = camX + W + 40, y0 = camY - 40, y1 = camY + H + 40;
     var i, m, n, filled, px, py, j;
     // pass 1: the filled pips
-    ctx.fillStyle = '#ffe66e';
+    ctx.fillStyle = '#e08a1a';
     for (i = 0; i < this.MAX_MOBS; i++) {
       m = this.mobs[i];
       if (!m.live || m.kind !== 0 || m.state === 2) continue;
@@ -2308,7 +2308,7 @@ const Tame = {
         : (canFeed ? '[T] offer food' : '[E] pet');
       var tw = textWidth(ctx, label, 7) + 10;
       uiNote(ctx, o.x - tw / 2, oy - 2, tw, 12, {});
-      text(ctx, label, o.x, oy + 1, { size: 7, color: '#4a3020', align: 'center', shadow: false });
+      text(ctx, label, o.x, oy + 1, { size: 7, color: '#30150a', align: 'center', shadow: false });
     }
   },
 
@@ -2319,7 +2319,7 @@ const Tame = {
       if (f.t <= 0) continue;
       if (f.x < x0 || f.x > x1 || f.y < y0 || f.y > y1) continue;
       ctx.globalAlpha = clamp(f.t / 1.5, 0, 1);
-      text(ctx, f.txt, f.x, f.y, { size: 7, color: f.tone === 0 ? '#a0f2b4' : '#ffe66e', align: 'center' });
+      text(ctx, f.txt, f.x, f.y, { size: 7, color: f.tone === 0 ? '#a0f2b4' : '#e08a1a', align: 'center' });
       ctx.globalAlpha = 1;
     }
   },
@@ -2363,7 +2363,7 @@ const Tame = {
       this._blit(ctx, frames[fi], x, y, box, dir, 0, 1);
       // a pip when there is something to collect
       if (this.ready(p)) {
-        ctx.fillStyle = '#ffe66e';
+        ctx.fillStyle = '#e08a1a';
         ctx.fillRect(x - 1, y - box * 0.5 - 6, 2, 4);
       }
       shown++;
@@ -2589,7 +2589,7 @@ const Tame = {
     uiPageOpen(c, clamp(this._openT, 0, 1), WX + WW / 2, WY + WH / 2);
     uiPage(c, WX, WY, WW, WH, 1);
 
-    text(c, 'THE TIDE POOL', WX + 34, WY + 12, { size: 12, color: '#7a5232', shadow: false });
+    text(c, 'THE TIDE POOL', WX + 34, WY + 12, { size: 12, color: '#662907', shadow: false });
     var pets = G.tame.pets;
     var favs = this.favours();
     var sub = pets.length + '/' + this.MAX_PETS + ' companions';
@@ -2599,7 +2599,7 @@ const Tame = {
       for (var q = 0; q < favs.length; q++) names += (q ? ', ' : '') + this.FAVOURS[favs[q]].name;
       sub += '   favours: ' + names;
     }
-    text(c, sub, WX + 34, WY + 26, { size: 7, color: '#a8895e', shadow: false });
+    text(c, sub, WX + 34, WY + 26, { size: 7, color: '#914007', shadow: false });
 
     var cr = this._closeRect();
     inkClose(c, cr, this._in && this._in(cr, Input.mouse.x, Input.mouse.y));
@@ -2613,7 +2613,7 @@ const Tame = {
       text(c, 'then choose: harvest what it makes, or feed it and never harvest at all.',
         WX + 20, this.ROW_Y + 52, { size: 7, color: '#8a9484' });
       text(c, 'the second road is longer. the favours are worth it.',
-        WX + 20, this.ROW_Y + 64, { size: 7, color: '#a4805a' });
+        WX + 20, this.ROW_Y + 64, { size: 7, color: '#914007' });
     }
 
     for (var v = 0; v < this.VIS; v++) {
@@ -2630,9 +2630,9 @@ const Tame = {
     }
 
     if (this._noteT > 0 && this._note)
-      text(c, this._note, WX + 34, WY + WH - 30, { size: 7, color: '#8a5a24', shadow: false });
+      text(c, this._note, WX + 34, WY + WH - 30, { size: 7, color: '#662907', shadow: false });
     text(c, this._touch() ? 'tap x to close' : '[Esc] or [T] close',
-      WX + WW - 34, WY + WH - 16, { size: 7, color: '#8a7454', align: 'right', shadow: false });
+      WX + WW - 34, WY + WH - 16, { size: 7, color: '#914007', align: 'right', shadow: false });
     c.restore();
   },
 
@@ -2675,7 +2675,7 @@ const Tame = {
       st = sp.prod.name + ' in ' + Math.ceil(p.cd) + ' day' + (p.cd > 1 ? 's' : '');
     } else {
       st = sp.prod.name + ' ready';
-      col = '#ffe66e';
+      col = '#e08a1a';
     }
     if (!p.favour) {
       var left = this.bondLeft(p);
@@ -2684,12 +2684,12 @@ const Tame = {
     text(c, st, tx, r.y + 14, { size: 7, color: col });
 
     // line 3: mood, and whether it has eaten
-    var moodCol = p.mood > 0.75 ? '#a0f2b4' : (p.mood > 0.4 ? '#ffe66e' : '#e8434c');
+    var moodCol = p.mood > 0.75 ? '#a0f2b4' : (p.mood > 0.4 ? '#e08a1a' : '#e8434c');
     rrect(c, tx, r.y + 25, 70, 4, '#2a1f14', 'rgba(226,200,150,0.25)');
     c.fillStyle = moodCol;
     c.fillRect(tx + 0.5, r.y + 25.5, 69 * clamp(p.mood, 0, 1), 3);
     text(c, p.fedDay === G.day ? 'fed today' : 'hungry', tx + 76, r.y + 23,
-      { size: 7, color: p.fedDay === G.day ? '#8a9484' : '#ffe66e' });
+      { size: 7, color: p.fedDay === G.day ? '#8a9484' : '#e08a1a' });
     if (p.out) text(c, 'swimming with you', tx + 132, r.y + 23, { size: 7, color: '#5ad2f0' });
 
     // buttons

@@ -39,7 +39,7 @@ const Skills = {
   PROFS: ['clamming', 'mining', 'fighting', 'farming', 'taming'],
   TABS: ['CLAM', 'MINE', 'FIGHT', 'FARM', 'TAME'],
   // one accent per profession, used for the tab underline and the XP bar
-  ACC: ['#5ad2f0', '#c9d4dc', '#e8434c', '#a0f2b4', '#ffe66e'],
+  ACC: ['#5ad2f0', '#c9d4dc', '#e8434c', '#a0f2b4', '#e08a1a'],
   BLURB: [
     'shells, pearls and the long breath it takes to reach them.',
     'rock, timber and every seam of ore under the pilings.',
@@ -1176,9 +1176,9 @@ const Skills = {
 
     var prof = this.prof(), r = G.skills[prof], acc = this.ACC[this.tab];
 
-    text(c, "OTTO'S TRADES", this.WX + 34, this.WY + 12, { size: 12, color: '#7a5232', shadow: false });
+    text(c, "OTTO'S TRADES", this.WX + 34, this.WY + 12, { size: 12, color: '#662907', shadow: false });
     text(c, 'five things worth getting good at', this.WX + 34, this.WY + 25,
-      { size: 7, color: '#a8895e', shadow: false });
+      { size: 7, color: '#914007', shadow: false });
     var total = this.points();
     if (total > 0) {
       // an unspent point is the reason you opened this, so it gets a drawn
@@ -1187,10 +1187,10 @@ const Skills = {
       var pw = textWidth(c, pt, 7) + 16;
       var px = this.WX + this.WW - 40 - pw, py = this.WY + 5;
       c.globalAlpha = 0.85 + 0.15 * Math.sin(this.time * 3);
-      inkBox(c, px, py, pw, 16, '#ffe9a8', '#a8761a', PIX * 2);
+      inkBox(c, px, py, pw, 16, '#e08a1a', '#c56906', PIX * 2);
       c.globalAlpha = 1;
       text(c, pt, px + pw / 2, py + 4.5,
-        { size: 7, color: '#6b4a22', align: 'center', shadow: false });
+        { size: 7, color: '#662907', align: 'center', shadow: false });
     }
 
     // ---- close: the frame in miniature, not a bare x
@@ -1200,7 +1200,7 @@ const Skills = {
 
     // ---- the note pinned beside the comb, drawn once so the bar and the node
     // detail share one card rather than sitting on two
-    inkBox(c, this.IX, this.IY, this.IW, this.IH, 'rgba(255,251,236,0.78)', 'rgba(146,116,76,0.65)', PIX * 2);
+    inkBox(c, this.IX, this.IY, this.IW, this.IH, '#f8d089', '#914007', PIX * 2);
 
     // (NO TAB STRIP. The hive is one screen -- all five trades at once -- so
     // there is nothing to page between. The header reports whichever trade the
@@ -1212,7 +1212,7 @@ const Skills = {
 
     text(c, TouchUI.enabled ? 'tap a cell to learn it  --  drag the comb to look around'
                             : '[arrows] move  [Enter] learn  drag to pan  wheel to zoom  [Esc] close',
-      this.WX + this.WW / 2, this.WY + this.WH - 15, { size: 6.5, color: '#8a7454', align: 'center', shadow: false });
+      this.WX + this.WW / 2, this.WY + this.WH - 15, { size: 6.5, color: '#914007', align: 'center', shadow: false });
     c.restore();
   },
 
@@ -1230,10 +1230,10 @@ const Skills = {
       var lv = G.skills[this.PROFS[i]].lv;
       var pts = G.skills[this.PROFS[i]].pts;
       text(c, String(lv), r.x + r.w - 4, r.y + (on ? 3 : 4),
-        { size: 6, color: on ? '#7a5232' : '#5f4526', align: 'right', shadow: false });
+        { size: 6, color: on ? '#662907' : '#5f4526', align: 'right', shadow: false });
       if (pts > 0) {
         // an unmissable dot for "you have something to spend here"
-        c.fillStyle = '#ffe66e';
+        c.fillStyle = '#e08a1a';
         c.fillRect(r.x + 2.5, r.y + 2.5, 2, 2);
       }
     }
@@ -1251,8 +1251,8 @@ const Skills = {
     if (frac < 0) frac = 0;
     if (frac > 1) frac = 1;
 
-    text(c, this.prof(), x, y, { size: 8, color: '#5a3a22', shadow: false });
-    text(c, 'lv ' + r.lv, x + w, y, { size: 8, color: '#7a5232', align: 'right', shadow: false });
+    text(c, this.prof(), x, y, { size: 8, color: '#662907', shadow: false });
+    text(c, 'lv ' + r.lv, x + w, y, { size: 8, color: '#662907', align: 'right', shadow: false });
 
     var by = y + 12, bh = 6;
     c.globalAlpha = capped ? 0.85 : 1;
@@ -1260,9 +1260,9 @@ const Skills = {
     c.globalAlpha = 1;
 
     text(c, capped ? 'mastered' : (r.xp + ' / ' + need + ' xp'),
-      x, by + 9, { size: 6.5, color: '#8a7454', shadow: false });
+      x, by + 9, { size: 6.5, color: '#914007', shadow: false });
     text(c, this.owned(this.prof()) + ' / ' + this.listOf(this.prof()).length + ' learned',
-      x + w, by + 9, { size: 6.5, color: '#8a7454', align: 'right', shadow: false });
+      x + w, by + 9, { size: 6.5, color: '#914007', align: 'right', shadow: false });
   },
 
   // THE HIVE, painted. Everything here is clipped to TX/TY/TW/TH: a cell that
@@ -1357,14 +1357,14 @@ const Skills = {
     c.fillStyle = 'rgba(120,92,58,0.5)'; c.fill();
     c.globalAlpha = 1;
     this._hexPath(c, hub.x, hub.y, HR * 1.24, 0.8);
-    c.fillStyle = '#fff6dc'; c.fill();
+    c.fillStyle = '#f8d089'; c.fill();
     // a warm ring inside the rim, so the queen cell reads as the middle of it all
     c.save();
     c.clip();
     c.fillStyle = 'rgba(255,214,110,0.22)';
     c.fillRect(hub.x - HR * 1.3, hub.y - HR * 0.1, HR * 2.6, HR * 1.4);
     c.restore();
-    this._hexInk(c, hub.x, hub.y, HR * 1.24, '#6e4d2c', PIX * 3.5);
+    this._hexInk(c, hub.x, hub.y, HR * 1.24, '#662907', PIX * 3.5);
     var oimg = ASSETS.o4_0;
     if (oimg && oimg.width) {
       // a slow bob, quantised to the sprite's own texel so it cannot shimmer
@@ -1392,7 +1392,7 @@ const Skills = {
       // with a pencilled outline and a dot where the icon will go.
       if (!show) {
         this._hexPath(c, pos.x, pos.y, HR * 0.92, 0.9);
-        c.fillStyle = 'rgba(206,190,158,0.42)';
+        c.fillStyle = '#d69a4e';
         c.fill();
         c.globalAlpha = 0.5;
         c.setLineDash([2, 2]);
@@ -1428,7 +1428,7 @@ const Skills = {
 
       // the wax: paper, then a wash of the trade's colour once it is yours
       this._hexPath(c, pos.x, pos.y - lift, HR * k, 0.9);
-      c.fillStyle = owned ? '#fff6dc' : (can ? '#fffaea' : '#d8c9a4');
+      c.fillStyle = owned ? '#f8d089' : (can ? '#f8d089' : '#d69a4e');
       c.fill();
       if (owned) {
         c.globalAlpha = 0.34; c.fillStyle = acc; c.fill();
@@ -1453,7 +1453,7 @@ const Skills = {
       // the outline, gone over twice. Learnable rims breathe in their colour.
       if (can) c.globalAlpha = 0.72 + 0.28 * Math.sin(t * 4 + i);
       this._hexInk(c, pos.x, pos.y - lift, HR * k,
-        owned ? acc : (can ? acc : 'rgba(122,90,56,0.6)'),
+        owned ? acc : (can ? acc : '#914007'),
         (owned || can) ? PIX * 3 : PIX * 2);
       c.globalAlpha = 1;
 
@@ -1480,7 +1480,7 @@ const Skills = {
         // the price, as pips along the bottom edge
         for (q = 0; q < nd.cost; q++) {
           var qx = pos.x + (q - (nd.cost - 1) / 2) * 3.4;
-          c.fillStyle = can ? '#c8922e' : 'rgba(122,90,56,0.5)';
+          c.fillStyle = can ? '#c8922e' : '#914007';
           c.fillRect(qx - 1, pos.y - lift + HR * 0.6, 2, 2);
         }
       }
@@ -1489,7 +1489,7 @@ const Skills = {
         c.setLineDash([3, 2.5]);
         c.lineDashOffset = -t * 9;
         this._hexPath(c, pos.x, pos.y - lift, HR * k + 3.4, 0);
-        c.strokeStyle = '#8a5a24'; c.lineWidth = PIX * 2; c.stroke();
+        c.strokeStyle = '#662907'; c.lineWidth = PIX * 2; c.stroke();
         c.setLineDash([]);
         c.lineDashOffset = 0;
         c.lineWidth = 1;
@@ -1517,9 +1517,9 @@ const Skills = {
       on = !TouchUI.enabled && this._in(r, Input.mouse.x, Input.mouse.y);
       can = d > 0 ? this.Z < this.ZMAX : this.Z > this.ZMIN;
       inkBox(c, r.x, r.y, r.w, r.h,
-        can ? (on ? '#ffd98a' : 'rgba(255,247,226,0.92)') : 'rgba(230,220,196,0.65)',
-        can ? '#8a5a24' : 'rgba(150,132,102,0.55)', PIX * 2);
-      lbl = can ? '#5a3210' : 'rgba(140,124,96,0.8)';
+        can ? (on ? '#f0a52c' : 'rgba(255,247,226,0.92)') : 'rgba(230,220,196,0.65)',
+        can ? '#662907' : 'rgba(150,132,102,0.55)', PIX * 2);
+      lbl = can ? '#30150a' : 'rgba(140,124,96,0.8)';
       c.fillStyle = lbl;
       c.fillRect(r.x + r.w / 2 - 4, r.y + r.h / 2 - 1, 8, 2);
       if (d > 0) c.fillRect(r.x + r.w / 2 - 1, r.y + r.h / 2 - 4, 2, 8);
@@ -1581,7 +1581,7 @@ const Skills = {
     uiRule(c, x + 6, y - 8, w - 12, true);
 
     if (!nd) {
-      text(c, prof, tx, ty, { size: 7, color: '#5a3a22', shadow: false });
+      text(c, prof, tx, ty, { size: 7, color: '#662907', shadow: false });
       lines = this._wrap(this.BLURB[this.tab], cols);
       for (i = 0; i < lines.length; i++)
         text(c, lines[i], tx, ty + 12 + i * 8, { size: 6, color: '#7a6244', shadow: false });
@@ -1598,24 +1598,24 @@ const Skills = {
       c.drawImage(img, tx, ty - 2, iw, ih);
       nx = tx + 17;
     }
-    text(c, nd.name, nx, ty, { size: 7, color: nd.star ? '#8a5a24' : '#4a3020', shadow: false });
+    text(c, nd.name, nx, ty, { size: 7, color: nd.star ? '#662907' : '#30150a', shadow: false });
 
     var tag = st === 'owned' ? 'learned'
       : st === 'locked' ? 'locked'
       : nd.cost + (nd.cost > 1 ? ' pts' : ' pt');
-    var tagCol = st === 'owned' ? '#3f7a4e' : st === 'ready' ? '#a8761a' : st === 'broke' ? '#b2601c' : '#907c5c';
+    var tagCol = st === 'owned' ? '#3f7a4e' : st === 'ready' ? '#c56906' : st === 'broke' ? '#b2601c' : '#907c5c';
     text(c, tag, x + w - 8, ty + 1, { size: 6, color: tagCol, align: 'right', shadow: false });
 
     var ly = ty + 14;
     if (nd.star) {
       this._star(c, tx + 3, ly + 3, 3.2, '#e0a72c');
-      text(c, 'keystone', tx + 9, ly, { size: 6, color: '#8a5a24', shadow: false });
+      text(c, 'keystone', tx + 9, ly, { size: 6, color: '#662907', shadow: false });
       ly += 9;
     }
 
     lines = this._wrap(nd.desc, cols);
     for (i = 0; i < lines.length; i++) {
-      text(c, lines[i], tx, ly, { size: 6, color: '#6b573c', shadow: false });
+      text(c, lines[i], tx, ly, { size: 6, color: '#662907', shadow: false });
       ly += 8;
     }
 
@@ -1649,7 +1649,7 @@ const Skills = {
       lines = this._wrap(this._note, cols);
       // only the last two lines fit above the bottom edge
       for (i = 0; i < lines.length && i < 2; i++)
-        text(c, lines[i], tx, y + h - 17 + i * 7.5, { size: 6, color: '#8a5a24', shadow: false });
+        text(c, lines[i], tx, y + h - 17 + i * 7.5, { size: 6, color: '#662907', shadow: false });
       c.globalAlpha = 1;
     }
   },
@@ -1768,7 +1768,7 @@ const Skills = {
       hot ? 'rgba(255,230,110,0.8)' : 'rgba(226,200,150,0.35)');
     var lbl = hot ? (TouchUI.enabled ? 'skills +' + n : '[K] +' + n)
                   : (TouchUI.enabled ? 'skills' : '[K] skills');
-    text(c, lbl, r.x + r.w / 2, r.y + 3.5, { size: 6, color: hot ? '#ffe66e' : '#a89878', align: 'center' });
+    text(c, lbl, r.x + r.w / 2, r.y + 3.5, { size: 6, color: hot ? '#e08a1a' : '#a89878', align: 'center' });
   },
 
   // ---------------------------------------------------------------- install ----

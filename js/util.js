@@ -183,19 +183,33 @@ function rrect(ctx, x, y, w, h, fill, stroke) {
 // not from gradients -- a smooth fill at this density reads as a web page with
 // sprites on it.
 const UIPAL = {
-  out: '#2a1b10',   // outline, on everything
-  sh:  '#5a3a18',   // cast shadow
-  b:   '#7a4a2a',   // leather, dark   -- also the body text ink
-  t:   '#b07840',   // leather, mid
-  c:   '#c99a5e',   // leather, light
-  d:   '#8a5a20',   // gold, dark
-  m:   '#e8b84e',   // gold, mid
-  l:   '#ffd66e',   // gold, light
-  w:   '#fff2c8',   // highlight -- and the paper itself
-  p2:  '#f2e2b4',   // paper, one step down (w toward c) for the dither
-  p3:  '#e2cea0',   // paper, two steps down: the curl
-  rule:'#9fb4c6',   // the ruled line, muted so it never fights the ink
+  // SAMPLED, not chosen. These are the colours the HUD icon art is actually
+  // painted from -- assets/ui_craft.png, ui_skills.png and ui_bag.png quantised
+  // and intersected, so the chrome and the icons are literally the same ramp.
+  out:  '#30150a',   // the near-black outline every icon wears
+  dark: '#662907',   // deep brown, the frame's shadow side
+  mid:  '#914007',   // mid brown
+  fr:   '#c56906',   // the frame face -- bright orange-brown
+  lit:  '#e08a1a',   // frame, sun side (fr stepped toward the panel)
+  warm: '#e3ab61',   // light tan, one step under the panel
+  w:    '#f4bf69',   // THE PANEL. Warm parchment gold, not cream.
+  p2:   '#e3ab61',   // paper, one step down (== warm)
+  p3:   '#c98f45',   // paper, two steps down: the curl and the torn edge
+  // kept for callers that still name the old gold ramp
+  b:    '#662907',
+  t:    '#914007',
+  c:    '#c56906',
+  d:    '#914007',
+  m:    '#e08a1a',
+  l:    '#f4bf69',
+  sh:   '#30150a',
+  rule: '#b07a3a',   // the ruled line, a tint of the frame so it belongs
+  hi:   '#f8d089',   // one step ABOVE the panel: cards, so they read as raised
+  ink:  '#30150a',   // primary text
+  ink2: '#662907',   // secondary text
+  ink3: '#914007',   // dim text
 };
+
 
 // A dither wash: every other texel of `col` on a 2x2 lattice, which is how a
 // pixel artist gets a half-tone without a new colour. Clipped by the caller.

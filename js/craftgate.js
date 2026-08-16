@@ -78,7 +78,7 @@ const Forge = {
   FX_MAX: 18,
 
   PAL: {
-    ink: '#f6e8c9', dim: '#a89878', hi: '#ffe66e', warm: '#c9a271',
+    ink: '#f6e8c9', dim: '#a89878', hi: '#e08a1a', warm: '#c9a271',
     good: '#a0f2b4', bad: '#ff6a7a', wood: '#8a6434',
   },
 
@@ -87,7 +87,7 @@ const Forge = {
   // stays exactly as it is because drawPlaced/_drawTable still paint over open
   // water; everything inside the page uses PAP instead.
   PAP: {
-    ink: '#4a3020', dim: '#8a7454', hi: '#a8761a', warm: '#7a5232',
+    ink: '#30150a', dim: '#914007', hi: '#c56906', warm: '#662907',
     good: '#3f7a4e', bad: '#b23a34', wood: '#8a6434',
   },
 
@@ -1298,7 +1298,7 @@ const Forge = {
     c.strokeStyle = '#c9a271';
     c.lineWidth = 1.6 * u;
     c.beginPath(); c.arc(0, 0, 3.6 * u, 0, TAU); c.stroke();
-    c.strokeStyle = '#a4805a';
+    c.strokeStyle = '#914007';
     c.lineWidth = 1.1 * u;
     c.beginPath(); c.arc(0, 0, 1.9 * u, 0, TAU); c.stroke();
     c.strokeStyle = '#c9a271';
@@ -1321,9 +1321,9 @@ const Forge = {
     uiPageOpen(c, clamp(this._openT, 0, 1), this.WX + this.WW / 2, this.WY + this.WH / 2);
     uiPage(c, this.WX, this.WY, this.WW, this.WH, 1);
 
-    text(c, 'THE WORKBENCH', this.WX + 34, this.WY + 12, { size: 12, color: '#7a5232', shadow: false });
+    text(c, 'THE WORKBENCH', this.WX + 34, this.WY + 12, { size: 12, color: '#662907', shadow: false });
     text(c, 'what otto can make with what otto has', this.WX + 34, this.WY + 25,
-      { size: 7, color: '#a8895e', shadow: false });
+      { size: 7, color: '#914007', shadow: false });
 
     // a real close box, the frame in miniature -- this was a bare lowercase x
     var cr = this._closeRect(), onC = this._in(cr, m.x, m.y);
@@ -1373,8 +1373,8 @@ const Forge = {
     for (i = 0; i < 4; i++) {
       cell = this._gridCell(i);
       inkBox(c, cell.x, cell.y, cell.w, cell.h,
-        i < keys.length ? 'rgba(255,251,236,0.8)' : 'rgba(226,214,186,0.45)',
-        'rgba(146,116,76,0.7)', PIX * 2);
+        i < keys.length ? '#f8d089' : '#d69a4e',
+        '#914007', PIX * 2);
       if (i >= keys.length) continue;
       k = keys[i];
       var need = cost[k], held = this.have(k);
@@ -1385,7 +1385,7 @@ const Forge = {
 
     // arrow
     var ax = this.WX + 118, ay = this.WY + 94;
-    c.strokeStyle = '#8a6440';
+    c.strokeStyle = '#914007';
     c.lineWidth = PIX * 2.5;
     c.lineCap = 'round';
     c.beginPath();
@@ -1398,7 +1398,7 @@ const Forge = {
 
     // result
     var rr = this._resultRect();
-    inkBox(c, rr.x, rr.y, rr.w, rr.h, 'rgba(255,240,196,0.85)', '#a8761a', PIX * 2.5);
+    inkBox(c, rr.x, rr.y, rr.w, rr.h, 'rgba(255,240,196,0.85)', '#c56906', PIX * 2.5);
     if (!row) return;
     if (row.kind === 'locked') {
       text(c, '?', rr.x + rr.w / 2, rr.y + 8, { size: 11, color: '#9a7a4e', align: 'center', shadow: false });
@@ -1442,7 +1442,7 @@ const Forge = {
     // caption an actual home -- and gives the steadiness gauge somewhere to
     // live that is not on top of the caption.
     var wx = this.WX + 34, wy = this.WY + 122, ww = 132, wh = 48;
-    inkBox(c, wx - 4, wy - 4, ww + 8, wh + 22, '#fffbec', 'rgba(146,116,76,0.7)', PIX * 2);
+    inkBox(c, wx - 4, wy - 4, ww + 8, wh + 22, '#f8d089', '#914007', PIX * 2);
     c.fillStyle = '#2a1a0d';
     c.fillRect(wx - 1, wy - 1, ww + 2, wh + 2);
     c.fillStyle = this.mini ? '#7a5f3f' : '#5c4632';        // the bench lamp warms up
@@ -1450,7 +1450,7 @@ const Forge = {
     c.fillStyle = 'rgba(255,214,110,0.10)';
     c.fillRect(wx, wy, ww, wh / 2);
     // his bench: a plank he stands behind
-    c.fillStyle = '#8a6440';
+    c.fillStyle = '#914007';
     c.fillRect(wx + 6, wy + wh - 8, ww - 12, 3);
     var oa = this.mini
       ? ASSETS['otool_' + (Math.floor(this.time * 9) % 4)]
@@ -1476,7 +1476,7 @@ const Forge = {
     if (!this.mini) {
       textFit(c, row ? row.name : 'nothing picked', wx + ww / 2, wy + wh + 5, ww - 4,
         { size: 7.5, align: 'center', shadow: false,
-          color: row && row.kind === 'locked' ? '#8a7454' : '#5a3a22' });
+          color: row && row.kind === 'locked' ? '#914007' : '#662907' });
     } else {
       var bx = wx, by = wy + wh + 4, bw = ww, bh = 9;
       uiMeter(c, bx, by, bw, bh, 1, 'rgba(60,40,22,0.9)', false);
@@ -1531,7 +1531,7 @@ const Forge = {
       if (!row) break;
       r = this._rowRect(i);
       var sel = idx === this.sel, on = this._in(r, m.x, m.y);
-      if (sel) inkBox(c, r.x, r.y, r.w, r.h, 'rgba(255,228,150,0.55)', 'rgba(168,118,26,0.7)', PIX * 2);
+      if (sel) inkBox(c, r.x, r.y, r.w, r.h, '#e08a1a', 'rgba(168,118,26,0.7)', PIX * 2);
       else if (on) inkBox(c, r.x, r.y, r.w, r.h, 'rgba(255,255,255,0.4)', null);
 
       if (row.kind === 'locked') {
@@ -1575,7 +1575,7 @@ const Forge = {
     var hint = TouchUI.enabled
       ? 'tap a row twice to make it  •  x to close'
       : '[1/2] tabs   arrows pick   [enter] make   [C] close';
-    text(c, hint, this.WX + 34, this.WY + this.WH - 16, { size: 6.5, color: '#8a7454', shadow: false });
+    text(c, hint, this.WX + 34, this.WY + this.WH - 16, { size: 6.5, color: '#914007', shadow: false });
   },
 
   // ==== draw: the dock ======================================================
@@ -1628,7 +1628,7 @@ const Forge = {
       var pulse = 0.6 + 0.4 * Math.sin(this.time * 5);
       c.globalAlpha = pulse;
       uiNote(c, bx - 2, by - 4, 28, 10, {});
-      text(c, 'ready', bx + 12, by - 1.5, { size: 6, color: '#4a3020', align: 'center', shadow: false });
+      text(c, 'ready', bx + 12, by - 1.5, { size: 6, color: '#30150a', align: 'center', shadow: false });
       c.globalAlpha = 1;
     } else if (j.dur > 0) {
       c.fillStyle = 'rgba(0,0,0,0.45)';
@@ -1691,7 +1691,7 @@ const Forge = {
     var b = this._placeBar(), ok = !p.why, m = Input.mouse;
     uiNote(c, b.x, b.y, b.w, b.h, {});
     text(c, (p.moveIdx >= 0 ? 'Moving ' : 'Placing ') + t.short, b.x + 8, b.y + 4,
-      { size: 7, color: '#4a3020', shadow: false });
+      { size: 7, color: '#30150a', shadow: false });
     // When the spot is refused, say which way to walk -- the green strips on the
     // planks show the same thing, but only if a free stretch is on screen.
     var line;
@@ -1712,7 +1712,7 @@ const Forge = {
     rrect(c, r0.x, r0.y, r0.w, r0.h, this._in(r0, m.x, m.y) ? 'rgba(232,67,76,0.5)' : 'rgba(0,0,0,0.16)',
       'rgba(74,48,32,0.3)');
     text(c, TouchUI.enabled ? 'CANCEL' : '[esc] DROP', r0.x + r0.w / 2, r0.y + 3.5,
-      { size: 6.5, color: '#4a3020', align: 'center', shadow: false });
+      { size: 6.5, color: '#30150a', align: 'center', shadow: false });
   },
 
   // ==== small helpers =======================================================

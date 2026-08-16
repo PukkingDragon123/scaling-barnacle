@@ -529,19 +529,57 @@ const Game = {
       drawHeart(c, 11 + i * 10, 10, kind);
     }
     drawAC(c, 'shell_pearl', 15, 27, 12);
-    text(c, `${G.money}`, 24, 22.5, { size: 9, color: '#6a4420', shadow: false });
+    text(c, `${G.money}`, 24, 22.5, { size: 9, color: '#662907', shadow: false });
 
-    // right: day + time dial
-    uiNote(c, W - 74, 6, 68, 20, { alpha: 0.9, });
-    text(c, `Day ${G.day}`, W - 12, 11, { size: 8, color: '#6a4420', align: 'right', shadow: false });
-    const dx = W - 60, dy = 20, dr = 8;
-    c.strokeStyle = 'rgba(122,74,48,0.4)'; c.lineWidth = 1;
-    c.beginPath(); c.arc(dx, dy, dr, Math.PI, 0); c.stroke();
-    const day = G.clock > 0.06 && G.clock < 0.66;
-    const tt = day ? (G.clock - 0.06) / 0.6 : clamp((G.clock >= 0.66 ? G.clock - 0.66 : G.clock + 0.34) / 0.4, 0, 1);
+    // ---- right: the day, and an actual CLOCK ------------------------------
+    // This was a hairline arc with an anti-aliased dot on it and the word
+    // "Day 1" -- which tells you the date and nothing about the time, on a
+    // farm where the whole point is that the day runs out. It says the hour
+    // now, and the dial is drawn in texels like everything else.
+    const S_ = APIX, snapv = (v) => Math.round(v / S_) * S_;
+    uiNote(c, W - 84, 6, 78, 22, { alpha: 0.95 });
+    const isDay = G.clock > 0.06 && G.clock < 0.66;
+
+    // 0 on the clock is 6am: dawn lands at 0.06 (7:26) and dusk at 0.66 (9:50),
+    // which is where the sky already changes.
+    const mins = Math.floor(((G.clock * 24 + 6) % 24) * 60);
+    let hh = Math.floor(mins / 60), mm = mins % 60;
+    const ap = hh < 12 ? 'am' : 'pm';
+    let h12 = hh % 12; if (h12 === 0) h12 = 12;
+    const tstr = h12 + ':' + (mm < 10 ? '0' : '') + mm + ap;
+
+    text(c, `Day ${G.day}`, W - 10, 9, { size: 7.5, color: '#30150a', align: 'right', shadow: false });
+    text(c, tstr, W - 10, 18, { size: 7, color: isDay ? '#662907' : '#914007', align: 'right', shadow: false });
+
+    // the dial: a stepped pixel arc, with the sun or the moon riding it
+    const dx = W - 64, dy = 23, dr = 9;
+    const tt = isDay ? (G.clock - 0.06) / 0.6
+      : clamp((G.clock >= 0.66 ? G.clock - 0.66 : G.clock + 0.34) / 0.4, 0, 1);
+    for (let i = 0; i <= 12; i++) {
+      const aa = Math.PI + (i / 12) * Math.PI;
+      c.fillStyle = (i / 12) <= tt ? '#c56906' : '#c98f45';
+      c.fillRect(snapv(dx + Math.cos(aa) * dr), snapv(dy + Math.sin(aa) * dr), S_, S_);
+    }
     const a = Math.PI + tt * Math.PI;
-    c.fillStyle = day ? '#e8a93c' : '#8a9ab8';
-    c.beginPath(); c.arc(dx + Math.cos(a) * dr, dy + Math.sin(a) * dr, 2.4, 0, TAU); c.fill();
+    const sx2 = snapv(dx + Math.cos(a) * dr), sy2 = snapv(dy + Math.sin(a) * dr);
+    if (isDay) {                                   // a sun: body plus four rays
+      c.fillStyle = '#e08a1a';
+      c.fillRect(sx2 - S_ * 2, sy2 - S_ * 2, S_ * 4, S_ * 4);
+      c.fillStyle = '#f4bf69';
+      c.fillRect(sx2 - S_, sy2 - S_ * 2, S_ * 2, S_ * 4);
+      c.fillRect(sx2 - S_ * 2, sy2 - S_, S_ * 4, S_ * 2);
+      c.fillStyle = '#e08a1a';
+      c.fillRect(sx2 - S_, sy2 - S_ * 4, S_ * 2, S_);
+      c.fillRect(sx2 - S_, sy2 + S_ * 3, S_ * 2, S_);
+      c.fillRect(sx2 - S_ * 4, sy2 - S_, S_, S_ * 2);
+      c.fillRect(sx2 + S_ * 3, sy2 - S_, S_, S_ * 2);
+    } else {                                       // a crescent moon
+      c.fillStyle = '#e3d6b4';
+      c.fillRect(sx2 - S_ * 2, sy2 - S_ * 2, S_ * 4, S_ * 4);
+      c.fillRect(sx2 - S_, sy2 - S_ * 3, S_ * 2, S_ * 6);
+      c.fillStyle = '#f4bf69';                     // the bite, in the paper's own tone
+      c.fillRect(sx2, sy2 - S_ * 2, S_ * 3, S_ * 4);
+    }
     // (the [H]/[J] hint used to live here; the tracker below is the affordance
     // now, and the help screen itself lists the keys)
 
@@ -588,7 +626,7 @@ const Game = {
         c.lineTo(tx + 10 + Math.cos(ang2) * 1.6, ty + 9 + Math.sin(ang2) * 1.6);
       }
       c.closePath(); c.fill();
-      textFit(c, name, tx + 17, ty + 5.5, tw - 24, { size: 6.5, color: '#4a3020', shadow: false });
+      textFit(c, name, tx + 17, ty + 5.5, tw - 24, { size: 6.5, color: '#30150a', shadow: false });
       // the hint WRAPS. It used to be one 5.5pt line in a 118-wide panel and the
       // clip took it mid-word -- "go and as" -- which is the whole "text bugs and
       // goes below" complaint in one place.
@@ -625,7 +663,7 @@ const Game = {
           c.beginPath(); c.rect(tx + 4, ey + 3, tw - 8, 18); c.clip();
           c.fillStyle = ready ? '#3f9a58' : '#8a6a44';
           c.fillRect(tx + 7, ey + 6, 4, 4);
-          textFit(c, show.name, tx + 15, ey + 4, tw - 22, { size: 6, color: ready ? '#2f6b40' : '#4a3020', shadow: false });
+          textFit(c, show.name, tx + 15, ey + 4, tw - 22, { size: 6, color: ready ? '#2f6b40' : '#30150a', shadow: false });
           const tail = ready
             ? `ready -- ${(typeof Quests !== 'undefined' && Quests.GIVER_NAMES[show.from]) || show.from} is waiting`
             : (sp ? `${sp.n}/${sp.of}` : '');
@@ -685,7 +723,7 @@ const Game = {
     // the plan, right in the guide. It read `cur.hint` -- a field the old chapter
     // list had and the survey does not -- so the guide printed the word
     // "undefined" at the player on every single open.
-    text(c, "OTTO'S PLAN", 66, y + 2, { size: 7, color: '#ffe66e' });
+    text(c, "OTTO'S PLAN", 66, y + 2, { size: 7, color: '#e08a1a' });
     const S_ = (typeof Side !== 'undefined' && Side && Side.ensure()) ? Side : null;
     const cur = S_ ? S_.mainNow() : null;
     const n = S_ ? S_.mainDone() : 0, of = S_ ? S_.main().length : 0;
@@ -920,7 +958,7 @@ const TitleScene = {
     c.rotate(sway * 0.0035);
     c.translate(-W / 2, -sy);
     uiNote(c, sx, sy, sw, sh, {});
-    text(c, "MR. OTTO'S", W / 2, sy + 8, { size: 14, color: '#7a5232', align: 'center', shadow: false });
+    text(c, "MR. OTTO'S", W / 2, sy + 8, { size: 14, color: '#662907', align: 'center', shadow: false });
     text(c, 'CLAM FARM', W / 2, sy + 24, { size: 22, color: '#3f6d86', align: 'center', shadow: false });
     // a rule and the tagline, on the sign where a sign would carry it
     for (let dx2 = sx + 22; dx2 < sx + sw - 22; dx2 += 6) {
@@ -952,11 +990,11 @@ const TitleScene = {
         // a save to find out which one it was.
         const armed = this.erasing === r.slot;
         text(c, armed ? `erase pier ${r.slot + 1}?` : r.label, bx2 + 18, y, {
-          size: 8, shadow: false, color: armed ? '#a33' : (on ? '#4a3020' : '#8a6a48'),
+          size: 8, shadow: false, color: armed ? '#a33' : (on ? '#30150a' : '#8a6a48'),
         });
         if (r.info && !armed) {
           text(c, `day ${r.info.day}  $${r.info.money}`, bx2 + bw - 24, y + 1, {
-            size: 6, align: 'right', shadow: false, color: on ? '#7a5c3c' : '#a4805a',
+            size: 6, align: 'right', shadow: false, color: on ? '#7a5c3c' : '#914007',
           });
         }
         if (r.info) {
@@ -966,13 +1004,13 @@ const TitleScene = {
           c.fillRect(er.x, er.y, er.w, er.h);
           text(c, armed ? '!' : 'x', er.x + er.w / 2, er.y + 2.5, {
             size: 7, align: 'center', shadow: false,
-            color: (armed || hovE) ? '#f6e8c9' : '#6a4420',
+            color: (armed || hovE) ? '#f6e8c9' : '#662907',
           });
         }
       } else {
         text(c, r.label, bx2 + bw / 2 + 4, y, {
           size: 9, align: 'center', shadow: false,
-          color: on ? '#4a3020' : '#8a6a48',
+          color: on ? '#30150a' : '#8a6a48',
         });
       }
     }
@@ -982,7 +1020,7 @@ const TitleScene = {
     }
     text(c, TouchUI.enabled || matchMedia('(pointer: coarse)').matches
       ? 'tap a pier   x erases' : 'arrows + enter    [x] erase', bx2 + bw / 2, by2 + bh - 11,
-      { size: 6, color: '#a4805a', align: 'center', shadow: false });
+      { size: 6, color: '#914007', align: 'center', shadow: false });
   },
 };
 

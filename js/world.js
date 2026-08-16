@@ -210,7 +210,7 @@ const WorldScene = {
     const w = textWidth(ctx, label, 7) + 12;
     const bx = clamp(this.px, cam + w / 2 + 4, cam + WVW - w / 2 - 4);
     uiNote(ctx, bx - w / 2, DECK_Y - 48, w, 13, {});
-    text(ctx, label, bx, DECK_Y - 45, { size: 7, color: '#4a3020', align: 'center', shadow: false });
+    text(ctx, label, bx, DECK_Y - 45, { size: 7, color: '#30150a', align: 'center', shadow: false });
     ctx.fillStyle = 'rgba(246,232,201,0.95)';
     ctx.beginPath();
     ctx.moveTo(this.px - 3, DECK_Y - 35.5); ctx.lineTo(this.px + 3, DECK_Y - 35.5); ctx.lineTo(this.px, DECK_Y - 31.5);

@@ -262,7 +262,7 @@ const Quests = {
       c.lineTo(x + 17 + Math.cos(ang2) * 2, y + 12 + Math.sin(ang2) * 2);
     }
     c.closePath(); c.fill();
-    text(c, "OTTO'S JOURNAL", x + 26, y + 8, { size: 10, color: '#4a3020', shadow: false });
+    text(c, "OTTO'S JOURNAL", x + 26, y + 8, { size: 10, color: '#30150a', shadow: false });
 
     // ---- the two tabs, drawn as paper index tabs on the right of the header --
     // STORY is the chapters that happen to you; ERRANDS is the jobs you were
@@ -288,7 +288,7 @@ const Quests = {
         c.fillRect(rc.x + rc.w - 1, rc.y, 1, rc.h);
         if (!on) { c.fillStyle = 'rgba(90,60,34,0.22)'; c.fillRect(rc.x + 1, rc.y + 1, rc.w - 2, rc.h - 1); }
         text(c, labels[i], rc.x + rc.w / 2, rc.y + 4, {
-          size: 7, align: 'center', shadow: false, color: on ? '#4a3020' : '#6d4f30' });
+          size: 7, align: 'center', shadow: false, color: on ? '#30150a' : '#6d4f30' });
         tx += tw + 3;
       }
     }
@@ -298,7 +298,7 @@ const Quests = {
     const hovX = Input.mouse.x >= xr.x && Input.mouse.x <= xr.x + xr.w &&
       Input.mouse.y >= xr.y && Input.mouse.y <= xr.y + xr.h;
     uiPanel(c, xr.x, xr.y, xr.w, xr.h, hovX ? 1 : 0.85, !hovX);
-    text(c, 'X', xr.x + xr.w / 2, y + 8.5, { size: 8, color: hovX ? '#f6e8c9' : '#5a3a22', align: 'center', shadow: false });
+    text(c, 'X', xr.x + xr.w / 2, y + 8.5, { size: 8, color: hovX ? '#f6e8c9' : '#662907', align: 'center', shadow: false });
     // a rope divider under the header: two-tone dashes, the pier's own line
     for (let dx2 = x + 12; dx2 < x + w - 12; dx2 += 6) {
       c.fillStyle = '#b08a5c';
@@ -348,7 +348,7 @@ const Quests = {
       const nm = known ? q.name : '. . .';
       text(c, nm, x + 34, ry, {
         size: 8, shadow: false,
-        color: done ? '#8a7458' : (active ? '#4a3020' : '#a4805a'),
+        color: done ? '#8a7458' : (active ? '#30150a' : '#914007'),
       });
       if (active) {
         // one line of the brief, then HOW in gold: the journal doubles as the
@@ -356,7 +356,7 @@ const Quests = {
         // says so instead -- you cannot be working on something you never took.
         if (!took) {
           text(c, 'not taken yet -- go and ask Fintan for it', x + 40, ry + 9,
-            { size: 6.5, color: '#a4805a', shadow: false });
+            { size: 6.5, color: '#914007', shadow: false });
         } else {
           const lines = q.brief || [];
           if (lines.length) text(c, lines[0], x + 40, ry + 9, { size: 6.5, color: '#7a5c3c', shadow: false });
@@ -368,16 +368,16 @@ const Quests = {
         }
         const p = took && S_ ? S_.prog(q) : null;
         if (p) text(c, S_ && S_.isDone(q) ? 'ready' : `${p.n}/${p.of}`, x + w - 16, ry + 9,
-          { size: 6.5, color: (S_ && S_.isDone(q)) ? '#3f9a58' : '#a4805a', align: 'right', shadow: false });
+          { size: 6.5, color: (S_ && S_.isDone(q)) ? '#3f9a58' : '#914007', align: 'right', shadow: false });
       } else if (done && q.from) {
         text(c, `for ${this.GIVER_NAMES[q.from] || q.from}`, x + 40, ry + 9, { size: 6.5, color: '#b09878', shadow: false });
       }
     }
 
-    if (this.scroll > 0) text(c, '^', x + w - 14, listY, { size: 8, color: '#a4805a', shadow: false });
+    if (this.scroll > 0) text(c, '^', x + w - 14, listY, { size: 8, color: '#914007', shadow: false });
     if (this.scroll + this.ROWS < chain.length)
-      text(c, 'v', x + w - 14, listY + this.ROWS * rowH - 12, { size: 8, color: '#a4805a', shadow: false });
-    text(c, '[J] close   arrows scroll   [Tab] errands', x + 12, y + h - 12, { size: 6.5, color: '#a4805a', shadow: false });
+      text(c, 'v', x + w - 14, listY + this.ROWS * rowH - 12, { size: 8, color: '#914007', shadow: false });
+    text(c, '[J] close   arrows scroll   [Tab] errands', x + 12, y + h - 12, { size: 6.5, color: '#914007', shadow: false });
   },
 
   // The errand page. Taller rows than the story page, because an errand has to
@@ -392,9 +392,9 @@ const Quests = {
 
     if (!rows.length) {
       text(c, 'Nobody has asked you for anything yet.', x + 22, y + 44, { size: 8, color: '#7a5c3c', shadow: false });
-      text(c, 'Go and talk to the neighbours. They all want', x + 22, y + 58, { size: 6.5, color: '#a4805a', shadow: false });
-      text(c, 'something, and they are all too polite to shout it.', x + 22, y + 68, { size: 6.5, color: '#a4805a', shadow: false });
-      text(c, '[J] close   [Tab] the survey', x + 12, y + h - 12, { size: 6.5, color: '#a4805a', shadow: false });
+      text(c, 'Go and talk to the neighbours. They all want', x + 22, y + 58, { size: 6.5, color: '#914007', shadow: false });
+      text(c, 'something, and they are all too polite to shout it.', x + 22, y + 68, { size: 6.5, color: '#914007', shadow: false });
+      text(c, '[J] close   [Tab] the survey', x + 12, y + h - 12, { size: 6.5, color: '#914007', shadow: false });
       return;
     }
 
@@ -428,17 +428,17 @@ const Quests = {
       const giver = this.GIVER_NAMES[q.from] || q.from;
       text(c, q.name, x + 34, ry, {
         size: 8, shadow: false,
-        color: done ? '#8a7458' : (offer ? '#7a5c3c' : '#4a3020'),
+        color: done ? '#8a7458' : (offer ? '#7a5c3c' : '#30150a'),
       });
       const bn = (typeof Side !== 'undefined' && Side.BRANCH_NAME[q.branch]) || '';
       text(c, `${giver}  ${bn}`, x + w - 16, ry, {
-        size: 6.5, align: 'right', shadow: false, color: '#a4805a' });
+        size: 6.5, align: 'right', shadow: false, color: '#914007' });
 
       if (done) { continue; }
 
       if (offer) {
         text(c, `not taken yet -- ${giver} is waiting to be asked`, x + 40, ry + 10,
-          { size: 6.5, color: '#a4805a', shadow: false });
+          { size: 6.5, color: '#914007', shadow: false });
         if (q.how) text(c, q.how, x + 40, ry + 19, { size: 6, color: '#b09878', shadow: false });
         continue;
       }
@@ -468,11 +468,11 @@ const Quests = {
         size: 6.5, align: 'right', color: '#3f9a58', shadow: false });
     }
 
-    if (this.escroll > 0) text(c, '^', x + w - 14, listY, { size: 8, color: '#a4805a', shadow: false });
-    if (this.escroll < maxE) text(c, 'v', x + w - 14, listY + this.EROWS * rowH - 14, { size: 8, color: '#a4805a', shadow: false });
+    if (this.escroll > 0) text(c, '^', x + w - 14, listY, { size: 8, color: '#914007', shadow: false });
+    if (this.escroll < maxE) text(c, 'v', x + w - 14, listY + this.EROWS * rowH - 14, { size: 8, color: '#914007', shadow: false });
     const nd = (typeof Side !== 'undefined' && Side) ? Side.doneCount() : 0;
-    text(c, `[J] close   arrows scroll   [Tab] the survey`, x + 12, y + h - 12, { size: 6.5, color: '#a4805a', shadow: false });
-    text(c, `${nd} done`, x + w - 16, y + h - 12, { size: 6.5, align: 'right', color: '#a4805a', shadow: false });
+    text(c, `[J] close   arrows scroll   [Tab] the survey`, x + 12, y + h - 12, { size: 6.5, color: '#914007', shadow: false });
+    text(c, `${nd} done`, x + w - 16, y + h - 12, { size: 6.5, align: 'right', color: '#914007', shadow: false });
   },
 
 };

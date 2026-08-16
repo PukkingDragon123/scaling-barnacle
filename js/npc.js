@@ -782,12 +782,12 @@ const NPCs = {
 
     // ---- name + role -------------------------------------------------------------
     const tx = r.x + 84;
-    text(c, n.full, tx, r.y + 5, { size: 9, color: '#4a3020', shadow: false });
+    text(c, n.full, tx, r.y + 5, { size: 9, color: '#30150a', shadow: false });
     // the pearl band, worn: partners get a small heart by their name instead of a
     // title change -- the game does not need to say the word out loud
     const partnered = G.partner === this.who;
     if (partnered) drawHeart(c, tx + textWidth(c, n.full, 9) + 5, r.y + 5, 'full');
-    text(c, n.role, tx + textWidth(c, n.full, 9) + (partnered ? 16 : 8), r.y + 7.5, { size: 6.5, color: '#a4805a', shadow: false });
+    text(c, n.role, tx + textWidth(c, n.full, 9) + (partnered ? 16 : 8), r.y + 7.5, { size: 6.5, color: '#914007', shadow: false });
 
     // ---- heart row ---------------------------------------------------------------
     const pts = this.points(this.who);
@@ -821,7 +821,7 @@ const NPCs = {
     let ly = r.y + 21;
     for (let i = 0; i < lines.length; i++) {
       const take = clamp(Math.floor(budget), 0, lines[i].length);
-      if (take > 0) text(c, lines[i].slice(0, take), tx, ly, { size: 8, color: '#4a3020', shadow: false });
+      if (take > 0) text(c, lines[i].slice(0, take), tx, ly, { size: 8, color: '#30150a', shadow: false });
       budget -= lines[i].length;
       ly += 10.5;
       if (budget <= 0) break;
@@ -840,7 +840,7 @@ const NPCs = {
       const hint = more
         ? (TouchUI.enabled ? 'tap for more' : '[E] more')
         : (TouchUI.enabled ? 'tap to finish' : '[E] finish   [Esc] leave');
-      text(c, hint, tx + 14, r.y + r.h - 17, { size: 6.5, color: '#a4805a', shadow: false });
+      text(c, hint, tx + 14, r.y + r.h - 17, { size: 6.5, color: '#914007', shadow: false });
     }
 
     const canG = this.canGift(this.who);
@@ -872,13 +872,13 @@ const NPCs = {
       const hov = this._in(rc, mx, my);
       if (hov) hoverName = `${this._itemName(k)}  x${G.storage[k]}`;
       inkBox(c, rc.x, rc.y, rc.w, rc.h,
-        hov ? 'rgba(255,236,182,0.96)' : 'rgba(247,240,220,0.86)',
-        hov ? '#a8761a' : 'rgba(146,116,76,0.5)', hov ? PIX * 3 : PIX * 2);
+        hov ? '#e08a1a' : '#e3ab61',
+        hov ? '#c56906' : '#914007', hov ? PIX * 3 : PIX * 2);
       this._icon(c, k, rc.x + rc.w / 2, rc.y + rc.h / 2 - 3, 20);
       text(c, 'x' + (G.storage[k] || 0), rc.x + rc.w - 3, rc.y + rc.h - 9, {
-        size: 6.5, align: 'right', color: '#6a4420', shadow: false });
+        size: 6.5, align: 'right', color: '#662907', shadow: false });
     }
-    text(c, hoverName, tx, r.y + 20, { size: 7, color: '#7a5232', shadow: false });
+    text(c, hoverName, tx, r.y + 20, { size: 7, color: '#662907', shadow: false });
 
     if (maxPage > 0) {
       for (let i = 0; i < 2; i++) {
@@ -887,7 +887,7 @@ const NPCs = {
         this._button(c, rc, i ? '>' : '<', can, mx, my);
       }
       text(c, `${this.gpage + 1}/${maxPage + 1}`, r.x + 128, r.y + r.h - 16,
-        { size: 6.5, color: '#a4805a', shadow: false });
+        { size: 6.5, color: '#914007', shadow: false });
     }
     this._button(c, this._btn('back'), 'BACK', true, mx, my);
   },
@@ -904,9 +904,9 @@ const NPCs = {
     const img = ASSETS[key];
     if (img && img.width) { drawAC(c, key, cx, cy, s); return; }
     if (key === 'tea' || key === 'teaLeaf' || key === 'crop_tea_p') { this._teacup(c, cx, cy, s); return; }
-    inkBox(c, cx - s / 2, cy - s / 2, s, s, 'rgba(247,240,220,0.8)', 'rgba(146,116,76,0.5)', PIX * 2);
+    inkBox(c, cx - s / 2, cy - s / 2, s, s, '#e3ab61', '#914007', PIX * 2);
     text(c, String(key).charAt(0).toUpperCase(), cx, cy - s / 2 + 2, {
-      size: s * 0.7, align: 'center', color: '#6a4420', shadow: false });
+      size: s * 0.7, align: 'center', color: '#662907', shadow: false });
   },
 
   // The professor's one true love has no art in the manifest, so we draw it.
@@ -917,10 +917,10 @@ const NPCs = {
     c.beginPath();
     c.moveTo(x, y); c.lineTo(x + w, y); c.lineTo(x + w * 0.82, y + h); c.lineTo(x + w * 0.18, y + h);
     c.closePath(); c.fill();
-    c.strokeStyle = '#7a5232'; c.lineWidth = PIX * 2; c.stroke();
+    c.strokeStyle = '#662907'; c.lineWidth = PIX * 2; c.stroke();
     c.fillStyle = '#8a5a2c';
     c.fillRect(x + w * 0.10, y + h * 0.14, w * 0.80, h * 0.22);
-    c.strokeStyle = '#7a5232'; c.lineWidth = PIX * 2;
+    c.strokeStyle = '#662907'; c.lineWidth = PIX * 2;
     c.beginPath(); c.arc(x + w + s * 0.03, y + h * 0.45, s * 0.11, -1.2, 1.2); c.stroke();
     c.fillStyle = '#c9a271';
     c.fillRect(x - w * 0.12, y + h, w * 1.24, PIX * 3);

@@ -297,7 +297,7 @@ const Mining = {
     }
     this.flys.length = 0;
     for (i = 0; i < this.FLY_MAX; i++) {
-      this.flys.push({ live: false, txt: '', x: 0, y: 0, t: 0, col: '#ffe66e' });
+      this.flys.push({ live: false, txt: '', x: 0, y: 0, t: 0, col: '#e08a1a' });
     }
   },
 
@@ -894,7 +894,7 @@ const Mining = {
     var label = noPick ? 'needs a pick' : '[E] mine';
     var tw = textWidth(ctx, label, 7) + 9;
     uiNote(ctx, n.x - tw * 0.5, y - 10, tw, 13, {});
-    text(ctx, label, n.x, y - 7, { size: 7, color: '#4a3020', align: 'center', shadow: false });
+    text(ctx, label, n.x, y - 7, { size: 7, color: '#30150a', align: 'center', shadow: false });
   },
 
   // THE TIMING BAR, over the node you are on. The good zone and its core are drawn
@@ -1144,7 +1144,7 @@ const Mining = {
     f.txt = txt;
     f.x = x; f.y = y;
     f.t = 1.1;
-    f.col = col || '#ffe66e';
+    f.col = col || '#e08a1a';
   },
 
   _collect: function (d) {
@@ -1153,7 +1153,7 @@ const Mining = {
     // Lifted well above the drop: a collection happens inside Otto's silhouette
     // and the host draws him on top of this pass.
     this._fly('+' + d.n + ' ' + this.resName(d.res), d.x, d.y - 22,
-      d.res === 'crystal' ? '#5ad2f0' : (d.res === 'ingot' || d.res === 'ore' ? '#c9d4dc' : '#ffe66e'));
+      d.res === 'crystal' ? '#5ad2f0' : (d.res === 'ingot' || d.res === 'ore' ? '#c9d4dc' : '#e08a1a'));
     d.live = false;
     this._snd('pop', d.res === 'crystal' ? 1.5 : 1.2);
   },
@@ -1409,7 +1409,7 @@ const Mining = {
       // does not degrade, it THROWS, and one throw kills the whole frame.
       var hk = clamp(n.hitT / (n.hitL || 0.16), 0, 1);
       ctx.globalAlpha = hk;
-      ctx.strokeStyle = '#ffe66e';
+      ctx.strokeStyle = '#e08a1a';
       ctx.lineWidth = PIX * 2;
       ctx.beginPath();
       ctx.arc(n.hitX, n.hitY, Math.max(0.1, 2 + (1 - hk) * 5), 0, TAU);
@@ -1442,7 +1442,7 @@ const Mining = {
     ctx.arc(0, 0, r, 0, TAU);
     ctx.stroke();
     if (!soft && p > 0) {
-      ctx.strokeStyle = '#ffe66e';
+      ctx.strokeStyle = '#e08a1a';
       ctx.lineWidth = PIX * 3;
       ctx.beginPath();
       ctx.arc(0, 0, r, -TAU * 0.25, -TAU * 0.25 + TAU * p);

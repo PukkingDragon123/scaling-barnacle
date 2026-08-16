@@ -859,7 +859,7 @@ const Stock = {
         if (f.k !== k || f.x < cam - 20 || f.x > cam + W + 20) continue;
         ctx.globalAlpha = clamp(f.t * 1.6, 0, k === 1 ? 0.95 : 0.7);
         if (k === 1) { drawHeart(ctx, f.x - 3.5, f.y - 2.75, 'full'); continue; }
-        if (!styled) { ctx.fillStyle = k === 0 ? '#bfe8f5' : '#ffe66e'; styled = true; }
+        if (!styled) { ctx.fillStyle = k === 0 ? '#bfe8f5' : '#e08a1a'; styled = true; }
         if (k === 0) { ctx.beginPath(); ctx.arc(f.x, f.y, f.s, 0, TAU); ctx.fill(); }
         else ctx.fillRect(f.x - f.s / 2, f.y - f.s / 2, f.s, f.s);
       }
@@ -990,14 +990,14 @@ const Stock = {
     uiPage(c, X, Y, WWi, HHi, 1);
 
     // ---- title bar -----------------------------------------------------------
-    text(c, 'FISH PENS', X + 34, Y + 12, { size: 12, color: '#7a5232', shadow: false });
+    text(c, 'FISH PENS', X + 34, Y + 12, { size: 12, color: '#662907', shadow: false });
     text(c, 'four berths, and everything in them', X + 34, Y + 25,
-      { size: 7, color: '#a8895e', shadow: false });
+      { size: 7, color: '#914007', shadow: false });
     const bl = `${berths.length}/${this.PEN_CAP} berths`;
     const blw = textWidth(c, bl, 7) + 16;
-    inkBox(c, X + WWi - 54 - blw, Y + 6, blw, 16, '#ffe9a8', '#a8761a', PIX * 2);
+    inkBox(c, X + WWi - 54 - blw, Y + 6, blw, 16, '#e08a1a', '#c56906', PIX * 2);
     text(c, bl, X + WWi - 54 - blw / 2, Y + 10.5,
-      { size: 7, color: '#6b4a22', align: 'center', shadow: false });
+      { size: 7, color: '#662907', align: 'center', shadow: false });
     const cr = this._closeRect();
     inkClose(c, cr, this._in(cr, mx, my));
 
@@ -1007,8 +1007,8 @@ const Stock = {
       const sel = i === this.pen;
       const hov = this._in(r, mx, my);
       inkBox(c, r.x, r.y, r.w, r.h,
-        sel ? '#ffe9a8' : (hov ? 'rgba(255,253,244,0.96)' : 'rgba(240,231,206,0.9)'),
-        sel ? '#a8761a' : 'rgba(146,116,76,0.55)', sel ? PIX * 3 : PIX * 2);
+        sel ? '#e08a1a' : (hov ? '#f8d089' : '#e3ab61'),
+        sel ? '#c56906' : '#914007', sel ? PIX * 3 : PIX * 2);
       text(c, `PEN ${i + 1}`, r.x + r.w / 2, r.y + 3.5,
         { size: 6.5, color: sel ? '#6b4a10' : '#7a6244', align: 'center', shadow: false });
     }
@@ -1020,21 +1020,21 @@ const Stock = {
       if (idx === undefined) { this._drawEmptyBerth(c, r); continue; }
       const a = this.get(idx);
       inkBox(c, r.x, r.y, r.w, r.h,
-        this.sel === i ? 'rgba(255,236,182,0.96)' : (this._in(r, mx, my) ? 'rgba(255,253,244,0.96)' : 'rgba(247,240,220,0.92)'),
-        this.sel === i ? '#a8761a' : 'rgba(146,116,76,0.45)', this.sel === i ? PIX * 3 : PIX * 2);
+        this.sel === i ? '#e08a1a' : (this._in(r, mx, my) ? '#f8d089' : '#e3ab61'),
+        this.sel === i ? '#c56906' : '#914007', this.sel === i ? PIX * 3 : PIX * 2);
 
       // portrait: a fixed frame per state, so the list does not flicker
       const art = `stock_${a.species}_${a.product ? 7 : (this.adult(a) ? 4 : 1)}`;
-      inkBox(c, r.x + 2, r.y + 3, 26, 26, 'rgba(255,251,236,0.85)', 'rgba(146,116,76,0.45)', PIX);
+      inkBox(c, r.x + 2, r.y + 3, 26, 26, '#f8d089', '#914007', PIX);
       const pw = Math.min(24, this._fitW(art, 22));
       drawAC(c, art, r.x + 15, r.y + 16, pw, assetH(art, pw));
 
       const sp = this.byKey(a.species);
-      text(c, a.name, r.x + 33, r.y + 3, { size: 7.5, color: '#4a3020', shadow: false });
+      text(c, a.name, r.x + 33, r.y + 3, { size: 7.5, color: '#30150a', shadow: false });
       text(c, `${sp.name}  •  ${this.adult(a) ? 'adult' : 'fry'}`,
-        r.x + 39 + textWidth(c, a.name, 7.5), r.y + 4, { size: 6, color: '#8a7454', shadow: false });
+        r.x + 39 + textWidth(c, a.name, 7.5), r.y + 4, { size: 6, color: '#914007', shadow: false });
       text(c, this._status(a), r.x + 33, r.y + 12,
-        { size: 6, shadow: false, color: a.product ? '#3f7a4e' : (a.fed ? '#8a7454' : '#b2601c') });
+        { size: 6, shadow: false, color: a.product ? '#3f7a4e' : (a.fed ? '#914007' : '#b2601c') });
 
       // happiness as five hearts — the relationship, at a glance
       for (let h = 0; h < 5; h++) {
@@ -1043,7 +1043,7 @@ const Stock = {
         drawHeart(c, r.x + 33 + h * 8, r.y + 21, kind);
       }
       text(c, a.petted ? 'petted today' : 'wants a scratch', r.x + 78, r.y + 21.5,
-        { size: 6, shadow: false, color: a.petted ? '#8a9484' : '#a8761a' });
+        { size: 6, shadow: false, color: a.petted ? '#8a9484' : '#c56906' });
 
       this._drawBtn(c, this._collectRect(i), a.product ? 'COLLECT' : 'NOTHING YET', !!a.product, mx, my, '#a0f2b4');
       this._drawBtn(c, this._feedRect(i), a.fed ? 'FED' : 'FEED', !a.fed, mx, my, '#bfe8f5');
@@ -1056,30 +1056,30 @@ const Stock = {
     this._drawBtn(c, this._feedAllRect(), 'FEED ALL', hungry > 0, mx, my, '#bfe8f5');
     this._drawBtn(c, this._collectAllRect(), 'COLLECT ALL', ready > 0, mx, my, '#a0f2b4');
     text(c, TouchUI.enabled ? 'tap a berth, then FEED / PET / COLLECT' : '[F] feed  [P] pet  [C] collect  [Esc] close',
-      X + 180, Y + HHi - 21, { size: 6.5, color: '#8a7454', shadow: false });
+      X + 180, Y + HHi - 21, { size: 6.5, color: '#914007', shadow: false });
     text(c, `$${G.money}`, X + WWi - 34, Y + HHi - 21, { size: 6.5, color: '#3f7a4e', align: 'right', shadow: false });
     c.restore();
   },
 
   _drawEmptyBerth(c, r) {
-    c.strokeStyle = 'rgba(146,116,76,0.5)';
+    c.strokeStyle = '#914007';
     c.lineWidth = PIX * 2;
     c.setLineDash([2.5, 2.5]);
     c.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
     c.setLineDash([]);
     c.lineWidth = 1;
-    text(c, 'empty berth', r.x + 10, r.y + 8, { size: 7, color: '#8a7454', shadow: false });
-    text(c, "buy fry at Sprout's Stall", r.x + 10, r.y + 17, { size: 6, color: '#a08a68', shadow: false });
+    text(c, 'empty berth', r.x + 10, r.y + 8, { size: 7, color: '#914007', shadow: false });
+    text(c, "buy fry at Sprout's Stall", r.x + 10, r.y + 17, { size: 6, color: '#914007', shadow: false });
   },
 
   _drawBtn(c, r, label, active, mx, my, col) {
     const hov = active && this._in(r, mx, my);
     inkBox(c, r.x, r.y, r.w, r.h,
-      active ? (hov ? '#ffd98a' : '#ffe9a8') : 'rgba(228,218,192,0.8)',
-      active ? '#8a5a24' : 'rgba(150,132,102,0.6)', active ? PIX * 2.5 : PIX * 2);
+      active ? (hov ? '#f0a52c' : '#e08a1a') : '#d69a4e',
+      active ? '#662907' : 'rgba(150,132,102,0.6)', active ? PIX * 2.5 : PIX * 2);
     text(c, label, r.x + r.w / 2, r.y + 3, {
       size: 6.5, align: 'center', shadow: false,
-      color: active ? '#5a3210' : 'rgba(140,124,96,0.85)',
+      color: active ? '#30150a' : 'rgba(140,124,96,0.85)',
     });
   },
 

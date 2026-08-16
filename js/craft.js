@@ -419,7 +419,7 @@ const Craft = {
     else if (r.buy) { SND.cash(); Game.toast(`Ordered: ${this.name(r)}`); }
     else { SND.clink(); Game.toast(`Made: ${this.name(r)}`); }
 
-    this._spark(r.tab === 'build' ? '#c9a271' : '#ffe66e');
+    this._spark(r.tab === 'build' ? '#c9a271' : '#e08a1a');
     this._say('');
     if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
     Game.save();
@@ -858,7 +858,7 @@ const Craft = {
     const btn = this._btnRect(i);
     const bHov = this._in(btn, mx, my);
     let bLabel = rec.btn || (rec.buy ? 'ORDER' : this.TABS[this.tab].verb);
-    let bCol = '#4a3020', bFill = 'rgba(160,120,74,0.30)', bEdge = 'rgba(90,58,30,0.55)';
+    let bCol = '#30150a', bFill = 'rgba(160,120,74,0.30)', bEdge = 'rgba(90,58,30,0.55)';
     if (isDone) { bLabel = rec.doneText || (tabId === 'build' ? 'BUILT' : 'DONE'); bCol = '#8a7a62'; bFill = 'rgba(160,120,74,0.14)'; }
     else if (blocked) { bLabel = 'LOCKED'; bCol = '#8a7a62'; bFill = 'rgba(160,120,74,0.14)'; }
     else if (!ok) { bCol = '#a83030'; bFill = 'rgba(168,48,48,0.12)'; bEdge = 'rgba(168,48,48,0.45)'; }
@@ -903,7 +903,7 @@ const Craft = {
     text(ctx, "otto's crafting bench", X + WW / 2, Y + 6, { size: 9, color: '#5a3a1e', align: 'center', shadow: false });
     ctx.fillStyle = 'rgba(90,58,30,0.5)';
     ctx.fillRect(X + WW / 2 - 58, Y + 17, 116, PIX * 2);
-    text(ctx, `$${G.money}`, X + 12, Y + 7, { size: 8, color: '#6a4420', shadow: false });
+    text(ctx, `$${G.money}`, X + 12, Y + 7, { size: 8, color: '#662907', shadow: false });
 
     const cr = this._closeRect();
     const cHov = this._in(cr, mx, my);
@@ -928,9 +928,9 @@ const Craft = {
         ctx.fillRect(r.x, r.y + r.h, r.w, PIX * 2);
       }
       text(ctx, `${i + 1}. ${this.TABS[i].name}`, r.x + r.w / 2, r.y + 4,
-        { size: 7.5, color: sel ? '#4a3020' : '#7a5232', align: 'center', shadow: false });
+        { size: 7.5, color: sel ? '#30150a' : '#662907', align: 'center', shadow: false });
     }
-    text(ctx, this.TABS[this.tab].blurb, X + WW - 12, Y + 26, { size: 6.5, color: '#7a5232', align: 'right', shadow: false });
+    text(ctx, this.TABS[this.tab].blurb, X + WW - 12, Y + 26, { size: 6.5, color: '#662907', align: 'right', shadow: false });
 
     // ---- rows: paper tags tied to the board ----------------------------
     const tabId = this.TABS[this.tab].id;
@@ -974,7 +974,7 @@ const Craft = {
       // name (+ how many you already have of the output)
       const nameX = r.x + 36;
       const label = this.name(rec);
-      text(ctx, label, nameX, r.y + 3, { size: 8, color: isDone ? '#8a7a62' : '#4a3020', shadow: false });
+      text(ctx, label, nameX, r.y + 3, { size: 8, color: isDone ? '#8a7a62' : '#30150a', shadow: false });
       if (rec.out) {
         const n = this.have(rec.out.key);
         if (n > 0)
@@ -987,14 +987,14 @@ const Craft = {
       const chipY = r.y + 14;
       if (isDone) {
         text(ctx, rec.flag ? 'standing on the dock' : (rec.counter ? 'as many as the planks will hold' : 'done'),
-          nameX, chipY, { size: 6.5, color: '#7a5232', shadow: false });
+          nameX, chipY, { size: 6.5, color: '#662907', shadow: false });
         this._rowButton(ctx, i, rec, isDone, false, false, tabId, mx, my);
         continue;
       }
       const cost$ = this.price(rec);
       if (cost$ > 0) {
         const afford = G.money >= cost$;
-        text(ctx, `$${cost$}`, cx2, chipY, { size: 6.5, color: afford ? '#6a4420' : '#a83030', shadow: false });
+        text(ctx, `$${cost$}`, cx2, chipY, { size: 6.5, color: afford ? '#662907' : '#a83030', shadow: false });
         cx2 += textWidth(ctx, `$${cost$}`, 6.5) + 8;
       }
       for (const k in rec.cost) {
@@ -1006,7 +1006,7 @@ const Craft = {
         cx2 += 12 + textWidth(ctx, s, 6.5) + 7;
       }
       if (cost$ === 0 && cx2 === nameX)
-        text(ctx, 'free', cx2, chipY, { size: 6.5, color: '#7a5232', shadow: false });
+        text(ctx, 'free', cx2, chipY, { size: 6.5, color: '#662907', shadow: false });
 
       // EAT button, for a dish you already have one of
       const dish = rec.out && this.DISHES[rec.out.key];
@@ -1018,7 +1018,7 @@ const Craft = {
         ctx.strokeStyle = '#7a4a2c';
         ctx.lineWidth = 1;
         ctx.strokeRect(er.x + 0.5, er.y + 0.5, er.w - 1, er.h - 1);
-        text(ctx, 'EAT', er.x + er.w / 2, er.y + 4.5, { size: 7.5, color: '#4a3020', align: 'center', shadow: false });
+        text(ctx, 'EAT', er.x + er.w / 2, er.y + 4.5, { size: 7.5, color: '#30150a', align: 'center', shadow: false });
       }
 
       this._rowButton(ctx, i, rec, isDone, blocked, ok, tabId, mx, my);
@@ -1064,11 +1064,11 @@ const Craft = {
 
     // ---- footer: hint, page, arrows ------------------------------------
     text(ctx, TouchUI.enabled ? 'tap a tag to read  •  X to put the tools down' : '[1-3] shelves  [wheel] scroll  [Esc] done',
-      X + 14, Y + 206, { size: 6.5, color: '#7a5232', shadow: false });
+      X + 14, Y + 206, { size: 6.5, color: '#662907', shadow: false });
     const max = Math.max(0, this._rows.length - this.VIS);
     if (max > 0) {
       text(ctx, `${this.scroll + 1}-${Math.min(this._rows.length, this.scroll + this.VIS)} / ${this._rows.length}`,
-        X + WW - 62, Y + 206, { size: 6.5, color: '#7a5232', align: 'right', shadow: false });
+        X + WW - 62, Y + 206, { size: 6.5, color: '#662907', align: 'right', shadow: false });
       for (const d of [-1, 1]) {
         const ar = this._arrowRect(d);
         const canGo = d < 0 ? this.scroll > 0 : this.scroll < max;
@@ -1079,7 +1079,7 @@ const Craft = {
         ctx.lineWidth = 1;
         ctx.strokeRect(ar.x + 0.5, ar.y + 0.5, ar.w - 1, ar.h - 1);
         text(ctx, d < 0 ? '^' : 'v', ar.x + ar.w / 2, ar.y + 2.5,
-          { size: 8, color: canGo ? '#4a3020' : '#a08a68', align: 'center', shadow: false });
+          { size: 8, color: canGo ? '#30150a' : '#914007', align: 'center', shadow: false });
       }
     }
 

@@ -217,7 +217,7 @@ const HouseScene = {
       const w = textWidth(ctx, label, 7) + 12;
       const bx = clamp(this.px, w / 2 + 4, W - w / 2 - 4);
       uiNote(ctx, bx - w / 2, FLOOR - 46, w, 13, {});
-      text(ctx, label, bx, FLOOR - 43, { size: 7, color: '#4a3020', align: 'center', shadow: false });
+      text(ctx, label, bx, FLOOR - 43, { size: 7, color: '#30150a', align: 'center', shadow: false });
     }
 
     // evening warmth

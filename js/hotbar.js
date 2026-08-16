@@ -402,7 +402,7 @@ const Hotbar = {
       ctx.fillStyle = dark;
       ctx.fillRect(-4 * u, -4 * u, 8 * u, 1 * u);
       text(ctx, String(key).slice(0, 2).toUpperCase(), 0, -1.5 * u, {
-        size: Math.max(5, 4.6 * u), color: '#6a4420', align: 'center', shadow: false });
+        size: Math.max(5, 4.6 * u), color: '#662907', align: 'center', shadow: false });
     }
     ctx.restore();
   },
@@ -452,13 +452,13 @@ const Hotbar = {
       const cx = this.cellX(i), cy = y0 - (on ? this.LIFT : 0);
 
       inkBox(ctx, cx, cy, C, C,
-        on ? 'rgba(255,236,182,0.96)' : (i === hov ? 'rgba(255,253,244,0.94)' : 'rgba(240,231,206,0.88)'),
-        on ? '#a8761a' : 'rgba(146,116,76,0.5)', on ? PIX * 3 : PIX * 2);
+        on ? '#e08a1a' : (i === hov ? '#f8d089' : '#e3ab61'),
+        on ? '#c56906' : '#914007', on ? PIX * 3 : PIX * 2);
 
       // key hint, top-left, dimmed so it never fights the art
       if (!TouchUI.enabled) {
         text(ctx, String((i + 1) % 10), cx + 1.6, cy + 1, {
-          size: 5, color: on ? 'rgba(138,90,36,0.95)' : 'rgba(146,116,76,0.6)', shadow: false });
+          size: 5, color: on ? 'rgba(138,90,36,0.95)' : '#914007', shadow: false });
       }
 
       if (this.isEmpty(s)) continue;
@@ -477,7 +477,7 @@ const Hotbar = {
       ctx.restore();
       if (s.kind === 'item' && s.n > 1) {
         text(ctx, String(s.n), cx + C - 1.6, cy + C - 7.5, {
-          size: 6.5, color: '#4a3020', align: 'right', shadow: false });
+          size: 6.5, color: '#30150a', align: 'right', shadow: false });
       }
     }
 
@@ -499,7 +499,7 @@ const Hotbar = {
       const ny = gy - 15;
       ctx.globalAlpha = clamp(this.nameT / 0.4, 0, 1);
       uiNote(ctx, nx, ny, w, 13, {});
-      text(ctx, name, nx + w / 2, ny + 3, { size: 7, color: '#4a3020', align: 'center', shadow: false });
+      text(ctx, name, nx + w / 2, ny + 3, { size: 7, color: '#30150a', align: 'center', shadow: false });
       ctx.globalAlpha = 1;
     }
     ctx.restore();

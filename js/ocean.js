@@ -2811,7 +2811,7 @@ const Ocean = {
           lx - lw / 2, y, lw, cut);
       }
     } else {
-      ctx.fillStyle = '#a4805a';
+      ctx.fillStyle = '#914007';
       ctx.fillRect(lx - 6, lTop, 2, lBot - lTop);
       ctx.fillRect(lx + 4, lTop, 2, lBot - lTop);
       ctx.fillStyle = this.atDock ? '#ffd66e' : '#c9a271';
@@ -3350,7 +3350,7 @@ const Ocean = {
     ctx.fillStyle = '#5a4526';
     ctx.fillRect(-4.5, -6.5, 9, 2);
     ctx.restore();
-    text(ctx, `${this.bagCount}/${cap}`, W - 52, by + 4, { size: 8, shadow: false, color: full ? '#b23a34' : '#4a3020' });
+    text(ctx, `${this.bagCount}/${cap}`, W - 52, by + 4, { size: 8, shadow: false, color: full ? '#b23a34' : '#30150a' });
 
     // The ladder prompt, and only when he is actually at it.
     if (!this.over && !this.leaving && this.atDock) {
@@ -3358,7 +3358,7 @@ const Ocean = {
       const lw2 = textWidth(ctx, lab, 7) + 16;
       ctx.globalAlpha = 0.75 + 0.25 * Math.sin(this.time * 3);
       uiNote(ctx, W / 2 - lw2 / 2, 38, lw2, 14, { tape: true });
-      text(ctx, lab, W / 2, 41.5, { size: 7, color: '#4a3020', align: 'center', shadow: false });
+      text(ctx, lab, W / 2, 41.5, { size: 7, color: '#30150a', align: 'center', shadow: false });
       ctx.globalAlpha = 1;
     } else if (!this.over && !this.leaving && this.py < 20) {
       // Up top and not home: say which way home is, because the sea is wide and
@@ -3382,7 +3382,7 @@ const Ocean = {
         const lw = textWidth(ctx, lbl, 7) + 16;
         ctx.globalAlpha = 0.9;
         uiNote(ctx, W / 2 - lw / 2, 36, lw, 15, { alpha: 0.9, });
-        text(ctx, lbl, W / 2, 39, { size: 7, color: '#5a3a22', align: 'center', shadow: false });
+        text(ctx, lbl, W / 2, 39, { size: 7, color: '#662907', align: 'center', shadow: false });
         ctx.globalAlpha = 1;
       }
     }
@@ -3395,7 +3395,7 @@ const Ocean = {
       ctx.globalAlpha = a;
       const w = textWidth(ctx, this.msg, 8) + 16;
       uiNote(ctx, W / 2 - w / 2, H * 0.28, w, 15, { tape: true });
-      text(ctx, this.msg, W / 2, H * 0.28 + 4, { size: 8, color: '#4a3020', align: 'center', shadow: false });
+      text(ctx, this.msg, W / 2, H * 0.28 + 4, { size: 8, color: '#30150a', align: 'center', shadow: false });
       ctx.globalAlpha = 1;
     }
   },

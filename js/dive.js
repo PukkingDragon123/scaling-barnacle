@@ -479,7 +479,7 @@ const DiveScene = {
             this.particles.push({
               x: mx + rand(-5, 5), y: my + rand(-5, 5),
               vx: rand(-30, 30), vy: rand(-45, 10), t: rand(0.25, 0.55),
-              col: Math.random() < 0.55 ? '#8a9484' : (G.gear.scraper === 2 && Math.random() < 0.5 ? '#ffe66e' : '#cfc8b8'), s: 1,
+              col: Math.random() < 0.55 ? '#8a9484' : (G.gear.scraper === 2 && Math.random() < 0.5 ? '#e08a1a' : '#cfc8b8'), s: 1,
             });
           if (Math.random() < 0.4)
             this.bubbles.push({ x: mx + rand(-4, 4), y: Input.mouse.y, r: rand(1, 2.5), v: rand(18, 34), wob: rand(TAU) });
@@ -847,7 +847,7 @@ const DiveScene = {
       ctx.fillRect(bx - winPx, by + 1, winPx * 2, 1);
       // swinging marker
       const mxk = bx + p.marker * halfW;
-      ctx.fillStyle = '#ffe66e';
+      ctx.fillStyle = '#e08a1a';
       ctx.beginPath();
       ctx.moveTo(mxk, by + 7.5); ctx.lineTo(mxk - 3, by + 12.5); ctx.lineTo(mxk + 3, by + 12.5);
       ctx.closePath(); ctx.fill();
@@ -1036,7 +1036,7 @@ const DiveScene = {
     text(ctx, '~', gx - 4.5, gy1 - 5, { size: 5, color: '#5a7484', align: 'right' });
     // you are here
     const my2 = yFor(this.camY);
-    ctx.fillStyle = '#ffe66e';
+    ctx.fillStyle = '#e08a1a';
     ctx.beginPath(); ctx.moveTo(gx - 3.5, my2); ctx.lineTo(gx - 8, my2 - 3); ctx.lineTo(gx - 8, my2 + 3); ctx.closePath(); ctx.fill();
     ctx.fillRect(gx - 1.5, my2 - 1, 9, 2);
 
@@ -1077,7 +1077,7 @@ const DiveScene = {
     ctx.fillStyle = '#5a4526';
     ctx.fillRect(-4.5, -6.5, 9, 2);
     ctx.restore();
-    text(ctx, `${this.bagCount}/${cap}`, W - 52, H - 24, { size: 8, shadow: false, color: bagFull ? '#b23a34' : '#4a3020' });
+    text(ctx, `${this.bagCount}/${cap}`, W - 52, H - 24, { size: 8, shadow: false, color: bagFull ? '#b23a34' : '#30150a' });
     // depth panel
     uiNote(ctx, W - 46, 26, 42, 13, {});
     text(ctx, `${Math.round((this.camY + H * 0.5) / 12)}m`, W - 9, 29, { size: 8, color: '#2a5068', align: 'right', shadow: false });
@@ -1095,7 +1095,7 @@ const DiveScene = {
       }
       const bob = Math.sin(this.time * 3.2) * 2.5;
       const active = this.surfaceT > 0;
-      ctx.fillStyle = active ? '#ffe66e' : 'rgba(200,235,250,0.8)';
+      ctx.fillStyle = active ? '#e08a1a' : 'rgba(200,235,250,0.8)';
       for (let i = 0; i < 2; i++) {
         ctx.beginPath();
         ctx.moveTo(W / 2, 30 + bob + i * 7);
@@ -1103,17 +1103,17 @@ const DiveScene = {
         ctx.lineTo(W / 2 + 6, 37 + bob + i * 7);
         ctx.closePath(); ctx.fill();
       }
-      text(ctx, active ? 'kick! kick!' : 'swim up to surface', W / 2, 48 + bob, { size: 7, color: active ? '#ffe66e' : 'rgba(200,235,250,0.8)', align: 'center' });
+      text(ctx, active ? 'kick! kick!' : 'swim up to surface', W / 2, 48 + bob, { size: 7, color: active ? '#e08a1a' : 'rgba(200,235,250,0.8)', align: 'center' });
       if (active) {
         rrect(ctx, W / 2 - 20, 58 + bob, 40, 4, '#08141c', '#2c4654');
-        ctx.fillStyle = '#ffe66e';
+        ctx.fillStyle = '#e08a1a';
         ctx.fillRect(W / 2 - 19, 59 + bob, 38 * clamp(this.surfaceT / 0.45, 0, 1), 2);
       }
     }
     // combo
     if (this.combo >= 3) {
       const cs = 9 + Math.min(this.combo, 15);
-      text(ctx, `x${this.combo}`, Input.mouse.x + 14, Input.mouse.y - 16, { size: Math.min(cs, 16), color: '#ffe66e', align: 'center' });
+      text(ctx, `x${this.combo}`, Input.mouse.x + 14, Input.mouse.y - 16, { size: Math.min(cs, 16), color: '#e08a1a', align: 'center' });
     }
     // messages
     if (this.msgT > 0 && this.msg)
@@ -1317,7 +1317,7 @@ const DiveScene = {
       if (scraping) ctx.rotate(Math.sin(this.time * 40) * 0.14);
       drawAC(ctx, 'g_scraper', 3, 3, 18);
       if (G.gear.scraper === 2 && scraping && Math.random() < 0.5) {
-        ctx.fillStyle = '#ffe66e';
+        ctx.fillStyle = '#e08a1a';
         ctx.fillRect(rand(-8, 0), rand(-8, -2), 1, 1);
       }
     }
