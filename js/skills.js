@@ -267,6 +267,7 @@ const Skills = {
   hover: '',              // node key under the pointer, '' for none
   time: 0,
   _note: '', _noteT: 0,
+  _pan: null,
   _lvT: 0, _lvTab: -1,    // level-up flash, so the tab pulses when it happens
   _stamp: -1,             // double-call guard, keyed on Game.time
   _installed: false,
@@ -733,6 +734,21 @@ const Skills = {
 
   _closeRect: function () { return { x: this.WX + this.WW - 32, y: this.WY + 10, w: 20, h: 17 }; },
 
+  // An iPad has no scroll wheel, so the zoom needs something to press.
+  _zoomRect: function (d) {
+    return { x: this.TX + this.TW - 40 + (d > 0 ? 0 : 19), y: this.TY + this.TH - 20, w: 17, h: 16 };
+  },
+
+  // Zoom about the middle of the view, so the cell you are looking at stays put.
+  _zoom: function (d) {
+    var z = clamp(Math.round((this.Z + d) * 4) / 4, this.ZMIN, this.ZMAX);
+    if (z === this.Z) return;
+    this.Z = z;
+    this._clampCam();
+    this._wantX = this._cx; this._wantY = this._cy;
+    this._snd('blip');
+  },
+
   _tabRect: function (i) {
     var inner = this.WW - 16, gap = 2;
     var w = (inner - gap * 4) / 5;
@@ -763,6 +779,79 @@ const Skills = {
   HR: 12,
   RING: 1.8,
   hubXY: function () { return { x: this.WX + 142, y: this.WY + 136 }; },
+
+  // ---- THE CAMERA ----------------------------------------------------------
+  // HR cannot simply be made bigger: five spokes of four tiers need
+  // 16.1 * HR of HEIGHT, and the page has 198, which is what pins HR at 12.
+  // The way to see the comb bigger is therefore to look at less of it -- a
+  // camera over the hive, following the selection. Z is device-friendly at
+  // half steps and the pan is quantised to the same pitch, because a smoothly
+  // easing camera over nearest-neighbour sprites re-rasterises every icon on
+  // every frame and the whole comb shimmers.
+  Z: 1.75,
+  ZMIN: 1, ZMAX: 3,
+  _cx: 0, _cy: 0,          // where the camera is looking, in hive units
+  _cinit: false,
+
+  // The camera must be somewhere sensible before ANYTHING reads it. openUI()
+  // aims it at the selection, but `open` is a public field and the panel can be
+  // raised by setting it directly -- in which case the camera sat at the hive's
+  // ORIGIN, which is up and left of the whole comb, and the page drew blank.
+  // Cheap, idempotent, and called from both update() and draw().
+  _camEnsure: function () {
+    if (this._cinit) return;
+    this._cinit = true;
+    var h = this.hubXY();
+    this._cx = this._wantX = h.x;
+    this._cy = this._wantY = h.y;
+    this._clampCam();
+  },
+
+  // The hive's full extent, so the camera can be clamped to it rather than
+  // wandering off into blank paper.
+  _bounds: function () {
+    var l = this._flat, i, p, r = this.HR + 4;
+    var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (i = 0; i < l.length; i++) {
+      p = this.hexAt(l[i]);
+      if (p.x - r < x0) x0 = p.x - r;
+      if (p.y - r < y0) y0 = p.y - r;
+      if (p.x + r > x1) x1 = p.x + r;
+      if (p.y + r > y1) y1 = p.y + r;
+    }
+    return { x0: x0, y0: y0, x1: x1, y1: y1 };
+  },
+
+  // Keep the camera so the comb never pulls away from the edge of its canvas.
+  // When the hive is SMALLER than the view at this zoom, centre it instead --
+  // clamp(v, lo, hi) with hi < lo returns hi, which would jam it in a corner.
+  _clampCam: function () {
+    var b = this._bounds(), z = this.Z;
+    var hw = this.TW / (2 * z), hh = this.TH / (2 * z);
+    var lo, hi;
+    lo = b.x0 + hw; hi = b.x1 - hw;
+    this._cx = hi < lo ? (b.x0 + b.x1) / 2 : clamp(this._cx, lo, hi);
+    lo = b.y0 + hh; hi = b.y1 - hh;
+    this._cy = hi < lo ? (b.y0 + b.y1) / 2 : clamp(this._cy, lo, hi);
+  },
+
+  // Screen point -> hive point. Every hit test goes through this, so the boxes
+  // can never drift from what is drawn.
+  _toHive: function (x, y) {
+    var z = this.Z;
+    return {
+      x: (x - (this.TX + this.TW / 2)) / z + this._cx,
+      y: (y - (this.TY + this.TH / 2)) / z + this._cy,
+    };
+  },
+
+  _camTo: function (nd, snap) {
+    if (!nd) return;
+    var p = this.hexAt(nd);
+    if (snap) { this._cx = p.x; this._cy = p.y; }
+    this._wantX = p.x; this._wantY = p.y;
+  },
+  _wantX: 0, _wantY: 0,
   profAngle: function (pi) { return -Math.PI / 2 + pi * TAU / 5; },
 
   // Where a node sits, in screen units. Everything else -- the hit test, the
@@ -836,13 +925,18 @@ const Skills = {
   _in: function (r, x, y) { return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; },
 
   _hit: function (mx, my) {
+    // outside the hive's canvas there is nothing to hit, whatever the camera
+    if (mx < this.TX || mx > this.TX + this.TW || my < this.TY || my > this.TY + this.TH) return -1;
+    var h = this._toHive(mx, my);
     var list = this.list(), i, nd, r;
+    var slop = 3 / this.Z;
     for (i = 0; i < list.length; i++) {
       nd = list[i];
       r = this._nodeRect(nd);
       // a couple of units of slop: 24-unit boxes on a 480-wide screen are small
       // under a finger
-      if (mx >= r.x - 3 && mx <= r.x + r.w + 3 && my >= r.y - 3 && my <= r.y + r.h + 3) return i;
+      if (h.x >= r.x - slop && h.x <= r.x + r.w + slop &&
+          h.y >= r.y - slop && h.y <= r.y + r.h + slop) return i;
     }
     return -1;
   },
@@ -868,6 +962,10 @@ const Skills = {
     this.open = true;
     this._openT = 0;              // the page gets put down again every time
     this.sel = 0;
+    // start looking at the first cell of the trade that was asked for, snapped
+    this._cinit = true;
+    this._camTo(this._flat[0], true);
+    this._clampCam();
     this.hover = '';
     this._note = '';
     this._noteT = 0;
@@ -926,6 +1024,13 @@ const Skills = {
   // ----------------------------------------------------------------- update ----
   update: function (dt) {
     this._openT = Math.min(1, this._openT + dt * 4.5);
+    if (this.open) {
+      this._camEnsure();
+      var k = Math.min(1, dt * 9);
+      this._cx += (this._wantX - this._cx) * k;
+      this._cy += (this._wantY - this._cy) * k;
+      this._clampCam();
+    }
     if (!this.ensure()) return;
     // Two layers may end up ticking us; Game.time advances exactly once a frame.
     if (typeof Game !== 'undefined') {
@@ -969,7 +1074,7 @@ const Skills = {
       var f0 = this._flat;
       for (var z = 0; z < f0.length; z++) {
         if (f0[z].prof !== this.PROFS[i] || f0[z].tier !== 0) continue;
-        this.sel = z; this.tab = i; break;
+        this.sel = z; this.tab = i; this._camTo(f0[z]); break;
       }
       return;
     }
@@ -995,17 +1100,16 @@ const Skills = {
           if ((dx / len) * mvx + (dy / len) * mvy < 0.5) continue;   // wrong way
           if (len < bd) { bd = len; best = q2; }
         }
-        if (best >= 0) { this.sel = best; this._syncTab(); this._snd('blip'); }
+        if (best >= 0) { this.sel = best; this._syncTab(); this._camTo(this._flat[best]); this._snd('blip'); }
       }
       return;
     }
 
-    if (Input.wheelDelta) {
-      // the wheel walks the SELECTION now; the hive always fits, nothing scrolls
-      var wl = this._flat.length;
-      this.sel = (this.sel + (Input.wheelDelta > 0 ? 1 : wl - 1)) % wl;
-      this._syncTab();
-    }
+    // the wheel ZOOMS. There is a camera over the hive now, and a wheel over a
+    // map that walks a list instead of zooming is the wrong answer everywhere.
+    if (Input.wheelDelta) this._zoom(Input.wheelDelta > 0 ? -0.25 : 0.25);
+    if (Input.p('Minus') || Input.p('NumpadSubtract')) this._zoom(-0.25);
+    if (Input.p('Equal') || Input.p('NumpadAdd')) this._zoom(0.25);
 
     if (Input.p('Enter')) {
       var cur = this.list()[this.sel];
@@ -1017,14 +1121,32 @@ const Skills = {
     var idx = this._hit(m.x, m.y);
     this.hover = idx >= 0 ? this.list()[idx].key : '';
 
+    // DRAG THE PAPER. Only a drag that STARTS on blank comb pans -- a press on a
+    // cell is a purchase, and Input.mouse.clicked fires on the press, so a
+    // drag-anywhere pan would buy whatever the finger went down on first.
+    var inCanvas = m.x >= this.TX && m.x <= this.TX + this.TW &&
+                   m.y >= this.TY && m.y <= this.TY + this.TH;
+    if (m.down && inCanvas) {
+      if (!this._pan && idx < 0) this._pan = { x: m.x, y: m.y };
+      else if (this._pan) {
+        this._cx -= (m.x - this._pan.x) / this.Z;
+        this._cy -= (m.y - this._pan.y) / this.Z;
+        this._pan.x = m.x; this._pan.y = m.y;
+        this._clampCam();
+        this._wantX = this._cx; this._wantY = this._cy;   // do not ease against the finger
+      }
+    } else if (!m.down) this._pan = null;
+
     if (m.clicked) {
       // most specific first, and return after the first hit so one click can
       // never fire two actions
       if (this._in(this._closeRect(), m.x, m.y)) { this.close(); return; }
+      if (this._in(this._zoomRect(1), m.x, m.y)) { this._zoom(0.25); return; }
+      if (this._in(this._zoomRect(-1), m.x, m.y)) { this._zoom(-0.25); return; }
       // (NO TAB HIT TEST. The strip is not drawn any more, and an invisible row
       // of rects across the top of the page silently ate clicks meant for the
       // title band.)
-      if (idx >= 0) { this.sel = idx; this._syncTab(); this.buy(this.list()[idx].key); return; }
+      if (idx >= 0) { this.sel = idx; this._syncTab(); this._camTo(this.list()[idx]); this.buy(this.list()[idx].key); return; }
       // a click outside the window closes, the way Craft and Farm's picker do
       if (m.x < this.WX || m.x > this.WX + this.WW || m.y < this.WY || m.y > this.WY + this.WH) {
         this.close();
@@ -1036,6 +1158,7 @@ const Skills = {
   // ------------------------------------------------------------------ draw -----
   draw: function (c) {
     if (!this.ensure()) return;
+    this._camEnsure();
     var W_ = W, H_ = H;
 
     // one flat rect, not a gradient: this runs over every device pixel
@@ -1079,11 +1202,11 @@ const Skills = {
     // selected cell belongs to.)
     this._drawBar(c, r, acc);
     this._drawTree(c, prof);
+    this._drawZoom(c);
     this._drawInfo(c, prof, r);
-    this._drawFx(c);
 
-    text(c, TouchUI.enabled ? 'tap a cell to learn it  --  tap x to close'
-                            : '[1-5] jump  [arrows] move  [Enter] learn  [Esc] close',
+    text(c, TouchUI.enabled ? 'tap a cell to learn it  --  drag the comb to look around'
+                            : '[arrows] move  [Enter] learn  drag to pan  wheel to zoom  [Esc] close',
       this.WX + this.WW / 2, this.WY + this.WH - 15, { size: 6.5, color: '#8a7454', align: 'center', shadow: false });
     c.restore();
   },
@@ -1150,6 +1273,14 @@ const Skills = {
     c.beginPath();
     c.rect(this.TX, this.TY, this.TW, this.TH);
     c.clip();
+    // THE CAMERA. Quantised to a whole device texel at the current zoom: an
+    // easing camera over nearest-neighbour sprites re-rasterises every icon
+    // every frame, and the whole comb crawls.
+    var q = 1 / (DPX * this.Z);
+    c.translate(this.TX + this.TW / 2, this.TY + this.TH / 2);
+    c.scale(this.Z, this.Z);
+    c.translate(-Math.round(this._cx / q) * q, -Math.round(this._cy / q) * q);
+    c.imageSmoothingEnabled = false;
 
     // (NO WATERMARK HONEYCOMB. There was a decorative hex lattice drawn under
     // all this, and because it could not line up with a RADIAL layout it just
@@ -1350,7 +1481,29 @@ const Skills = {
       }
     }
 
+    this._drawFx(c);        // inside the camera: a burst belongs to its cell
     c.restore();
+  },
+
+  // The zoom pair. Drawn after the hive and outside its camera, so they stay
+  // put in the corner of the canvas while the comb slides about underneath.
+  _drawZoom: function (c) {
+    var i, r, d, on, lbl, can;
+    for (i = 0; i < 2; i++) {
+      d = i ? -1 : 1;
+      r = this._zoomRect(d);
+      on = !TouchUI.enabled && this._in(r, Input.mouse.x, Input.mouse.y);
+      can = d > 0 ? this.Z < this.ZMAX : this.Z > this.ZMIN;
+      inkBox(c, r.x, r.y, r.w, r.h,
+        can ? (on ? '#ffd98a' : 'rgba(255,247,226,0.92)') : 'rgba(230,220,196,0.65)',
+        can ? '#8a5a24' : 'rgba(150,132,102,0.55)', PIX * 2);
+      lbl = can ? '#5a3210' : 'rgba(140,124,96,0.8)';
+      c.fillStyle = lbl;
+      c.fillRect(r.x + r.w / 2 - 4, r.y + r.h / 2 - 1, 8, 2);
+      if (d > 0) c.fillRect(r.x + r.w / 2 - 1, r.y + r.h / 2 - 4, 2, 8);
+    }
+    text(c, 'x' + this.Z.toFixed(2).replace(/0$/, ''), this._zoomRect(1).x - 4,
+      this._zoomRect(1).y + 4, { size: 6, color: '#8a7454', align: 'right', shadow: false });
   },
 
   // A little drawn star, for the one node per trade worth planning around.

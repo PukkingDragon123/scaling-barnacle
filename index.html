@@ -5,13 +5,37 @@
 <title>Mr. Otto's Clam Farm</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <style>
-  html, body { margin:0; padding:0; height:100%; background:#070b12; overflow:hidden; }
-  #wrap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
+  html, body {
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:#1a1208;
+    /* iOS rubber-bands the document even with overflow:hidden, which drags the
+       whole picture up and down under your thumb while you play. */
+    overscroll-behavior:none;
+    -webkit-user-select:none; user-select:none;
+    -webkit-touch-callout:none;
+  }
+  /* THE LETTERBOX. The game is 16:9; a tablet held upright is 3:4, so on an iPad
+     in portrait the bands above and below the picture are bigger than the
+     picture. Flat black there reads as a broken page, so it is a desk: warm
+     boards with the sheet lying on them. */
+  #wrap {
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    touch-action:none;
+    background:
+      repeating-linear-gradient(90deg,
+        rgba(0,0,0,0.14) 0px, rgba(0,0,0,0.14) 2px,
+        rgba(0,0,0,0.00) 2px, rgba(0,0,0,0.00) 46px),
+      linear-gradient(#3a2716 0%, #2a1c10 55%, #1a1208 100%);
+  }
   canvas {
     cursor: none;
     background:#000;
+    display:block;
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
+    /* the sheet sits ON the desk, so it casts one */
+    box-shadow: 0 0.6vmin 2.4vmin rgba(0,0,0,0.55);
   }
 </style>
 </head>

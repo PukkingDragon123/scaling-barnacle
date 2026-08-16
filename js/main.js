@@ -196,11 +196,33 @@ const TouchUI = {
   },
 };
 
-canvas.addEventListener('touchstart', (e) => {
+// TOUCH IS BOUND TO THE WHOLE VIEWPORT, NOT TO THE CANVAS.
+//
+// The game is 16:9 and a tablet held upright is not, so on an iPad in portrait
+// the canvas is 720x405 in an 834x1194 window: SIXTY PER CENT of the screen is
+// letterbox. With the listeners on the canvas, a tap in that band did nothing --
+// including the first one, which is what switches TouchUI on. A player who
+// happened to tap above or below the picture got no controls at all and no way
+// to work out why. Listening on #wrap (position:fixed, inset:0) means any touch
+// anywhere turns the pads on; onCanvas() below then decides whether it is also
+// a real input, so a stray tap in the letterbox cannot be clamped onto the
+// canvas edge and act as a press there.
+const touchHost = document.getElementById('wrap') || canvas;
+function onCanvas(clientX, clientY) {
+  const r = canvas.getBoundingClientRect();
+  return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
+}
+
+touchHost.addEventListener('touchstart', (e) => {
   e.preventDefault();
   SND.init(); SND.resume();
+  const first = !TouchUI.enabled;
   TouchUI.enabled = true;
+  // The tap that turns the pads on does not also press whatever is under it:
+  // the controls were not on screen when the finger went down.
+  if (first) return;
   for (const t of e.changedTouches) {
+    if (!onCanvas(t.clientX, t.clientY)) continue;
     const p = toCanvasXY(t.clientX, t.clientY);
     const btn = TouchUI.buttons.find(b => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h);
     if (btn) {
@@ -216,7 +238,7 @@ canvas.addEventListener('touchstart', (e) => {
   }
 }, { passive: false });
 
-canvas.addEventListener('touchmove', (e) => {
+touchHost.addEventListener('touchmove', (e) => {
   e.preventDefault();
   for (const t of e.changedTouches) {
     if (t.identifier === TouchUI.pointerId) {
@@ -240,8 +262,8 @@ function touchEnd(e) {
     }
   }
 }
-canvas.addEventListener('touchend', touchEnd, { passive: false });
-canvas.addEventListener('touchcancel', touchEnd, { passive: false });
+touchHost.addEventListener('touchend', touchEnd, { passive: false });
+touchHost.addEventListener('touchcancel', touchEnd, { passive: false });
 
 // ---- game manager ---------------------------------------------------------------
 const Game = {
