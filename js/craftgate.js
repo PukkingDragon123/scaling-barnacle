@@ -950,10 +950,55 @@ const Forge = {
     return 'BUILD';
   },
 
+  // ---- STEADY HANDS ----------------------------------------------------------
+  // Pressing MAKE on a recipe no longer just spends the materials. A marker
+  // sweeps a short bar under Otto's bench window and you stop it: in the green
+  // and the craft comes out with something over, anywhere else and it comes out
+  // fine. There is NO FAIL -- this is a cosy game, and a bench you can lose at is
+  // a bench you stop using. It is the same grammar as the pry and the pick, so
+  // the whole game asks for its timing the same way.
+  MINI_T: 0.62,          // seconds per sweep
+  MINI_WIN: 0.17,        // half-width of the green, as a fraction of the bar
+  mini: null,            // { key, sweep, dir, t, flash }
+
+  _miniStart: function (key) {
+    this.mini = { key: key, sweep: 0.06, dir: 1, t: 0, flash: 0, good: false };
+    if (typeof SND !== 'undefined' && SND.blip) SND.blip();
+    return true;
+  },
+
+  // Stop the marker and craft. `good` only ever ADDS.
+  _miniStop: function () {
+    var m = this.mini;
+    if (!m) return false;
+    var good = Math.abs(m.sweep - 0.5) < this.MINI_WIN;
+    this.mini = null;
+    var okMade = this.makeHand(m.key);
+    if (!okMade) return false;
+    if (good) {
+      this._say('clean work.');
+      if (typeof SND !== 'undefined' && SND.chime) SND.chime();
+      var br = this._btnRect();
+      if (typeof FX !== 'undefined') {
+        FX.burst(br.x + br.w / 2, br.y + 2, 16, { col: '#ffd45a', spread: 56, g: 92, up: 34, life: 0.6, star: true });
+      }
+      // the reward for timing it: a second helping of whatever it makes
+      var rec = this.recipe ? this.recipe(m.key) : null;
+      var out = rec && rec.out;
+      if (out && typeof Craft !== 'undefined' && Craft.give) Craft.give(out.key, out.n || 1);
+      else if (typeof Skills !== 'undefined' && Skills.gain) Skills.gain('mining', 4);
+    }
+    return true;
+  },
+
   act: function (row) {
     if (!row) return false;
     if (row.kind === 'locked') { this._say(this.rowWhy(row)); SND.blip(); return false; }
-    if (row.kind === 'recipe') return this.makeHand(row.key);
+    if (row.kind === 'recipe') {
+      if (this.mini) return this._miniStop();
+      if (!this.rowOk(row)) { this._say(this.rowWhy(row) || ''); SND.alarm && SND.alarm(); return false; }
+      return this._miniStart(row.key);
+    }
     // A table already standing offers a free relocation instead of a second one.
     if (this.countPlaced(row.t.key) >= this.MAX_PER) {
       var idx = -1, a = G.placed, i;
@@ -971,6 +1016,17 @@ const Forge = {
 
   // ==== update ==============================================================
   update: function (dt) {
+    // the sweep, if one is running. Bounces at the ends so a slow reader still
+    // gets a shot at the green rather than one pass and a miss.
+    if (this.mini) {
+      var mi = this.mini;
+      mi.t += dt;
+      mi.sweep += mi.dir * dt / this.MINI_T;
+      if (mi.sweep > 1) { mi.sweep = 1; mi.dir = -1; }
+      if (mi.sweep < 0) { mi.sweep = 0; mi.dir = 1; }
+      if (Input.p('KeyE') || Input.p('Space') || Input.p('Enter')) { this._miniStop(); return; }
+      if (Input.p('Escape')) { this.mini = null; return; }
+    }
     if (!this.ensure()) return;
     // Several layers may tick us; Game.time advances exactly once a frame, so the
     // first call in a frame wins. The same guard Inv, Ocean and Skills use.
@@ -1174,7 +1230,7 @@ const Forge = {
     return { x: this.WX + 12 + (i % 2) * s, y: this.WY + 46 + ((i / 2) | 0) * s, w: this.CELL, h: this.CELL };
   },
   _resultRect: function () { return { x: this.WX + 74, y: this.WY + 54, w: 26, h: 26 }; },
-  _btnRect: function () { return { x: this.WX + 12, y: this.WY + 118, w: 90, h: 18 }; },
+  _btnRect: function () { return { x: this.WX + 12, y: this.WY + 143, w: 90, h: 17 }; },
   _listX: function () { return this.WX + 116; },
   _listW: function () { return this.WW - 116 - 12; },
   _rowRect: function (i) {
@@ -1341,13 +1397,48 @@ const Forge = {
   _drawButton: function (c, row, m) {
     var P = this.PAL, r = this._btnRect(), ok = this.rowOk(row), on = this._in(r, m.x, m.y);
 
-    // what is on the bench, spelled out under the 2x2 -- the list column only has
-    // room for a clipped name
-    text(c, row ? this._clip(row.name, 22) : 'nothing picked', this.WX + 12, this.WY + 100,
-      { size: 7, color: row && row.kind === 'locked' ? '#7a6a55' : P.ink });
+    // ---- OTTO AT THE BENCH -----------------------------------------------------
+    // A little lit window under the 2x2 with the otter actually working in it:
+    // his tool cycle while a sweep is running, a slow idle otherwise. It is the
+    // one place in the crafting board where something is ALIVE, and it is what
+    // makes the panel read as a workshop rather than a form.
+    var wx = this.WX + 12, wy = this.WY + 96, ww = 90, wh = 34;
+    c.fillStyle = '#1d1209';
+    c.fillRect(wx - 1, wy - 1, ww + 2, wh + 2);
+    c.fillStyle = this.mini ? '#7a5f3f' : '#5c4632';        // the bench lamp warms up
+    c.fillRect(wx, wy, ww, wh);
+    c.fillStyle = 'rgba(255,214,110,0.10)';
+    c.fillRect(wx, wy, ww, wh / 2);
+    // his bench: a plank he stands behind
+    c.fillStyle = '#8a6440';
+    c.fillRect(wx + 6, wy + wh - 8, ww - 12, 3);
+    var oa = this.mini
+      ? ASSETS['otool_' + (Math.floor(this.time * 9) % 4)]
+      : ASSETS['o4_' + (Math.floor(this.time * 2) % 4)];
+    if (oa && oa.width) {
+      var oh = wh * 0.86, ow2 = oh * oa.width / oa.height;
+      var bobY = this.mini ? Math.abs(Math.sin(this.time * 9)) * 1.6 : Math.sin(this.time * 2) * 0.7;
+      c.drawImage(oa, wx + ww / 2 - ow2 / 2, wy + wh - 6 - oh + bobY, ow2, oh);
+    }
+    text(c, row ? this._clip(row.name, 20) : 'nothing picked', wx, wy - 9,
+      { size: 6.5, color: row && row.kind === 'locked' ? '#7a6a55' : P.ink, shadow: false });
+
+    // ---- the steady-hands bar, right under the window while a sweep is live
+    if (this.mini) {
+      var bx = wx, by = wy + wh + 4, bw = ww, bh = 7;
+      uiMeter(c, bx, by, bw, bh, 1, 'rgba(60,40,22,0.9)', false);
+      var g0 = bx + bw * (0.5 - this.MINI_WIN), gw = bw * this.MINI_WIN * 2;
+      c.fillStyle = '#3f9a58';
+      c.fillRect(g0, by, gw, bh);
+      c.fillStyle = '#7dffb0';
+      c.fillRect(g0, by, gw, 1);
+      var mx2 = bx + bw * this.mini.sweep;
+      c.fillStyle = '#fff3cf';
+      c.fillRect(mx2 - 1, by - 2, 2, bh + 4);
+    }
 
     // a pressable wooden button with a shine, not a flat cream slab
-    uiButton(c, r, this.rowVerb(row), ok, on, this.time);
+    uiButton(c, r, this.mini ? 'STOP  [E]' : this.rowVerb(row), ok || !!this.mini, on, this.time);
 
     // the reason, or the flavour line, wrapped by character count the way npc.js,
     // skills.js and inv.js all do it -- Courier is monospace, so it is exact.
@@ -1360,11 +1451,15 @@ const Forge = {
     }
     // wrapped by character count, not measureText: Courier is monospace at 0.6em,
     // so this is exact and free -- the npc.js / skills.js / inv.js idiom.
-    var cols = Math.floor(90 / (6 * 0.6));
+    // UNDER THE LIST, not under the button: the left column now ends with the
+    // bench window and the button, and a two-line note below those ran straight
+    // through the footer at the bottom edge of the panel.
+    var cols = Math.floor(130 / (6 * 0.6));
     var lines = this._wrap(msg, cols), i;
+    var nx = this.WX + 118, ny = this.WY + this.WH - 26;
     for (i = 0; i < lines.length && i < 2; i++) {
       c.globalAlpha = this.noteT > 0 ? clamp(this.noteT, 0, 1) : 1;
-      text(c, lines[i], r.x, r.y + 22 + i * 8, { size: 6, color: col });
+      text(c, lines[i], nx, ny + i * 8, { size: 6, color: col, shadow: false });
       c.globalAlpha = 1;
     }
   },
