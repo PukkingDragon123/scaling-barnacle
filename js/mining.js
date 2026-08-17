@@ -124,6 +124,12 @@ const Mining = {
   NODES: {
     wood: {
       key: 'wood', name: 'sunken timber', art: 'node_wood', w: 46,
+      // node_wood.png was a SHEET: three tied bundles stacked in one 256x190
+      // image, and the game drew the whole thing as a single node -- which is
+      // why one piece of sunken timber came out as a column of three. Sliced
+      // into a bundle each; a node picks one, so it is ONE bundle with three
+      // variants. The untouched sheet is kept as assets/_node_wood_sheet.png.
+      arts: ['node_wood', 'node_wood_b', 'node_wood_c'],
       hardness: 3, tier: 0, band: [0.00, 0.60], weight: 10, skill: 'foraging', xp: 3,
       chips: [0, 1], snd: 'thump',
       loot: [
@@ -630,7 +636,9 @@ const Mining = {
       dead: false,
       cr: null
     };
-    n.h = (typeof assetH === 'function') ? assetH(def.art, def.w) : def.w;
+    if (def.arts && def.arts.length) n.art = def.arts[(rng() * def.arts.length) | 0];
+    var useArt = n.art || def.art;
+    n.h = (typeof assetH === 'function') ? assetH(useArt, def.w) : def.w;
     // Crack segments are baked once, from the placement stream, so they never
     // crawl between frames (same discipline as Craft._grain / Farm._buildGrit).
     var cr = [], i;
@@ -1395,8 +1403,9 @@ const Mining = {
     ctx.save();
     ctx.translate(Math.round((sx + ox) * DPX) / DPX, Math.round((sy + oy) * DPX) / DPX);
 
-    var img = (typeof ASSETS !== 'undefined') ? ASSETS[def.art] : null;
-    if (img && img.width) drawAC(ctx, def.art, 0, 0, w, h, n.flip);
+    var art = n.art || def.art;
+    var img = (typeof ASSETS !== 'undefined') ? ASSETS[art] : null;
+    if (img && img.width) drawAC(ctx, art, 0, 0, w, h, n.flip);
     else this._nodeGlyph(ctx, def, w, h);
 
     // Cracks earn their way in as the node gives: one line, then two, then three.
