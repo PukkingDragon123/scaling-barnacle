@@ -204,7 +204,8 @@ const UIPAL = {
   l:    '#f4bf69',
   sh:   '#30150a',
   rule: '#b07a3a',   // the ruled line, a tint of the frame so it belongs
-  hi:   '#f8d089',   // one step ABOVE the panel: cards, so they read as raised
+  hi:   '#f8d089',
+  p:    '#f4bf69',   // one step ABOVE the panel: cards, so they read as raised
   ink:  '#30150a',   // primary text
   ink2: '#662907',   // secondary text
   ink3: '#914007',   // dim text
@@ -379,83 +380,105 @@ function uiPanel(ctx, x, y, w, h, alpha = 0.92, light = false) {
 // of the margin, the tape sits at a slight angle. All of it is derived from x/y
 // so it is stable frame to frame -- a page that shimmered would be worse than a
 // rectangle.
-function uiPage(ctx, x, y, w, h, alpha = 1) {
+
+// ---- THE PANEL FRAME ------------------------------------------------------
+//
+// Stardew's menu anatomy, which is what this was asked to look like and what
+// torn notebook paper was never going to be:
+//
+//   * a THICK border band, bevelled -- lit along the top and left, shadowed
+//     along the bottom and right, so it reads as carved wood rather than as a
+//     coloured stroke
+//   * a one-texel dark outline on BOTH sides of that band: the outer one seats
+//     the panel on any background, the inner one separates wood from paper
+//   * a rounded STUD over each corner, with its own bright pin -- the detail
+//     that makes a frame read as furniture instead of as a rectangle
+//   * an interior that is SHADED: a banded vertical ramp, lit at the top and
+//     falling to the shadow at the bottom, dithered at every seam
+//
+// The shading is banded and dithered rather than a canvas gradient on purpose.
+// A real gradient at this density produces hundreds of intermediate colours and
+// reads as a web page; four steps with a dithered seam is how the ramp is done
+// in the art, and it matches the sprites beside it.
+function uiFrame(ctx, x, y, w, h, opts = {}) {
+  const { border = 3, alpha = 1, studs = true, top = null, bot = null } = opts;
   const S = APIX;
   const snap = (v) => Math.round(v / S) * S;
-  x = snap(x); y = snap(y); w = snap(w); h = snap(h);
+  x = snap(x); y = snap(y); w = Math.max(12 * S, snap(w)); h = Math.max(12 * S, snap(h));
+  const B = border * S;
+
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  // the shadow it casts, two flat steps -- not a blur
-  ctx.fillStyle = 'rgba(20,12,6,0.34)';
+  // the shadow it sits on -- two flat steps, never a blur
+  ctx.fillStyle = 'rgba(24,12,4,0.34)';
   ctx.fillRect(x + S * 4, y + S * 5, w, h);
-  ctx.fillStyle = 'rgba(20,12,6,0.22)';
+  ctx.fillStyle = 'rgba(24,12,4,0.20)';
   ctx.fillRect(x + S * 2, y + S * 3, w, h);
 
-  // the sheet: lit body, one step down along the far edges, dithered between
-  ctx.fillStyle = UIPAL.w;
+  // the border band, then its bevel
+  ctx.fillStyle = UIPAL.fr;
   ctx.fillRect(x, y, w, h);
-  ctx.save();
-  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
-  pixDither(ctx, x, y, w, h, UIPAL.p2, 3);          // the grain of the paper
-  ctx.fillStyle = UIPAL.p2;
-  ctx.fillRect(x + w - S * 10, y, S * 10, h);
-  ctx.fillRect(x, y + h - S * 7, w, S * 7);
-  ctx.fillStyle = UIPAL.p3;
-  ctx.fillRect(x + w - S * 4, y, S * 4, h);
-  ctx.fillRect(x, y + h - S * 3, w, S * 3);
-  ctx.restore();
+  ctx.fillStyle = UIPAL.lit;                       // sun side: top and left
+  ctx.fillRect(x + S, y + S, w - S * 2, S * 2);
+  ctx.fillRect(x + S, y + S, S * 2, h - S * 2);
+  ctx.fillStyle = UIPAL.mid;                       // shadow side: bottom and right
+  ctx.fillRect(x + S, y + h - B, w - S * 2, B - S);
+  ctx.fillRect(x + w - B, y + S, B - S, h - S * 2);
+  ctx.fillStyle = UIPAL.dark;
+  ctx.fillRect(x + S, y + h - S * 2, w - S * 2, S);
+  ctx.fillRect(x + w - S * 2, y + S, S, h - S * 2);
 
-  // THE TORN EDGE, in the paper's own darker step, wobble hashed off the coord
-  ctx.fillStyle = UIPAL.p3;
-  for (let i = 0; i < h; i += S * 2) {
-    ctx.fillRect(x, y + i, S + ((i * 7919) % 5) * S * 0.5, S * 2);
-    ctx.fillRect(x + w - S - ((i * 6271) % 5) * S * 0.5, y + i, S * 2, S * 2);
-  }
-  for (let i = 0; i < w; i += S * 2) {
-    ctx.fillRect(x + i, y, S * 2, S + ((i * 5381) % 5) * S * 0.5);
-    ctx.fillRect(x + i, y + h - S - ((i * 4409) % 5) * S * 0.5, S * 2, S * 2);
-  }
-  // the hard outline that every icon in this game wears
+  // outer outline, then the interior with its inner outline
   pixEdge(ctx, x, y, w, h, UIPAL.out, 1);
+  const ix = x + B, iy = y + B, iw = w - B * 2, ih = h - B * 2;
+  pixEdge(ctx, ix - S, iy - S, iw + S * 2, ih + S * 2, UIPAL.dark, 1);
 
-  // the blue rules, stopping clear of the margin the way ruled paper does
-  ctx.globalAlpha = alpha * 0.5;
-  ctx.fillStyle = UIPAL.rule;
-  for (let ry = y + 22; ry < y + h - 8; ry += 9) ctx.fillRect(x + 26, ry, w - 40, S);
-  ctx.globalAlpha = alpha;
-
-  // the red margin, and the three punched holes on it
-  ctx.fillStyle = '#b2604a';
-  ctx.fillRect(x + 22, y + 8, S, h - 16);
-  for (let i = 0; i < 3; i++) {
-    const hy = snap(y + h * (0.24 + i * 0.26));
-    ctx.fillStyle = UIPAL.out;
-    ctx.fillRect(x + 8, hy - S * 3, S * 6, S * 6);
-    ctx.fillStyle = UIPAL.p3;
-    ctx.fillRect(x + 8 + S, hy - S * 2, S * 4, S * 4);
+  // THE SHADED INTERIOR: four steps down the page with a dithered seam
+  const A = hexRGB(top || UIPAL.hi), Z = hexRGB(bot || UIPAL.warm);
+  const bands = 4, bh = ih / bands;
+  for (let i = 0; i < bands; i++) {
+    ctx.fillStyle = cssRGB(rgbLerp(A, Z, i / (bands - 1)));
+    ctx.fillRect(ix, iy + bh * i, iw, bh + S);
+    if (i > 0) {                                   // dither the seam upward
+      ctx.fillStyle = cssRGB(rgbLerp(A, Z, (i - 1) / (bands - 1)));
+      for (let dx = (i & 1) ? 0 : S; dx < iw; dx += S * 2) ctx.fillRect(ix + dx, iy + bh * i, S, S);
+    }
   }
 
-  // tape at the corners: flat, stepped, on the grid
-  const tape = (tx, ty, dir) => {
-    const tw = 26, th = 8;
-    ctx.save();
-    ctx.translate(snap(tx), snap(ty));
-    ctx.rotate(dir * 0.55);
-    ctx.fillStyle = 'rgba(255,242,200,0.72)';
-    ctx.fillRect(-tw / 2, -th / 2, tw, th);
-    ctx.fillStyle = 'rgba(255,255,255,0.30)';
-    ctx.fillRect(-tw / 2, -th / 2, tw, S);
-    ctx.fillStyle = 'rgba(90,58,24,0.28)';
-    ctx.fillRect(-tw / 2, th / 2 - S, tw, S);
-    ctx.restore();
-  };
-  tape(x + 2, y + 2, -1);
-  tape(x + w - 2, y + 2, 1);
-  tape(x + 2, y + h - 2, 1);
-  tape(x + w - 2, y + h - 2, -1);
-
+  // the corner studs
+  if (studs) {
+    const k = B + S * 3;
+    for (let c = 0; c < 4; c++) {
+      const cx = c & 1 ? x + w - k - S : x + S, cy = c & 2 ? y + h - k - S : y + S;
+      ctx.fillStyle = UIPAL.out;
+      ctx.fillRect(cx, cy, k, k);
+      ctx.fillStyle = UIPAL.mid;
+      ctx.fillRect(cx + S, cy + S, k - S * 2, k - S * 2);
+      ctx.fillStyle = UIPAL.lit;
+      ctx.fillRect(cx + S, cy + S, k - S * 3, S);
+      ctx.fillRect(cx + S, cy + S, S, k - S * 3);
+      ctx.fillStyle = UIPAL.p;                     // the bright pin
+      ctx.fillRect(cx + k / 2 - S / 2, cy + k / 2 - S / 2, S, S);
+    }
+  }
   ctx.restore();
+  return { x: ix, y: iy, w: iw, h: ih };
+}
+
+function uiPage(ctx, x, y, w, h, alpha = 1) {
+  // A BIG menu: a wide carved border and a shaded page inside it. The torn
+  // notebook sheet that used to live here -- punch holes, red margin, tape --
+  // was a different game's furniture; this is the frame the icons belong to.
+  const r = uiFrame(ctx, x, y, w, h, { border: 8, alpha: alpha });
+  // the faintest ruling across the page, so a wall of text still has a grid to
+  // sit on without the panel pretending to be paper
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.16;
+  ctx.fillStyle = UIPAL.mid;
+  for (let ry = r.y + 12; ry < r.y + r.h - 4; ry += 9) ctx.fillRect(r.x + 6, ry, r.w - 12, APIX);
+  ctx.restore();
+  return r;
 }
 
 // The open/close transition every big menu shares: a page does not blink on, it
@@ -551,59 +574,23 @@ function inkBox(ctx, x, y, w, h, fill, ink, lw = PIX * 2) {
 // curl down two sides, and (optionally) the ruling. Everything wobbles by its
 // COORDINATE so a note that is redrawn every frame holds still.
 function uiNote(ctx, x, y, w, h, opts = {}) {
-  const { alpha = 1, rules = false, tape = false, tint = null } = opts;
-  const S = APIX;
-  const snap = (v) => Math.round(v / S) * S;
-  x = snap(x); y = snap(y); w = snap(w); h = snap(h);
+  // A SMALL plate -- HUD chips, prompts, toasts, the dialogue box. Same
+  // anatomy, a narrower border, and studs only when it is big enough to carry
+  // them without the corners eating the whole plate.
+  const { alpha = 1, rules = false, tint = null } = opts;
+  const r = uiFrame(ctx, x, y, w, h, {
+    border: 4, alpha: alpha, studs: Math.min(w, h) >= 30,
+  });
   ctx.save();
   ctx.globalAlpha = alpha;
-
-  ctx.fillStyle = 'rgba(20,12,6,0.32)';
-  ctx.fillRect(x + S * 2, y + S * 3, w, h);
-
-  ctx.fillStyle = UIPAL.w;
-  ctx.fillRect(x, y, w, h);
-  ctx.save();
-  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
-  pixDither(ctx, x, y, w, h, UIPAL.p2, 3);
-  ctx.fillStyle = UIPAL.p2;
-  ctx.fillRect(x + w - S * 3, y, S * 3, h);
-  ctx.fillRect(x, y + h - S * 2, w, S * 2);
-  if (tint) { ctx.fillStyle = tint; ctx.fillRect(x, y, w, h); }
+  if (tint) { ctx.fillStyle = tint; ctx.fillRect(r.x, r.y, r.w, r.h); }
   if (rules) {
-    ctx.globalAlpha = alpha * 0.5;
-    ctx.fillStyle = UIPAL.rule;
-    for (let ry = y + 9; ry < y + h - 3; ry += 9) ctx.fillRect(x + 4, ry, w - 8, S);
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = alpha * 0.18;
+    ctx.fillStyle = UIPAL.mid;
+    for (let ry = r.y + 9; ry < r.y + r.h - 3; ry += 9) ctx.fillRect(r.x + 3, ry, r.w - 6, APIX);
   }
   ctx.restore();
-
-  // torn edge in the paper's darker step, then the hard outline
-  ctx.fillStyle = UIPAL.p3;
-  for (let i = 0; i < h; i += S * 2) {
-    ctx.fillRect(x, y + i, S + ((i * 7919) % 3) * S * 0.5, S * 2);
-    ctx.fillRect(x + w - S - ((i * 6271) % 3) * S * 0.5, y + i, S * 2, S * 2);
-  }
-  for (let i = 0; i < w; i += S * 2) {
-    ctx.fillRect(x + i, y, S * 2, S + ((i * 5381) % 3) * S * 0.5);
-    ctx.fillRect(x + i, y + h - S - ((i * 4409) % 3) * S * 0.5, S * 2, S * 2);
-  }
-  pixEdge(ctx, x, y, w, h, UIPAL.out, 1);
-
-  if (tape) {
-    const tab = (tx, ty, dir) => {
-      ctx.save();
-      ctx.translate(snap(tx), snap(ty)); ctx.rotate(dir * 0.5);
-      ctx.fillStyle = 'rgba(255,242,200,0.72)';
-      ctx.fillRect(-8, -2.5, 16, 5);
-      ctx.fillStyle = 'rgba(255,255,255,0.28)';
-      ctx.fillRect(-8, -2.5, 16, S);
-      ctx.restore();
-    };
-    tab(x + 3, y + 1, -1);
-    tab(x + w - 3, y + 1, 1);
-  }
-  ctx.restore();
+  return r;
 }
 
 // A button somebody drew on the page and coloured in. Live buttons carry a

@@ -1463,8 +1463,14 @@ const Skills = {
 
       var img = ASSETS[nd.art];
       if (img && img.width) {
-        var iw = HR * 1.2 * k, ih = iw * img.height / img.width;
-        if (ih > HR * 1.32 * k) { ih = HR * 1.32 * k; iw = ih * img.width / img.height; }
+        // FIT INSIDE THE HEXAGON, not inside its bounding box. A flat-top hex of
+        // circumradius HR is only HR*0.866 from centre to EDGE, and it narrows
+        // further toward the top and bottom -- so an icon sized off HR (1.2 wide,
+        // 1.32 tall) had its corners hanging outside the cell and overlapping the
+        // neighbours. Fit both axes into a box the hex fully contains.
+        var box = HR * 1.02 * k;
+        var iw = box, ih = box * img.height / img.width;
+        if (ih > box) { ih = box; iw = box * img.width / img.height; }
         c.globalAlpha = owned ? 1 : 0.7;
         c.drawImage(img, pos.x - iw / 2, pos.y - lift - ih / 2, iw, ih);
         c.globalAlpha = 1;
@@ -1528,26 +1534,22 @@ const Skills = {
   // Four stepped bands of paper along each edge of the hive's canvas: solid at
   // the very edge, then two dithered half-tones, then nothing.
   _fade: function (c) {
+    // Dither the comb out at the canvas edge so a half-cut cell reads as "there
+    // is more this way" rather than as a clipping fault. The solid band that
+    // used to sit at the very edge drew a visible RECTANGLE once the page went
+    // gold -- it was painting the old cream over the new interior -- so this is
+    // dither only, in the interior's own lower tone.
     var S = APIX, n = 4, i, t, x = this.TX, y = this.TY, w = this.TW, h = this.TH;
-    for (i = 0; i < n; i++) {
-      t = S * 2 * (n - i);
-      c.fillStyle = UIPAL.w;
-      c.globalAlpha = (i === 0) ? 1 : 0;
-      if (i === 0) {
-        c.fillRect(x, y, w, S * 2); c.fillRect(x, y + h - S * 2, w, S * 2);
-        c.fillRect(x, y, S * 2, h); c.fillRect(x + w - S * 2, y, S * 2, h);
-        continue;
-      }
-      c.globalAlpha = 1;
+    for (i = 1; i <= n; i++) {
+      t = S * 2 * (n - i + 1);
       c.save();
       c.beginPath();
       c.rect(x, y + t - S * 2, w, S * 2); c.rect(x, y + h - t, w, S * 2);
       c.rect(x + t - S * 2, y, S * 2, h); c.rect(x + w - t, y, S * 2, h);
       c.clip();
-      pixDither(c, x, y, w, h, UIPAL.w, i + 1);
+      pixDither(c, x, y, w, h, UIPAL.warm, i);
       c.restore();
     }
-    c.globalAlpha = 1;
   },
 
   // A little drawn star, for the one node per trade worth planning around.
