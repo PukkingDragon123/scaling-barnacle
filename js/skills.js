@@ -1433,7 +1433,7 @@ const Skills = {
       // the reveal pop: set in buy(), eased out here
       var rv = this._revT && this._revT[nd.key] > 0 ? this._revT[nd.key] : 0;
       var k = rv > 0 ? 1 + Math.sin(rv / this.REV_T * Math.PI) * 0.35 : 1;
-      if (isSel) k *= 1.06 + Math.sin(this.time * 3.4) * 0.03;   // the pick breathes
+      if (isSel) k *= 1.06;
       var lift = (isSel || isHov) ? 1 : 0;                // the cell picks up off the page
 
       // an affordable cell breathes a ring outward: "spend here"
@@ -1555,20 +1555,20 @@ const Skills = {
   // the very edge, then two dithered half-tones, then nothing.
   _fade: function (c) {
     // Dither the comb out at the canvas edge so a half-cut cell reads as "there
-    // is more this way" rather than as a clipping fault. The solid band that
-    // used to sit at the very edge drew a visible RECTANGLE once the page went
-    // gold -- it was painting the old cream over the new interior -- so this is
-    // dither only, in the interior's own lower tone.
+    // is more this way" rather than as a clipping fault.
+    //
+    // This used to hand pixDither the WHOLE canvas four times and rely on a clip
+    // to hide most of it -- but a clip does not stop the fillRects being issued,
+    // so it was ~175,000 of them per frame for four thin strips. Dither each
+    // strip's own rectangle instead: same picture, a few hundred rects.
     var S = APIX, n = 4, i, t, x = this.TX, y = this.TY, w = this.TW, h = this.TH;
     for (i = 1; i <= n; i++) {
       t = S * 2 * (n - i + 1);
-      c.save();
-      c.beginPath();
-      c.rect(x, y + t - S * 2, w, S * 2); c.rect(x, y + h - t, w, S * 2);
-      c.rect(x + t - S * 2, y, S * 2, h); c.rect(x + w - t, y, S * 2, h);
-      c.clip();
-      pixDither(c, x, y, w, h, UIPAL.warm, i);
-      c.restore();
+      var st = i + 1;
+      pixDither(c, x, y + t - S * 2, w, S * 2, UIPAL.warm, st);
+      pixDither(c, x, y + h - t, w, S * 2, UIPAL.warm, st);
+      pixDither(c, x + t - S * 2, y, S * 2, h, UIPAL.warm, st);
+      pixDither(c, x + w - t, y, S * 2, h, UIPAL.warm, st);
     }
   },
 

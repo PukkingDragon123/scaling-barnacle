@@ -215,11 +215,21 @@ const UIPAL = {
 // A dither wash: every other texel of `col` on a 2x2 lattice, which is how a
 // pixel artist gets a half-tone without a new colour. Clipped by the caller.
 function pixDither(ctx, x, y, w, h, col, step = 2) {
+  // ONE FILLRECT PER LATTICE POINT, and the lattice is w*h/(S*step)^2 points.
+  // At S = 0.5 and step = 1 over a 244x180 panel that is 175,000 fillRects in a
+  // single call -- per frame. That is what "the game lags" was. The step is
+  // clamped so a caller can never ask for a finer lattice than two texels, and
+  // the whole thing bails out if the area is still absurd.
   const S = APIX;
+  const st = Math.max(2, step | 0);
+  const cell = S * st;
+  if (w <= 0 || h <= 0) return;
+  if ((w / cell) * (h / cell) > 6000) return;      // refuse to melt the frame
   ctx.fillStyle = col;
   const x0 = Math.round(x / S) * S, y0 = Math.round(y / S) * S;
-  for (let j = 0; j < h; j += S * step) {
-    for (let i = ((j / (S * step)) & 1) ? S * step / 2 : 0; i < w; i += S * step) {
+  let row = 0;
+  for (let j = 0; j < h; j += cell, row++) {
+    for (let i = (row & 1) ? cell / 2 : 0; i < w; i += cell) {
       ctx.fillRect(x0 + i, y0 + j, S, S);
     }
   }
@@ -603,11 +613,10 @@ function uiNote(ctx, x, y, w, h, opts = {}) {
 // contract as uiButton so the two are interchangeable.
 function inkButton(ctx, r, label, enabled, hover, t = 0) {
   const S = APIX;
-  // a live button breathes: one texel of lift and a shine that crosses it,
-  // so the thing you are meant to press is the thing that moves
-  const breathe = (enabled && !hover) ? Math.round(Math.sin(t * 2.4) * 0.6) * S : 0;
+  // (NO IDLE BOUNCE. Every button on screen lifting on its own sine read as
+  // the UI vibrating, not as life -- a button should move when you touch it.)
   const snap = (v) => Math.round(v / S) * S;
-  const x = snap(r.x), y = snap(r.y + (enabled && hover ? S * 2 : 0) - breathe);
+  const x = snap(r.x), y = snap(r.y + (enabled && hover ? S * 2 : 0));
   const w = snap(r.w), h = snap(r.h);
 
   if (enabled && !hover) {                     // it stands off the page
@@ -625,11 +634,10 @@ function inkButton(ctx, r, label, enabled, hover, t = 0) {
   ctx.fillStyle = enabled ? UIPAL.d : '#8f8574';
   ctx.fillRect(x, y + h - S * 2, w, S * 2);
   ctx.fillRect(x + w - S * 2, y, S * 2, h);
-  if (enabled) {
-    ctx.save();
-    ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
-    pixDither(ctx, x, y, w, h, UIPAL.l, 4);    // a little sparkle in the metal
-    ctx.restore();
+  if (enabled) {                               // two flat glints, not a wash
+    ctx.fillStyle = UIPAL.p;
+    ctx.fillRect(x + S * 3, y + S * 3, S * 2, S);
+    ctx.fillRect(x + w - S * 7, y + S * 3, S * 4, S);
   }
   pixEdge(ctx, x, y, w, h, UIPAL.out, 1);
 
