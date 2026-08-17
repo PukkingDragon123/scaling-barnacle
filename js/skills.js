@@ -677,6 +677,10 @@ const Skills = {
     this._applyHearts();
 
     this._say('learned ' + nd.name);
+    if (typeof FX !== 'undefined' && FX.ring) {
+      var rc0 = this._nodeRect(nd);
+      FX.ring(rc0.x + rc0.w / 2, rc0.y + rc0.h / 2, this.ACC[nd.profIdx] || '#e08a1a');
+    }
     if (typeof SND !== 'undefined') SND.chime();
     if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
     var rc = this._nodeRect(nd);
@@ -1429,7 +1433,7 @@ const Skills = {
       // the reveal pop: set in buy(), eased out here
       var rv = this._revT && this._revT[nd.key] > 0 ? this._revT[nd.key] : 0;
       var k = rv > 0 ? 1 + Math.sin(rv / this.REV_T * Math.PI) * 0.35 : 1;
-      if (isSel) k *= 1.06;
+      if (isSel) k *= 1.06 + Math.sin(this.time * 3.4) * 0.03;   // the pick breathes
       var lift = (isSel || isHov) ? 1 : 0;                // the cell picks up off the page
 
       // an affordable cell breathes a ring outward: "spend here"

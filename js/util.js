@@ -485,15 +485,19 @@ function uiPage(ctx, x, y, w, h, alpha = 1) {
 // is put down. Scale from 0.88 with a small overshoot, fade the backdrop in, and
 // hand back a boolean for "still animating". k is 0..1.
 function uiPageOpen(ctx, k, cx, cy) {
+  // A panel does not fade in, it is SET DOWN: overshoot past full size, settle
+  // back, with a little tilt that unwinds as it lands. The backdrop darkens on
+  // its own curve so the room dims before the panel has finished arriving.
   const e = k >= 1 ? 1 : 1 - Math.pow(1 - k, 3);
-  const sc = 0.88 + 0.12 * e + Math.sin(Math.min(1, k) * Math.PI) * 0.03;
-  ctx.fillStyle = `rgba(8,12,18,${(0.55 * e).toFixed(3)})`;
+  const spring = Math.sin(Math.min(1, k) * Math.PI) * 0.055;
+  const sc = 0.82 + 0.18 * e + spring;
+  ctx.fillStyle = `rgba(8,12,18,${(0.6 * Math.min(1, k * 1.6)).toFixed(3)})`;
   ctx.fillRect(0, 0, W, H);
   ctx.translate(cx, cy);
   ctx.scale(sc, sc);
-  ctx.rotate((1 - e) * -0.05);
+  ctx.rotate((1 - e) * -0.06);
   ctx.translate(-cx, -cy);
-  ctx.globalAlpha = e;
+  ctx.globalAlpha = Math.min(1, k * 2.2);
 }
 
 // ---- hand-drawn ink -------------------------------------------------------
@@ -599,8 +603,11 @@ function uiNote(ctx, x, y, w, h, opts = {}) {
 // contract as uiButton so the two are interchangeable.
 function inkButton(ctx, r, label, enabled, hover, t = 0) {
   const S = APIX;
+  // a live button breathes: one texel of lift and a shine that crosses it,
+  // so the thing you are meant to press is the thing that moves
+  const breathe = (enabled && !hover) ? Math.round(Math.sin(t * 2.4) * 0.6) * S : 0;
   const snap = (v) => Math.round(v / S) * S;
-  const x = snap(r.x), y = snap(r.y + (enabled && hover ? S * 2 : 0));
+  const x = snap(r.x), y = snap(r.y + (enabled && hover ? S * 2 : 0) - breathe);
   const w = snap(r.w), h = snap(r.h);
 
   if (enabled && !hover) {                     // it stands off the page
