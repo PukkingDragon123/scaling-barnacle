@@ -797,8 +797,8 @@ const Skills = {
   // half steps and the pan is quantised to the same pitch, because a smoothly
   // easing camera over nearest-neighbour sprites re-rasterises every icon on
   // every frame and the whole comb shimmers.
-  Z: 1.1,
-  ZMIN: 0.5, ZMAX: 3,
+  Z: 1.0,
+  ZMIN: 0.42, ZMAX: 3,
   _cx: 0, _cy: 0,          // where the camera is looking, in hive units
   _cinit: false,
 
@@ -885,7 +885,14 @@ const Skills = {
     var pi = this.PROFS.indexOf(nd.prof);
     if (pi < 0) pi = 0;
     var a = this.profAngle(pi);
-    var P = this.HR * 1.732;                       // hex pitch: centre to centre
+    // PITCH. sqrt(3)*HR is the honeycomb pitch, and it is only enough when the
+    // displacement runs along a LATTICE direction -- along a corner direction
+    // each hexagon reaches a full HR, so two of them need 2*HR to clear. Five
+    // arms at 72 degrees can never all line up with a 60-degree lattice, so the
+    // safe figure is 2*HR, not sqrt(3)*HR. Using the honeycomb pitch here left
+    // consecutive cells overlapping by 3.2 units, which is the bite visible on
+    // every arm. 2.15 gives the clearance plus a hairline of air.
+    var P = this.HR * 2.15;                        // hex pitch: centre to centre
     var i = (nd.tier | 0) * 2 + (nd.col | 0);      // 0..7 along the chain
     var r = (i + 2) * 0.866 * P;                   // +2 keeps arm 0 clear of arm 1
     var off = (i & 1 ? 0.25 : -0.25) * P;
