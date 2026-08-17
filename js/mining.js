@@ -570,21 +570,33 @@ const Mining = {
     var i, j, tries, x, y, fy, ok, df, kind, pairs, k, def, w, uid, node;
     for (i = 0; i < count; i++) {
       x = 0; y = 0; ok = false;
-      for (tries = 0; tries < 6 && !ok; tries++) {
+      for (tries = 0; tries < 8 && !ok; tries++) {
         x = baseX + this.MARGIN + rng() * span;
         y = baseY + this.MARGIN + rng() * spanY;
+
+        // RESOLVE THE FINAL POSITION FIRST, THEN CHECK IT.
+        //
+        // The separation test used to run on the RANDOM y and only afterwards
+        // was y replaced by the seabed height -- so two nodes could sit far
+        // apart vertically, both pass, and then both get pulled down onto the
+        // same line of sand and land on top of each other. That is the stack of
+        // driftwood bundles: two whole nodes in one spot, not one drawn twice.
+        //
+        // Once everything is bedded in the sand the y's are all alike, so what
+        // actually matters is the horizontal gap -- and it has to clear both
+        // nodes' widths rather than a flat constant.
+        if (grounded) {
+          fy = Ocean.floorAt(x);
+          if (!(fy >= baseY && fy < baseY + this.CHUNK_H)) continue;   // another row's sand
+          y = fy;
+        }
         ok = true;
         for (j = 0; j < out.length; j++) {
-          if (Math.abs(out[j].x - x) < this.MIN_SEP && Math.abs(out[j].y - y) < this.MIN_SEP) { ok = false; break; }
+          var need = Math.max(this.MIN_SEP, (out[j].w + 46) * 0.5);
+          if (Math.abs(out[j].x - x) < need && Math.abs(out[j].y - y) < this.MIN_SEP) { ok = false; break; }
         }
       }
       if (!ok) continue;
-
-      if (grounded) {
-        fy = Ocean.floorAt(x);
-        if (!(fy >= baseY && fy < baseY + this.CHUNK_H)) continue;   // another row's sand
-        y = fy;
-      }
 
       df = this.depthFrac(y, x);
       pairs = [];
