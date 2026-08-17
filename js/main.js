@@ -528,7 +528,7 @@ const Game = {
       const kind = G.hearts >= i + 1 ? 'full' : (G.hearts >= i + 0.5 ? 'half' : 'empty');
       drawHeart(c, 11 + i * 10, 10, kind);
     }
-    drawAC(c, 'shell_pearl', 15, 27, 12);
+    PixIcons.draw(c, 'coin', 15, 27, 13, { t: Game.time, fx: 'tick' });
     text(c, `${G.money}`, 24, 22.5, { size: 9, color: '#662907', shadow: false });
 
     // ---- right: the day, and an actual CLOCK ------------------------------
@@ -550,6 +550,7 @@ const Game = {
 
     text(c, `Day ${G.day}`, W - 10, 9, { size: 7.5, color: '#30150a', align: 'right', shadow: false });
     text(c, tstr, W - 10, 18, { size: 7, color: isDay ? '#662907' : '#914007', align: 'right', shadow: false });
+    PixIcons.draw(c, 'clock', W - 15 - textWidth(c, tstr, 7) - 6, 21, 10, { t: Game.time });
 
     // the dial: a stepped pixel arc, with the sun or the moon riding it
     const dx = W - 64, dy = 23, dr = 9;
@@ -562,24 +563,9 @@ const Game = {
     }
     const a = Math.PI + tt * Math.PI;
     const sx2 = snapv(dx + Math.cos(a) * dr), sy2 = snapv(dy + Math.sin(a) * dr);
-    if (isDay) {                                   // a sun: body plus four rays
-      c.fillStyle = '#e08a1a';
-      c.fillRect(sx2 - S_ * 2, sy2 - S_ * 2, S_ * 4, S_ * 4);
-      c.fillStyle = '#f4bf69';
-      c.fillRect(sx2 - S_, sy2 - S_ * 2, S_ * 2, S_ * 4);
-      c.fillRect(sx2 - S_ * 2, sy2 - S_, S_ * 4, S_ * 2);
-      c.fillStyle = '#e08a1a';
-      c.fillRect(sx2 - S_, sy2 - S_ * 4, S_ * 2, S_);
-      c.fillRect(sx2 - S_, sy2 + S_ * 3, S_ * 2, S_);
-      c.fillRect(sx2 - S_ * 4, sy2 - S_, S_, S_ * 2);
-      c.fillRect(sx2 + S_ * 3, sy2 - S_, S_, S_ * 2);
-    } else {                                       // a crescent moon
-      c.fillStyle = '#e3d6b4';
-      c.fillRect(sx2 - S_ * 2, sy2 - S_ * 2, S_ * 4, S_ * 4);
-      c.fillRect(sx2 - S_, sy2 - S_ * 3, S_ * 2, S_ * 6);
-      c.fillStyle = '#f4bf69';                     // the bite, in the paper's own tone
-      c.fillRect(sx2, sy2 - S_ * 2, S_ * 3, S_ * 4);
-    }
+    // drawn art rather than hand-plotted rects, so the dial matches the icons
+    PixIcons.draw(c, isDay ? 'sun' : 'moon', sx2, sy2, 11,
+      { t: Game.time, fx: isDay ? 'spin' : 'bob' });
     // (the [H]/[J] hint used to live here; the tracker below is the affordance
     // now, and the help screen itself lists the keys)
 

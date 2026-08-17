@@ -144,6 +144,16 @@ const PixIcons = {
       '..o..h..o...', '.oho.h.oho..', 'ohhhhhhhhho.', '.oho.h.oho..',
       '..o..h..o...', '.....o......', '....oho.....', '.....o......',
     ],
+    sun: [
+      '.....oo.....', '..o..hh..o..', '..oh.hh.ho..', '....oooo....',
+      '.o.ohhhhoo.o', '.hhohhhhhhoh', '.hhohhhhhhoh', '.o.ohhhhoo.o',
+      '....oooo....', '..oh.hh.ho..', '..o..hh..o..', '.....oo.....',
+    ],
+    moon: [
+      '............', '....oooo....', '..oohhhho...', '.ohhhhhoo...',
+      'ohhhhhoo....', 'ohhhhho.....', 'ohhhhho.....', 'ohhhhhoo....',
+      '.ohhhhhoo...', '..oohhhho...', '....oooo....', '............',
+    ],
     gear: [
       '............', '...o.oo.o...', '..ofoffofo..', '.ooffffffoo.',
       '.offfooffffo', 'ooffo..offfo', 'ooffo..offfo', '.offfooffffo',
