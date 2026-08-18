@@ -74,7 +74,11 @@ const Forge = {
   WX: 16, WY: 12, WW: 448, WH: 246,
   _openT: 0,          // 0..1, the put-it-down transition
   CELL: 22, CGAP: 3,          // the 2x2 grid
-  ROW_H: 18, ROW_VIS: 10,          // a full page holds ten rows now
+  // A GRID, not a list. Eight across by four down is every recipe this game has
+  // on one screen at once -- which is the point: a crafting menu you scroll is a
+  // menu that hides what you are working toward.
+  COLS: 8, ROWS: 3, TILE: 30, TGAP: 4,
+  ROW_H: 18, ROW_VIS: 24,          // ROW_VIS is the page size: 8 x 3
   FX_MAX: 18,
 
   PAL: {
@@ -1254,13 +1258,23 @@ const Forge = {
     var s = this.CELL + this.CGAP;
     return { x: this.WX + 34 + (i % 2) * s, y: this.WY + 64 + ((i / 2) | 0) * s, w: this.CELL, h: this.CELL };
   },
-  _resultRect: function () { return { x: this.WX + 136, y: this.WY + 76, w: 32, h: 32 }; },
-  _btnRect: function () { return { x: this.WX + 34, y: this.WY + 206, w: 132, h: 22 }; },
+  _resultRect: function () { var r = this._cardRect(); return { x: r.x + r.w / 2 - 16, y: r.y + 6, w: 32, h: 32 }; },
+  _btnRect: function () { var r = this._cardRect(); return { x: r.x + 8, y: r.y + r.h - 26, w: r.w - 16, h: 20 }; },
   _listX: function () { return this.WX + 190; },
   _listW: function () { return this.WW - 190 - 26; },
+  // The click target AND the draw box for one recipe. Everything else -- the
+  // selection, the keyboard, the scroll clamp -- already goes through this, so
+  // turning the list into a grid is this one function plus its painter.
   _rowRect: function (i) {
-    return { x: this._listX(), y: this.WY + 58 + i * this.ROW_H, w: this._listW(), h: this.ROW_H - 2 };
+    var s = this.TILE + this.TGAP;
+    return {
+      x: this.WX + 34 + (i % this.COLS) * s,
+      y: this.WY + 62 + ((i / this.COLS) | 0) * s,
+      w: this.TILE, h: this.TILE,
+    };
   },
+  // the card on the right: what the selected thing is, and what it costs
+  _cardRect: function () { return { x: this.WX + 322, y: this.WY + 58, w: 118, h: 176 }; },
   _arrowRect: function (dir) {
     var x = this._listX() + this._listW() - 12;
     return dir < 0 ? { x: x, y: this.WY + 24, w: 12, h: 12 }
@@ -1365,51 +1379,78 @@ const Forge = {
 
   // The 2x2. Four cost slots, an arrow, and what comes out -- the one shape every
   // player already knows what to do with.
+  // THE CARD. What the selected thing is, and exactly what it costs -- with the
+  // ingredients as ICONS carrying have/need, so "can I make this" is answered by
+  // looking rather than by reading. Short amounts go red. This replaces the old
+  // 2x2 slot grid, which could only ever show four ingredients and told you
+  // nothing until you had already selected something.
   _drawGrid: function (c, row) {
-    var P = this.PAP, i, cell, cost = this.rowCost(row);
-    var keys = [], k;
-    if (cost) for (k in cost) if (Object.prototype.hasOwnProperty.call(cost, k)) keys.push(k);
+    var P = this.PAP, r = this._cardRect();
+    inkBox(c, r.x, r.y, r.w, r.h, '#f8d089', '#914007', PIX * 2);
 
-    for (i = 0; i < 4; i++) {
-      cell = this._gridCell(i);
-      inkBox(c, cell.x, cell.y, cell.w, cell.h,
-        i < keys.length ? '#f8d089' : '#d69a4e',
-        '#914007', PIX * 2);
-      if (i >= keys.length) continue;
-      k = keys[i];
-      var need = cost[k], held = this.have(k);
-      this.icon(c, k, cell.x + cell.w / 2, cell.y + cell.h / 2 - 2, 14);
-      text(c, held + '/' + need, cell.x + cell.w - 1.5, cell.y + cell.h - 8,
-        { size: 6, color: held >= need ? P.good : P.bad, align: 'right', shadow: false });
+    if (!row) {
+      text(c, 'pick something', r.x + r.w / 2, r.y + r.h / 2 - 12,
+        { size: 7, color: P.dim, align: 'center', shadow: false });
+      text(c, 'off the shelf', r.x + r.w / 2, r.y + r.h / 2 - 2,
+        { size: 7, color: P.dim, align: 'center', shadow: false });
+      return;
     }
 
-    // arrow
-    var ax = this.WX + 118, ay = this.WY + 94;
-    c.strokeStyle = '#914007';
-    c.lineWidth = PIX * 2.5;
-    c.lineCap = 'round';
-    c.beginPath();
-    inkLine(c, ax, ay, ax + 12, ay, 0.8);
-    inkLine(c, ax + 12, ay, ax + 8, ay - 3.5, 0.6);
-    inkLine(c, ax + 12, ay, ax + 8, ay + 3.5, 0.6);
-    c.stroke();
-    c.lineCap = 'butt';
-    c.lineWidth = 1;
-
-    // result
+    // the thing itself, big
     var rr = this._resultRect();
-    inkBox(c, rr.x, rr.y, rr.w, rr.h, 'rgba(255,240,196,0.85)', '#c56906', PIX * 2.5);
-    if (!row) return;
+    inkBox(c, rr.x - 2, rr.y - 2, rr.w + 4, rr.h + 4, '#f4bf69', '#914007', PIX);
+    var cx = rr.x + rr.w / 2, cy = rr.y + rr.h / 2;
     if (row.kind === 'locked') {
-      text(c, '?', rr.x + rr.w / 2, rr.y + 8, { size: 11, color: '#9a7a4e', align: 'center', shadow: false });
+      c.save(); c.globalAlpha = 0.3;
+      this.icon(c, row.key, cx, cy, 26);
+      c.restore();
+      PixIcons.draw(c, 'lock', cx, cy, 16, { t: this.time });
     } else if (row.kind === 'table') {
-      this._tableArt(c, row.t, rr.x + rr.w / 2, rr.y + rr.h / 2, 18);
+      this._tableArt(c, row.t, cx, cy, 26);
     } else if (row.r.out) {
-      this.icon(c, row.r.out.key, rr.x + rr.w / 2, rr.y + rr.h / 2, 18);
+      this.icon(c, row.r.out.key, cx, cy, 26);
       if (row.r.out.n > 1) {
-        text(c, 'x' + row.r.out.n, rr.x + rr.w - 1.5, rr.y + rr.h - 8,
-          { size: 6, color: this.PAP.ink, align: 'right', shadow: false });
+        text(c, 'x' + row.r.out.n, rr.x + rr.w - 1, rr.y + rr.h - 8,
+          { size: 6.5, color: '#30150a', align: 'right', shadow: false });
       }
+    }
+
+    textFit(c, row.name, r.x + r.w / 2, r.y + 42, r.w - 10,
+      { size: 7.5, color: '#30150a', align: 'center', shadow: false });
+
+    // the description, wrapped to the card
+    var cols = Math.floor((r.w - 14) / (6 * 0.6));
+    var lines = this._wrap(this.rowDesc(row) || '', cols), i;
+    var ly = r.y + 54;
+    for (i = 0; i < lines.length && i < 3; i++) {
+      text(c, lines[i], r.x + 7, ly, { size: 6, color: P.dim, shadow: false });
+      ly += 8;
+    }
+
+    // ---- WHAT IT COSTS, as icons with have/need ----------------------------
+    uiRule(c, r.x + 6, ly + 2, r.w - 12, true);
+    ly += 8;
+    text(c, 'needs', r.x + 7, ly, { size: 6.5, color: P.ink, shadow: false });
+    ly += 17;
+    var cost = this.rowCost(row), k, n = 0;
+    if (cost) {
+      for (k in cost) {
+        if (!Object.prototype.hasOwnProperty.call(cost, k)) continue;
+        if (n >= 4) break;
+        var need = cost[k], held = this.have(k), got = held >= need;
+        var ix = r.x + 9 + (n % 2) * 54, iy = ly + ((n / 2) | 0) * 20;
+        inkBox(c, ix - 9, iy - 9, 18, 18, got ? '#f4bf69' : '#d69a4e',
+          got ? '#914007' : '#b23a34', PIX * 2);
+        this.icon(c, k, ix, iy, 14);
+        text(c, held + '/' + need, ix + 11, iy - 3,
+          { size: 6, shadow: false, color: got ? '#3f7a4e' : '#b23a34' });
+        n++;
+      }
+    }
+    if (!n) text(c, 'nothing at all', r.x + 9, ly - 2, { size: 6, color: P.dim, shadow: false });
+    if (row.money) {
+      text(c, '$' + row.money, r.x + 9, ly + 42,
+        { size: 6.5, shadow: false, color: G.money >= row.money ? '#3f7a4e' : '#b23a34' });
     }
   },
 
@@ -1441,7 +1482,7 @@ const Forge = {
     // and the frame below. A photo mount with a deep bottom border gives the
     // caption an actual home -- and gives the steadiness gauge somewhere to
     // live that is not on top of the caption.
-    var wx = this.WX + 34, wy = this.WY + 122, ww = 132, wh = 48;
+    var wx = this.WX + 34, wy = this.WY + 166, ww = 132, wh = 40;
     inkBox(c, wx - 4, wy - 4, ww + 8, wh + 22, '#f8d089', '#914007', PIX * 2);
     c.fillStyle = '#2a1a0d';
     c.fillRect(wx - 1, wy - 1, ww + 2, wh + 2);
@@ -1507,9 +1548,12 @@ const Forge = {
     // UNDER THE LIST, not under the button: the left column now ends with the
     // bench window and the button, and a two-line note below those ran straight
     // through the footer at the bottom edge of the panel.
-    var cols = Math.floor(130 / (6 * 0.6));
+    // ONLY the note (an actual result or refusal). The flavour text is on the
+    // card now, and printing it here as well just said everything twice.
+    if (this.noteT <= 0) return;
+    var cols = Math.floor(180 / (6 * 0.6));
     var lines = this._wrap(msg, cols), i;
-    var nx = this._listX(), ny = this.WY + this.WH - 34;
+    var nx = this.WX + 178, ny = this.WY + this.WH - 30;
     for (i = 0; i < lines.length && i < 2; i++) {
       c.globalAlpha = this.noteT > 0 ? clamp(this.noteT, 0, 1) : 1;
       text(c, lines[i], nx, ny + i * 8, { size: 6, color: col, shadow: false });
@@ -1517,12 +1561,15 @@ const Forge = {
     }
   },
 
+  // THE GRID. Every recipe as a tile: its own art, a status pip, and locked ones
+  // present as dark silhouettes rather than absent -- you should be able to see
+  // what you are working toward, which is half of why a crafting screen exists.
   _drawList: function (c, rows, m) {
     var P = this.PAP, i, r, row, idx, vis = Math.min(this.ROW_VIS, rows.length);
 
     if (!rows.length) {
       text(c, this.tab === 1 ? 'a workbench first.' : 'nothing to whittle.',
-        this._listX(), this.WY + 58, { size: 6.5, color: P.dim, shadow: false });
+        this.WX + 34, this.WY + 66, { size: 7, color: P.dim, shadow: false });
       return;
     }
     for (i = 0; i < vis; i++) {
@@ -1531,28 +1578,43 @@ const Forge = {
       if (!row) break;
       r = this._rowRect(i);
       var sel = idx === this.sel, on = this._in(r, m.x, m.y);
-      if (sel) inkBox(c, r.x, r.y, r.w, r.h, '#e08a1a', 'rgba(168,118,26,0.7)', PIX * 2);
-      else if (on) inkBox(c, r.x, r.y, r.w, r.h, 'rgba(255,255,255,0.4)', null);
+      var ok = this.rowOk(row);
+      var lock = row.kind === 'locked';
+      var built = row.kind === 'table' && this.countPlaced(row.t.key) >= this.MAX_PER;
 
-      if (row.kind === 'locked') {
-        // silhouette: a flat plate where the icon would be
-        c.fillStyle = 'rgba(120,96,64,0.45)';
-        c.fillRect(r.x + 3, r.y + 3, 8, 8);
+      // the tile: pressed-in when it is the one you have picked
+      inkBox(c, r.x, r.y + (sel ? 1 : 0), r.w, r.h,
+        sel ? '#e08a1a' : (on ? '#f8d089' : (ok ? '#f4bf69' : '#d69a4e')),
+        sel ? '#662907' : '#914007', sel ? PIX * 3 : PIX * 2);
+
+      var cx = r.x + r.w / 2, cy = r.y + r.h / 2 + (sel ? 1 : 0);
+      if (lock) {
+        // a silhouette, not a blank: the shape is the tease
+        c.save();
+        c.globalAlpha = 0.30;
+        if (row.kind === 'table') this._tableArt(c, row.t, cx, cy, 20);
+        else this.icon(c, row.key, cx, cy, 20);
+        c.restore();
+        PixIcons.draw(c, 'lock', cx, cy + 1, 14, { t: this.time, alpha: 0.9 });
       } else if (row.kind === 'table') {
-        this._tableArt(c, row.t, r.x + 7, r.y + r.h / 2, 11);
+        this._tableArt(c, row.t, cx, cy, 22);
       } else {
-        this.icon(c, row.r.out ? row.r.out.key : row.key, r.x + 7, r.y + r.h / 2, 11);
+        this.icon(c, row.r.out ? row.r.out.key : row.key, cx, cy, 22);
       }
 
-      var ok = this.rowOk(row);
-      var built = row.kind === 'table' && this.countPlaced(row.t.key) >= this.MAX_PER;
-      text(c, this._clip(row.name, 20), r.x + 15, r.y + 3,
-        { size: 6.5, shadow: false,
-          color: row.kind === 'locked' ? '#9a8a70' : (sel ? '#6b4a10' : P.ink) });
-      // one pip of status per row: gold already standing, green ready, red short.
-      // Drawn, not lettered -- a glyph the font lacks would be a tofu box.
-      c.fillStyle = built ? P.hi : (ok ? P.good : 'rgba(255,106,122,0.75)');
-      c.fillRect(r.x + r.w - 6, r.y + 5, 3, 3);
+      // status, bottom-right of the tile: standing / ready / short
+      if (built) PixIcons.draw(c, 'check', r.x + r.w - 6, r.y + r.h - 6, 10, { t: this.time });
+      else if (!lock && !ok) {
+        c.fillStyle = '#b23a34';
+        c.fillRect(r.x + r.w - 7, r.y + r.h - 7, 4, 4);
+        c.fillStyle = '#30150a';
+        c.fillRect(r.x + r.w - 8, r.y + r.h - 8, 6, 1);
+      }
+      // how many the recipe yields, so a x3 is visible without selecting it
+      if (!lock && row.kind === 'recipe' && row.r.out && row.r.out.n > 1) {
+        text(c, 'x' + row.r.out.n, r.x + r.w - 2, r.y + 1,
+          { size: 6, color: '#30150a', align: 'right', shadow: false });
+      }
     }
 
     if (rows.length <= this.ROW_VIS) return;
