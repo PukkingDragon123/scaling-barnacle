@@ -30,7 +30,11 @@ const DECK_Y = 214;   // the dock sits low in frame, water filling the bottom
 // pier sat small under two thirds of empty sky. 1.5 matches the ocean exactly --
 // same slice, same crisp setting (a sprite texel on three whole device pixels),
 // so the two scenes finally read as one place at one scale.
-const WORLD_ZOOM = 1.5;
+// ZOOM. A sprite texel covers APIX * DPX * ZOOM device pixels, so only whole
+// multiples keep the art crisp: 1.5 gives 3, 1.0 gives 2, and 1.25 would give
+// 2.5 -- uneven texels and a shimmer. Stepping out from 1.5 therefore means 1.0,
+// which shows half again as much deck.
+const WORLD_ZOOM = 1.0;
 const WVW = W / WORLD_ZOOM, WVH = H / WORLD_ZOOM;
 // With the zoom on, DECK_Y (214) sits past the bottom of a 180-unit slice, so the
 // world needs a vertical camera too. This puts the deck at 74% of the frame: the
@@ -106,6 +110,34 @@ const WorldScene = {
     // (the old first-visit toast stack lived here; the journal teaches now)
   },
 
+  // WHICH SPOT [E] MEANS.
+  //
+  // This was duplicated between update() and drawPrompt() -- the same loop
+  // written twice, which is how the label and the action drift apart. One
+  // function now, called by both.
+  //
+  // Two things it does that the old loop did not:
+  //
+  //   * a spot may declare its own REACH. A flat 22 units is fine for a hatch in
+  //     the planks and much too tight for a person: the cast WALK, so a
+  //     conversation meant lining Otto up inside a 44-unit window against a
+  //     moving target, which is what "it is really hard to talk to him" is.
+  //     People get 34.
+  //   * a spot may declare a PRIORITY, and priority beats distance. Otherwise a
+  //     scenery spot standing a unit nearer silently eats the only interaction
+  //     that advances the quest.
+  pick() {
+    let best = null, bd = 1e9, bp = -1;
+    for (const s of this.spots()) {
+      const reach = s.r || 22;
+      const d = Math.abs(this.px - s.x);
+      if (d > reach) continue;
+      const prio = s.prio || 0;
+      if (prio > bp || (prio === bp && d < bd)) { bp = prio; bd = d; best = s; }
+    }
+    return best;
+  },
+
   spots() {
     const s = [
       { x: 56, label: 'Enter House', act: () => Game.go(HouseScene, {}) },
@@ -166,11 +198,7 @@ const WorldScene = {
     this.camX = clamp(this.px - WVW / 2, 0, Math.max(0, this.worldW() - WVW));
 
     if (Input.p('KeyE') || Input.p('Space')) {
-      let best = null, bd = 22;
-      for (const s of this.spots()) {
-        const d = Math.abs(this.px - s.x);
-        if (d < bd) { bd = d; best = s; }
-      }
+      const best = this.pick();
       if (best) { SND.click(); best.act(); return; }
     }
 
@@ -198,11 +226,7 @@ const WorldScene = {
   drawPrompt(ctx) {
     if (!G) return;
     const cam = this.camX;
-    let best = null, bd = 22;
-    for (const s of this.spots()) {
-      const d = Math.abs(this.px - s.x);
-      if (d < bd) { bd = d; best = s; }
-    }
+    const best = this.pick();
     if (!best) return;
     ctx.save();
     worldSpace(ctx, cam);

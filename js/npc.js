@@ -121,7 +121,7 @@ const NPCs = {
     },
     {
       key: 'prof', name: 'Fintan', full: 'Prof. Fintan Bellwether', role: 'whale scholar',
-      art: 'prof', x: 378, h: 56, flip: false,
+      art: 'prof', x: 378, h: 46, flip: false,
       frames: { idle: [0, 1, 2, 3], walk: [4, 5, 6, 7], talk: [9, 8], emote: [11, 10, 12], happy: [12, 13], sad: [14, 15] },
       adore: ['tea', 'teaLeaf', 'crop_tea_p'],
       loved: ['pearl', 'pearlPol', 'abalonePol'],
@@ -959,7 +959,18 @@ const NPCs = {
       const fresh = this.rec(key).talkDay !== G.day;
       out.push({
         x: n.x,
-        label: `Talk to ${n.name}  (${this.hearts(key)}/${NPC_MAX_HEARTS} hearts)${fresh ? '  *' : ''}`,
+        // A person is wide and a walking person is a moving target, so 22 units
+        // was a window you had to line up in. And priority, because talking is
+        // what advances the game: a hatch in the planks standing one unit nearer
+        // must not swallow the only interaction that does.
+        r: 34,
+        prio: 2,
+        // NO RELATIONSHIP NUMBER. The label used to read "(3/10 hearts)" --
+        // spelling out the affection score as a fraction turns a friendship into
+        // a progress bar. The hearts are drawn in the dialogue box where they
+        // belong; out here it is just a name, and a star when they have not been
+        // spoken to today.
+        label: `Talk to ${n.name}${fresh ? '  *' : ''}`,
         act: () => this.talk(key),
       });
     }

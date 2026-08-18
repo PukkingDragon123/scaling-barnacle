@@ -604,8 +604,18 @@ const Hood = {
   // come back flagged `up`.
   _target: function (a, where, out) {
     var hm = this.HOMES[a.homeI];
-    if (where === 'fish') { out.x = hm.fish.x; out.y = hm.fish.y; out.up = false; return out; }
-    if (where === 'dock') { out.x = this.DOCK_AT.x; out.y = this.DOCK_AT.y; out.up = false; return out; }
+    // NOBODY LEAVES THEIR OWN PLACE BY WATER.
+    //
+    // They already stayed at the surface rather than sinking, but paddling
+    // between houses still read as wrong: these are people in dungarees, and
+    // watching one set off across open water to a fishing mark or somebody
+    // else's deck looked like a pathing fault, not like a neighbour visiting.
+    //
+    // The schedule keeps its ACT -- they still tend, fish, potter and drift, so
+    // the neighbourhood is alive -- but every destination now resolves on their
+    // own house. Only Otto crosses water.
+    if (where === 'fish' || where === 'dock') where = 'plot';
+    if (where !== 'home' && where !== 'plot' && this.homeByKey(where)) where = 'home';
     var tgt = hm;
     if (where !== 'home' && where !== 'plot') {
       var other = this.homeByKey(where);

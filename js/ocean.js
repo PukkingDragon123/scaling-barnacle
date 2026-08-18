@@ -2638,6 +2638,12 @@ const Ocean = {
 
   // ---- surface light ----------------------------------------------------------
   _drawRays(ctx, t) {
+    // GOD RAYS ARE OFF. Blurred translucent trapezoids over painted seabed art
+    // read as a rendering fault -- pale bands with visible straight edges that
+    // nothing in the scene casts. They were also the single most expensive pass
+    // in the file. The uploaded backgrounds already carry their own light.
+    return;
+    /* eslint-disable no-unreachable */
     if (this.quality <= 0) return;               // the first thing to go
     const fade = clamp(1 - Math.max(0, this.camY) / this.LIGHT_END, 0, 1) * (1 - this._nightF());
     if (fade <= 0.02) return;
@@ -2669,6 +2675,11 @@ const Ocean = {
   },
 
   _drawCaustics(ctx, t) {
+    // CAUSTICS ARE OFF, same reason: a soft banded strip stretched over the top
+    // of the water added a moving haze the art did not ask for, and cost a
+    // fortune per destination pixel.
+    return;
+    /* eslint-disable no-unreachable */
     const fade = clamp(1 - Math.max(0, this.camY) / this.LIGHT_END, 0, 1) * (1 - this._nightF() * 0.9);
     if (fade <= 0.02) return;
     const ca = this.caustics(t);
@@ -3275,25 +3286,19 @@ const Ocean = {
       // belly-up: the limp frames already sag, this rolls him the rest of the way
       ctx.rotate(clamp((this.overT - 1.1) * 0.9, 0, 1) * Math.PI * (this.face > 0 ? 1 : -1) * 0.9);
     }
-    // Cross-fade the outgoing pose into the incoming one. Only during the first
-    // slice of each frame's dwell, so this is one blit for most of every frame.
-    if (this.animMix < 1) {
-      const pimg = ASSETS[this.animPrev];
-      if (pimg && pimg.width) {
-        const pw = pimg.width >= pimg.height ? box : box * pimg.width / pimg.height;
-        const ph = pimg.width >= pimg.height ? box * pimg.height / pimg.width : box;
-        const base = ctx.globalAlpha;
-        ctx.globalAlpha = base * (1 - this.animMix);
-        ctx.drawImage(pimg, -pw / 2, -ph / 2, pw, ph);
-        ctx.globalAlpha = base * this.animMix;
-        ctx.drawImage(img, -w / 2, -h / 2, w, h);
-        ctx.globalAlpha = base;
-      } else {
-        ctx.drawImage(img, -w / 2, -h / 2, w, h);
-      }
-    } else {
-      ctx.drawImage(img, -w / 2, -h / 2, w, h);
-    }
+    // ONE BLIT. HARD CUT.
+    //
+    // This used to CROSS-FADE the outgoing pose into the incoming one by drawing
+    // BOTH at partial alpha -- two half-transparent otters stacked on each other
+    // at the start of every animation frame. Wherever the two poses did not
+    // overlap you could see the water straight through him, and it re-triggered
+    // several times a second: that is the "hollow and flickering" sprite, and it
+    // is nothing to do with the png (the oswim sheet has zero interior holes --
+    // I checked all sixteen frames by flood-filling their alpha).
+    //
+    // Cross-fading is for soft-edged art. Pixel art cuts between frames, which is
+    // what the sheet's own four poses are for.
+    ctx.drawImage(img, -w / 2, -h / 2, w, h);
     ctx.restore();
     ctx.globalAlpha = 1;
   },
