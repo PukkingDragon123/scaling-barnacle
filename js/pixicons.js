@@ -19,155 +19,159 @@
 const PixIcons = {
   S: 12,
 
-  // '.' transparent. Colours are UIPAL where they can be, so an icon and the
-  // panel under it are cut from the same ramp.
+  // '.' is transparent. Everything else is a key into PAL. The ramps are three
+  // tones deep -- shadow, body, light -- because a flat fill at this size reads
+  // as a sticker, and one highlight pixel in the right place is the difference
+  // between a shape and an object.
   PAL: {
-    o: '#30150a',  // outline
-    d: '#662907',  // dark
-    m: '#914007',  // mid
-    f: '#c56906',  // frame / bright brown
-    w: '#e3ab61',  // warm
-    p: '#f4bf69',  // panel gold
-    h: '#f8d089',  // highlight
-    // accents, used sparingly and only where meaning needs a colour
-    r: '#c8392f',  // red
-    R: '#f0645a',  // light red
-    g: '#3f8f4e',  // green
-    G: '#7fd08a',  // light green
-    b: '#2a5f8f',  // blue
-    B: '#5aa8d8',  // light blue
-    c: '#7fe0e8',  // cyan
-    s: '#8a929c',  // steel
-    S: '#d8dee6',  // light steel
-    k: '#fff6e0',  // white
-    v: '#7a4a9c',  // violet
+    o: '#2a1206',  // outline, near-black brown
+    O: '#4a2410',  // soft outline / contact shadow
+    // wood + gold: the panel ramp, so an icon and its frame share a family
+    d: '#662907', m: '#914007', f: '#c56906', w: '#e3ab61', p: '#f4bf69', h: '#f8d089',
+    u: '#7a4a22', U: '#b07a3a',                       // plain wood
+    // metal
+    s: '#4e5a68', S: '#8a97a6', T: '#c9d6e4', k: '#fff6e0',
+    // red
+    r: '#8f2020', R: '#d63b2e', E: '#ff8b72',
+    // green
+    g: '#2a6b34', G: '#4fa84f', N: '#9ee87f',
+    // blue + water
+    b: '#1d4a78', B: '#3f8fd0', C: '#86d8f0', c: '#c9f4fb',
+    // sun + amber
+    x: '#c96a06', y: '#ffc21e', Y: '#fff2a8',
+    // violet
+    v: '#5b3a8f', V: '#9b6fe0',
+    // coral + pink
+    z: '#a8436f', n: '#e06a9c', q: '#ffb0cd',
+    // teal
+    t: '#1f7d78', L: '#48c2b4',
   },
 
   G: {
     // ---- the five trades ----------------------------------------------------
     shell: [
-      '............', '....oooo....', '..oohhhhoo..', '.ohwhwhwhwo.',
-      'ohwhwhwhwhho', 'ohwhwhwhwhho', 'ohwwhwwhwwho', '.ohwwwwwwho.',
-      '..ohhhhhho..', '...oooooo...', '............', '............',
+      '............', '....oooo....', '..oozqqzoo..', '.oznqqqqnzo.',
+      'oznqnqqnqnzo', 'ozqnqqqqnqzo', 'oznqnqqnqnzo', '.oznqqqqnzo.',
+      '..ozznnzzo..', '...oooooo...', '............', '............',
     ],
     pick: [
-      '............', '............', '.oooooooooo.', 'oSSSSSSSSSSo',
-      'oSSSoooSSSSo', '.ooooddoooo.', '....oddo....', '....oddo....',
-      '....oddo....', '....oddo....', '....oooo....', '............',
+      '............', '............', '.oooooooooo.', 'oTSSSSSSSSTo',
+      'oSsSSooSSsSo', '.oooOUUOooo.', '....oUUo....', '....oUuo....',
+      '....oUuo....', '....oUuo....', '....oooo....', '............',
     ],
     sword: [
-      '.......oo...', '......oSSo..', '.....oSSSo..', '....oSSSo...',
-      '...oSSSo....', '..oSSSo.....', '.oSSSo......', 'ofSfo.......',
-      'offfo.......', 'odo.........', 'oo..........', '............',
+      '.......ooo..', '......oTSo..', '.....oTSSo..', '....oTSSo...',
+      '...oTSSo....', '..oTSSo.....', '.oTSSo......', 'ofpSfo......',
+      'offdfo......', 'oduo........', 'ooo.........', '............',
     ],
     seed: [
-      '.....oo.....', '....ogGo....', '...ogGGo....', '..ogGGGo....',
-      '...oggo.....', '....odo.....', '....odo.....', '...oddo.....',
-      '..owwwwo....', '.owppppwo...', '..oooooo....', '............',
+      '.....oo.....', '....oNGo....', '...oNGGo.o..', '..oNGGGooGo.',
+      '...oGGGNGo..', '....oGgo....', '....ogo.....', '...oUuo.....',
+      '..oUUUUo....', '.oUhpphUo...', '..oooooo....', '............',
     ],
     fish: [
-      '............', '............', 'o...........', 'oo..oooooo..',
-      'oBoooBBBBBo.', 'oBBoBBBBkBo.', 'oBBoBBBBBBo.', 'oBoooBBBBBo.',
-      'oo..oooooo..', 'o...........', '............', '............',
+      '............', '.......oo...', 'oo....oBCo..', 'oBoooBBBBBo.',
+      'oBBoBCCCCkBo', 'oBBoCCCCCoBo', 'oBBoBCCCCCBo', 'oBoooBBBBBo.',
+      'oo....oBbo..', '............', '............', '............',
     ],
 
     // ---- states -------------------------------------------------------------
     star: [
-      '............', '.....oo.....', '....ohho....', '....ohho....',
-      'oooohhhhoooo', 'ohhhhhhhhhho', '.ohhhhhhhho.', '..ohhhhhho..',
-      '..ohh..hho..', '.ohho..ohho.', '.oo......oo.', '............',
+      '.....oo.....', '....oYyo....', '....oYyo....', 'oooooYyooooo',
+      'oYYYyyyyyxxo', '.oYyyyyyyxo.', '..oyyyyyxo..', '..oyyooyxo..',
+      '.oyyo..oxxo.', '.oxo....oxo.', '.oo......oo.', '............',
     ],
     lock: [
-      '............', '....oooo....', '...o####o...', '...o#..#o...',
-      '.oooooooooo.', '.offffffffo.', '.offfoofffo.', '.offfoofffo.',
-      '.offffoffffo', '.offffffffo.', '.oooooooooo.', '............',
+      '............', '....oooo....', '...oTSSTo...', '...oS..So...',
+      '.oooooooooo.', '.oxYyyyyyxo.', '.oxyyooyyxo.', '.oxyyooyyxo.',
+      '.oxyyyyyyxo.', '.oooooooooo.', '............', '............',
     ],
     check: [
-      '............', '..........oo', '.........oGo', '........oGGo',
-      '.oo....oGGo.', 'oGGo..oGGo..', 'oGGGooGGo...', '.oGGGGGo....',
-      '..oGGGo.....', '...ooo......', '............', '............',
+      '............', '.........ooo', '........oNGo', '.......oNGGo',
+      '.oo...oNGGo.', 'oNGo.oNGGo..', 'oNGGooGGo...', '.oGGGGGo....',
+      '..oggGo.....', '...ooo......', '............', '............',
     ],
     heart: [
-      '............', '..oo....oo..', '.oRRo..oRRo.', 'oRkRRooRRRo.',
-      'oRkRRRRRRRo.', 'oRRRRRRRRRo.', '.oRRRRRRRo..', '..oRRRRRo...',
-      '...oRRRo....', '....oRo.....', '.....o......', '............',
+      '............', '..oo....oo..', '.oEEo..oRRo.', 'oEkERoooRRro',
+      'oEkERRRRRRro', 'oERRRRRRRrro', '.oRRRRRRrro.', '..oRRRRrro..',
+      '...oRRrro...', '....oRro....', '.....oo.....', '............',
     ],
     coin: [
-      '............', '....oooo....', '..oofppfoo..', '.ofphhhhpfo.',
-      'ofphhkkhhpfo', 'ofphkkkkhpfo', 'ofphkkkkhpfo', 'ofphhkkhhpfo',
-      '.ofphhhhpfo.', '..oofppfoo..', '....oooo....', '............',
+      '............', '....oooo....', '..ooxppxoo..', '.oxphhhhpxo.',
+      'oxphYYkhhpxo', 'oxphYkkhhpxo', 'oxphhkkhhpxo', 'oxphhhhhhpxo',
+      '.oxphhhhpxo.', '..ooxppxoo..', '....oooo....', '............',
     ],
     clock: [
-      '............', '....oooo....', '..oohhhhoo..', '.ohhhhhhhho.',
-      'ohhhhohhhhho', 'ohhhhohhhhho', 'ohhhhoooohho', '.ohhhhhhhho.',
-      '..oohhhhoo..', '....oooo....', '............', '............',
+      '............', '....oooo....', '..ooSTTSoo..', '.oSkkrkkkSo.',
+      'oSTkkrkkkTSo', 'oSTkkrkkkTSo', 'oSTkkrrrkTSo', 'oSTkkkkkkTSo',
+      '.oSkkkkkkSo.', '..ooSTTSoo..', '....oooo....', '............',
     ],
     bubble: [
-      '............', '....oooo....', '..oocccco...', '.ockkcccco..',
-      'ockkcccccco.', 'occccccccco.', 'occccccccco.', '.occccccco..',
-      '..oocccco...', '....oooo....', '............', '............',
+      '............', '....oooo....', '..ootCCtoo..', '.otCccCCCto.',
+      'otCcckCCCCto', 'otCCcCCCCCto', 'otCCCCCCCCto', '.otCCCCCCto.',
+      '..oottCCoo..', '....oooo....', '............', '............',
     ],
 
     // ---- verbs --------------------------------------------------------------
     hammer: [
-      '............', '..oooooo....', '.osSSSSso...', 'osSSkSSSso..',
-      '.osSSSSso...', '..ooodooo...', '....odo.....', '....odo.....',
-      '....odo.....', '....odo.....', '....ooo.....', '............',
+      '............', '..oooooo....', '.oTSSSSso...', 'osSTkSSSso..',
+      '.osSSSSso...', '..oooUooo...', '....oUo.....', '....oUo.....',
+      '....oUuo....', '....oUuo....', '....ooo.....', '............',
     ],
     bag: [
-      '............', '...oo..oo...', '..od....do..', '.oooooooooo.',
-      '.owwwwwwwwo.', '.owwwwwwwwo.', '.oooooooooo.', '.offffffffo.',
-      '.offoddoffo.', '.offffffffo.', '..oooooooo..', '............',
+      '............', '...oo..oo...', '..oUo..oUo..', '.oooooooooo.',
+      '.ohppppppho.', '.owppppppwo.', '.oooooooooo.', '.oUUUUUUUUo.',
+      '.oUUoyyoUUo.', '.oUUoyyoUUo.', '.ouuuuuuuuo.', '..oooooooo..',
     ],
     plus: [
-      '............', '....oooo....', '....ohho....', '....ohho....',
-      '.oooohhoooo.', '.ohhhhhhhho.', '.ohhhhhhhho.', '.oooohhoooo.',
-      '....ohho....', '....ohho....', '....oooo....', '............',
+      '............', '....oooo....', '....oNGo....', '....oNGo....',
+      '.ooooNGoooo.', '.oNNNNGGGGo.', '.oGGGGGGGGo.', '.ooooGgoooo.',
+      '....oGgo....', '....oGgo....', '....oooo....', '............',
     ],
     minus: [
       '............', '............', '............', '............',
-      '.oooooooooo.', '.ohhhhhhhho.', '.ohhhhhhhho.', '.oooooooooo.',
+      '.oooooooooo.', '.oEEEEEEEEo.', '.oRRRRRRRRo.', '.oooooooooo.',
       '............', '............', '............', '............',
     ],
     close: [
-      '............', '.oo......oo.', 'ohho....ohho', '.ohho..ohho.',
-      '..ohhoohho..', '...ohhhho...', '...ohhhho...', '..ohhoohho..',
-      '.ohho..ohho.', 'ohho....ohho', '.oo......oo.', '............',
+      '............', '.oo......oo.', 'oEEo....oEEo', '.oEEo..oEEo.',
+      '..oEEooEEo..', '...oERREo...', '...oERREo...', '..oERooREo..',
+      '.oERo..oREo.', 'oERo....oREo', '.oo......oo.', '............',
     ],
     arrowR: [
       '............', '....oo......', '....oho.....', '....ohho....',
-      '.oooohhho...', '.ohhhhhhho..', '.ohhhhhhho..', '.oooohhho...',
-      '....ohho....', '....oho.....', '....oo......', '............',
+      '.ooooohho...', '.ohhhhhhho..', '.owwwwwwwho.', '.ooooowwo...',
+      '....owwo....', '....owo.....', '....oo......', '............',
     ],
     spark: [
-      '............', '.....oo.....', '.....hh.....', '....ohho....',
-      '..oohhhhoo..', '.ohhhhhhhho.', '.ohhhhhhhho.', '..oohhhhoo..',
-      '....ohho....', '.....hh.....', '.....oo.....', '............',
+      '............', '.....oo.....', '.....Yo.....', '....oYyo....',
+      '..ooYYyyoo..', '.oYYYkYyyyo.', '.oyYYkkYyyo.', '..ooyYyyoo..',
+      '....oyyo....', '.....yo.....', '.....oo.....', '............',
     ],
     sun: [
-      '.....hh.....', '.....oo.....', '....oooo....', '..oohhhhoo..',
-      '.ohhhhhhhho.', 'hoohhhhhhooh', 'hoohhhhhhooh', '.ohhhhhhhho.',
-      '..oohhhhoo..', '....oooo....', '.....oo.....', '.....hh.....',
+      '.....yy.....', '..y..oo..y..', '....oyyo....', '..ooyYYyoo..',
+      '.oyYYYYYYyo.', 'yoYYYYYYYYoy', 'yoYYYYYYYYoy', '.oyYYYYYYyo.',
+      '..ooyYYyoo..', '....oyyo....', '..y..oo..y..', '.....yy.....',
     ],
     moon: [
-      '............', '....oooo....', '..oohhhho...', '.ohhhhhoo...',
-      'ohhhhhoo....', 'ohhhhho.....', 'ohhhhho.....', 'ohhhhhoo....',
-      '.ohhhhhoo...', '..oohhhho...', '....oooo....', '............',
+      '............', '....oooo....', '..ooTkkTo...', '.oTkkkkToo..',
+      'oTkkkkToo...', 'oTkSkkTo....', 'oTkkkSTo....', 'oTkkkkToo...',
+      '.oTkkkkToo..', '..ooTkkTo...', '....oooo....', '............',
     ],
     expand: [
-      '............', '.#####..###.', '.#####..#..#', '.##.........',
-      '.##.........', '............', '............', '.........##.',
-      '.........##.', '#..#..#####.', '.###..#####.', '............',
+      '............', '.oooo..oooo.', '.oTTo..oTTo.', '.oTooooooTo.',
+      '.oTo....oTo.', '.oo......oo.', '.oo......oo.', '.oTo....oTo.',
+      '.oTooooooTo.', '.oTTo..oTTo.', '.oooo..oooo.', '............',
     ],
     shrink: [
-      '............', '............', '...##..##...', '...##..##...',
-      '.####..####.', '............', '............', '.####..####.',
-      '...##..##...', '...##..##...', '............', '............',
+      '............', '.o........o.', '.oo......oo.', '.oTo....oTo.',
+      '..oTooooTo..', '...oTTTTo...', '...oTTTTo...', '..oTooooTo..',
+      '.oTo....oTo.', '.oo......oo.', '.o........o.', '............',
     ],
     gear: [
-      '............', '...o.oo.o...', '..ofoffofo..', '.ooffffffoo.',
-      '.offfooffffo', 'ooffo..offfo', 'ooffo..offfo', '.offfooffffo',
-      '.ooffffffoo.', '..ofoffofo..', '...o.oo.o...', '............',
+      '............', '...o.oo.o...', '..oSoSSoSo..', '.ooTTSSSSoo.',
+      '.oSSSooSSSo.', 'ooSSo..oSSoo', 'ooSSo..oSSoo', '.oSSSooSSSo.',
+      '.ooSSSSSSoo.', '..oSoSSoSo..', '...o.oo.o...', '............',
     ],
   },
 
