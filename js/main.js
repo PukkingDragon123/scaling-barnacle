@@ -213,6 +213,50 @@ function onCanvas(clientX, clientY) {
   return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
 }
 
+
+// ---- FULLSCREEN -------------------------------------------------------------
+//
+// The scaling was never the problem -- it already snaps to whole physical pixels
+// and fills what it is given. The problem is what it is GIVEN: on a tablet the
+// browser's own tab bar, address bar and toolbar can eat a fifth of the display
+// before the game gets a say, and the game is then letterboxed inside what is
+// left. Actual fullscreen hands all of it back.
+//
+// Vendor-prefixed because Safari still wants webkit- for this, and guarded
+// because a browser that refuses (iPhone Safari has never supported it for
+// elements) must degrade to "nothing happens", not to an exception.
+const Fullscreen = {
+  el() { return document.getElementById('wrap') || document.documentElement; },
+  on() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+              document.mozFullScreenElement || document.msFullscreenElement);
+  },
+  supported() {
+    const e = this.el();
+    return !!(e.requestFullscreen || e.webkitRequestFullscreen ||
+              e.webkitRequestFullScreen || e.msRequestFullscreen);
+  },
+  toggle() {
+    try {
+      if (this.on()) {
+        const f = document.exitFullscreen || document.webkitExitFullscreen ||
+                  document.mozCancelFullScreen || document.msExitFullscreen;
+        if (f) f.call(document);
+      } else {
+        const e = this.el();
+        const f = e.requestFullscreen || e.webkitRequestFullscreen ||
+                  e.webkitRequestFullScreen || e.msRequestFullscreen;
+        if (f) f.call(e);
+      }
+    } catch (err) { /* a refusal is not a crash */ }
+  },
+};
+// the viewport changes on the way in and on the way out, and Safari does not
+// always fire a plain resize for it
+for (const ev of ['fullscreenchange', 'webkitfullscreenchange', 'msfullscreenchange']) {
+  document.addEventListener(ev, () => setTimeout(resize, 60));
+}
+
 touchHost.addEventListener('touchstart', (e) => {
   e.preventDefault();
   SND.init(); SND.resume();
@@ -520,6 +564,13 @@ const Game = {
     if (this.toasts.length === 0 && this._toastQ.length) this.toasts.push({ msg: this._toastQ.shift(), t: 2.6 });
   },
 
+  // A TABLET HAS NO F KEY. The one control that gives the player back a fifth of
+  // their screen cannot be keyboard-only, so it is a button as well -- tucked
+  // under the day badge, out of the icon rail's way.
+  // Left of the day badge (which owns W-84..W-6), NOT under it: at W-22 it sat
+  // on top of the icon rail's bag button.
+  _fsRect() { return { x: W - 104, y: 8, w: 17, h: 15 }; },
+
   drawHUD(c) {
     // left: hearts + purse
     const pw = Math.max(G.maxHearts * 10 + 14, 62);
@@ -527,6 +578,15 @@ const Game = {
     for (let i = 0; i < G.maxHearts; i++) {
       const kind = G.hearts >= i + 1 ? 'full' : (G.hearts >= i + 0.5 ? 'half' : 'empty');
       drawHeart(c, 11 + i * 10, 10, kind);
+    }
+    // the fullscreen toggle, if the browser will give us one at all
+    if (typeof Fullscreen !== 'undefined' && Fullscreen.supported()) {
+      const fr = this._fsRect();
+      const fh = !TouchUI.enabled && Input.mouse.x >= fr.x && Input.mouse.x <= fr.x + fr.w &&
+                 Input.mouse.y >= fr.y && Input.mouse.y <= fr.y + fr.h;
+      inkBox(c, fr.x, fr.y, fr.w, fr.h, fh ? UIPAL.lit : UIPAL.hi, UIPAL.mid, PIX * 2);
+      PixIcons.draw(c, Fullscreen.on() ? 'shrink' : 'expand',
+        fr.x + fr.w / 2, fr.y + fr.h / 2, 12, { t: Game.time, fx: fh ? 'pulse' : null });
     }
     PixIcons.draw(c, 'coin', 15, 27, 13, { t: Game.time, fx: 'tick' });
     text(c, `${G.money}`, 24, 22.5, { size: 9, color: '#662907', shadow: false });
@@ -1032,6 +1092,14 @@ function frame(now) {
   if (Input.p('KeyN')) {
     const muted = SND.toggleMute();
     Game.toast(muted ? 'Sound muted.' : 'Sound on.');
+  }
+  if (typeof Fullscreen !== 'undefined') {
+    if (Input.p('KeyF')) Fullscreen.toggle();
+    else if (Input.mouse.clicked && G && Game.scene !== TitleScene && Fullscreen.supported()) {
+      const fr = Game._fsRect();
+      if (Input.mouse.x >= fr.x && Input.mouse.x <= fr.x + fr.w &&
+          Input.mouse.y >= fr.y && Input.mouse.y <= fr.y + fr.h) Fullscreen.toggle();
+    }
   }
   if (G && Game.scene !== TitleScene && !Shop.open && !Bench.open && Input.p('KeyH'))
     Game.helpOpen = !Game.helpOpen;

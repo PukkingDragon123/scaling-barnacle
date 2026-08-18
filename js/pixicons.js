@@ -46,14 +46,14 @@ const PixIcons = {
   G: {
     // ---- the five trades ----------------------------------------------------
     shell: [
-      '............', '....oooo....', '..oowwwwoo..', '.owpppppwo..',
-      '.opphppphpo.', 'opphppphppo.', 'oppphpppppo.', 'oppphppppo..',
-      '.opphpppo...', '..owpppo....', '...oooo.....', '............',
+      '............', '....oooo....', '..oohhhhoo..', '.ohwhwhwhwo.',
+      'ohwhwhwhwhho', 'ohwhwhwhwhho', 'ohwwhwwhwwho', '.ohwwwwwwho.',
+      '..ohhhhhho..', '...oooooo...', '............', '............',
     ],
     pick: [
-      '............', '.oo......oo.', 'oSSo....oSSo', 'oSSSoooSSSo.',
-      '.oSSSSSSSo..', '..ooSSSoo...', '....odo.....', '....odo.....',
-      '....odo.....', '....odo.....', '....ooo.....', '............',
+      '............', '............', '.oooooooooo.', 'oSSSSSSSSSSo',
+      'oSSSoooSSSSo', '.ooooddoooo.', '....oddo....', '....oddo....',
+      '....oddo....', '....oddo....', '....oooo....', '............',
     ],
     sword: [
       '.......oo...', '......oSSo..', '.....oSSSo..', '....oSSSo...',
@@ -66,26 +66,26 @@ const PixIcons = {
       '..owwwwo....', '.owppppwo...', '..oooooo....', '............',
     ],
     fish: [
-      '............', '.......oo...', '......oBBo..', '.ooo.oBBBo..',
-      'oBBBoBBBBo..', 'oBkBBBBBBo..', 'oBBBBBBBBo..', 'oBBBoBBBBo..',
-      '.ooo.oBBBo..', '......oBBo..', '.......oo...', '............',
+      '............', '............', 'o...........', 'oo..oooooo..',
+      'oBoooBBBBBo.', 'oBBoBBBBkBo.', 'oBBoBBBBBBo.', 'oBoooBBBBBo.',
+      'oo..oooooo..', 'o...........', '............', '............',
     ],
 
     // ---- states -------------------------------------------------------------
     star: [
-      '.....oo.....', '.....hh.....', '....ohho....', 'oo..ohho..oo',
-      'ohoohhhhooho', '.ohhhhhhhho.', '..ohhhhhho..', '..ohhhhhho..',
-      '.ohho..ohho.', '.oho....oho.', '.oo......oo.', '............',
+      '............', '.....oo.....', '....ohho....', '....ohho....',
+      'oooohhhhoooo', 'ohhhhhhhhhho', '.ohhhhhhhho.', '..ohhhhhho..',
+      '..ohh..hho..', '.ohho..ohho.', '.oo......oo.', '............',
     ],
     lock: [
-      '............', '...oooooo...', '..od....do..', '..od....do..',
-      '.oooooooooo.', '.offffffffo.', '.offoooffffo', '.offo..offfo',
-      '.offoooffffo', '.offffffffo.', '.oooooooooo.', '............',
+      '............', '....oooo....', '...o####o...', '...o#..#o...',
+      '.oooooooooo.', '.offffffffo.', '.offfoofffo.', '.offfoofffo.',
+      '.offffoffffo', '.offffffffo.', '.oooooooooo.', '............',
     ],
     check: [
-      '............', '..........oo', '.........oGo', '........oGo.',
-      '.oo....oGo..', 'oGo...oGo...', '.oGo.oGo....', '..oGoGo.....',
-      '...oGo......', '....o.......', '............', '............',
+      '............', '..........oo', '.........oGo', '........oGGo',
+      '.oo....oGGo.', 'oGGo..oGGo..', 'oGGGooGGo...', '.oGGGGGo....',
+      '..oGGGo.....', '...ooo......', '............', '............',
     ],
     heart: [
       '............', '..oo....oo..', '.oRRo..oRRo.', 'oRkRRooRRRo.',
@@ -93,19 +93,19 @@ const PixIcons = {
       '...oRRRo....', '....oRo.....', '.....o......', '............',
     ],
     coin: [
-      '............', '....oooo....', '..oohhhhoo..', '.ohppffppho.',
-      'ohpfhhhhfpo.', 'ohpfhoohfpo.', 'ohpfhoohfpo.', 'ohpfhhhhfpo.',
-      '.ohpffffpho.', '..oohhhhoo..', '....oooo....', '............',
+      '............', '....oooo....', '..oofppfoo..', '.ofphhhhpfo.',
+      'ofphhkkhhpfo', 'ofphkkkkhpfo', 'ofphkkkkhpfo', 'ofphhkkhhpfo',
+      '.ofphhhhpfo.', '..oofppfoo..', '....oooo....', '............',
     ],
     clock: [
-      '............', '....oooo....', '..oohhhhoo..', '.ohpppppppo.',
-      'ohppodppppo.', 'ohppodppppo.', 'ohppoddddpo.', 'ohpppppppo..',
-      '.ohppppppo..', '..oohhhhoo..', '....oooo....', '............',
+      '............', '....oooo....', '..oohhhhoo..', '.ohhhhhhhho.',
+      'ohhhhohhhhho', 'ohhhhohhhhho', 'ohhhhoooohho', '.ohhhhhhhho.',
+      '..oohhhhoo..', '....oooo....', '............', '............',
     ],
     bubble: [
       '............', '....oooo....', '..oocccco...', '.ockkcccco..',
-      'ockkccccco..', 'occcccccco..', 'occcccccco..', '.occccccco..',
-      '..occccco...', '....oooo....', '............', '............',
+      'ockkcccccco.', 'occccccccco.', 'occccccccco.', '.occccccco..',
+      '..oocccco...', '....oooo....', '............', '............',
     ],
 
     // ---- verbs --------------------------------------------------------------
@@ -116,8 +116,8 @@ const PixIcons = {
     ],
     bag: [
       '............', '...oo..oo...', '..od....do..', '.oooooooooo.',
-      'ofwwwwwwwwfo', 'ofwhhwwhhwfo', 'ofwwwwwwwwfo', 'offffddffffo',
-      'offffddffffo', '.offffffffo.', '..oooooooo..', '............',
+      '.owwwwwwwwo.', '.owwwwwwwwo.', '.oooooooooo.', '.offffffffo.',
+      '.offoddoffo.', '.offffffffo.', '..oooooooo..', '............',
     ],
     plus: [
       '............', '....oooo....', '....ohho....', '....ohho....',
@@ -140,19 +140,29 @@ const PixIcons = {
       '....ohho....', '....oho.....', '....oo......', '............',
     ],
     spark: [
-      '............', '.....o......', '....oho.....', '.....o......',
-      '..o..h..o...', '.oho.h.oho..', 'ohhhhhhhhho.', '.oho.h.oho..',
-      '..o..h..o...', '.....o......', '....oho.....', '.....o......',
+      '............', '.....oo.....', '.....hh.....', '....ohho....',
+      '..oohhhhoo..', '.ohhhhhhhho.', '.ohhhhhhhho.', '..oohhhhoo..',
+      '....ohho....', '.....hh.....', '.....oo.....', '............',
     ],
     sun: [
-      '.....oo.....', '..o..hh..o..', '..oh.hh.ho..', '....oooo....',
-      '.o.ohhhhoo.o', '.hhohhhhhhoh', '.hhohhhhhhoh', '.o.ohhhhoo.o',
-      '....oooo....', '..oh.hh.ho..', '..o..hh..o..', '.....oo.....',
+      '.....hh.....', '.....oo.....', '....oooo....', '..oohhhhoo..',
+      '.ohhhhhhhho.', 'hoohhhhhhooh', 'hoohhhhhhooh', '.ohhhhhhhho.',
+      '..oohhhhoo..', '....oooo....', '.....oo.....', '.....hh.....',
     ],
     moon: [
       '............', '....oooo....', '..oohhhho...', '.ohhhhhoo...',
       'ohhhhhoo....', 'ohhhhho.....', 'ohhhhho.....', 'ohhhhhoo....',
       '.ohhhhhoo...', '..oohhhho...', '....oooo....', '............',
+    ],
+    expand: [
+      '............', '.#####..###.', '.#####..#..#', '.##.........',
+      '.##.........', '............', '............', '.........##.',
+      '.........##.', '#..#..#####.', '.###..#####.', '............',
+    ],
+    shrink: [
+      '............', '............', '...##..##...', '...##..##...',
+      '.####..####.', '............', '............', '.####..####.',
+      '...##..##...', '...##..##...', '............', '............',
     ],
     gear: [
       '............', '...o.oo.o...', '..ofoffofo..', '.ooffffffoo.',
