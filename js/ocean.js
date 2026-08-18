@@ -3272,18 +3272,27 @@ const Ocean = {
     // half-texel and shimmer against everything else in the scene
     const q2 = APIX * (this.ZOOM || 1);
     ctx.translate(Math.round(sx / q2) * q2, Math.round(sy / q2) * q2);
-    // Bank toward the velocity vector, mirrored when he swims left so the lean
-    // still points the way he is going -- QUANTISED to 1/24 rad. A pixel sprite
-    // under a continuously-easing rotation re-rasterises every single frame, and
-    // with smoothing off that is a visible crawl along every edge. In steps it
-    // re-rasterises only when the lean actually changes, and 1/24 rad is finer
-    // than the eye reads at this size.
-    const bankQ = Math.round(this.bank * 24) / 24;
-    ctx.rotate(this.face > 0 ? bankQ : -bankQ);
+    // NO BANK, NO SQUASH. THIS IS WHY HE FLICKERED.
+    //
+    // I checked the art first this time: the oswim sheet has ZERO partially
+    // transparent pixels and zero interior holes -- every frame is perfectly
+    // hard-edged. So the break-up was never the png.
+    //
+    // It was this transform. A rotation and a non-integer scale on a hard-edged
+    // sprite, with smoothing OFF, get nearest-neighbour resampled: whole rows and
+    // columns of pixels are DROPPED. Quantising the angle to 1/24 rad only meant
+    // the dropped rows changed less often -- they still moved every time the lean
+    // did, and every dropped row is a slice missing out of the otter, which is
+    // exactly "hollow" and exactly "flicker".
+    //
+    // Only whole-number operations survive: a flip is safe because it is an exact
+    // mirror. The sheet has sixteen poses -- cruise, dive, dash and roll -- and
+    // those carry the lean far better than bending one frame ever did.
     if (this.face < 0) ctx.scale(-1, 1);
-    ctx.scale(sqx, sqy);
+    // Belly-up is the one rotation left, and it is allowed because it is a
+    // one-off death flourish rather than something that runs every frame you
+    // swim: it resamples, but only while he is already floating limp.
     if (this.over) {
-      // belly-up: the limp frames already sag, this rolls him the rest of the way
       ctx.rotate(clamp((this.overT - 1.1) * 0.9, 0, 1) * Math.PI * (this.face > 0 ? 1 : -1) * 0.9);
     }
     // ONE BLIT. HARD CUT.
@@ -3298,7 +3307,12 @@ const Ocean = {
     //
     // Cross-fading is for soft-edged art. Pixel art cuts between frames, which is
     // what the sheet's own four poses are for.
-    ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    // and the drawn SIZE lands on whole sprite texels, so no row is ever a
+    // fraction of a pixel wide
+    const qw = APIX * (this.ZOOM || 1);
+    const dw = Math.max(qw, Math.round(w / qw) * qw);
+    const dh = Math.max(qw, Math.round(h / qw) * qw);
+    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
     ctx.restore();
     ctx.globalAlpha = 1;
   },

@@ -328,11 +328,10 @@ const WorldScene = {
     // the workbench is a Forge table now, drawn by Forge.drawPlaced wherever the
     // player put it.)
 
-    // drone landing pad
-    ctx.fillStyle = 'rgba(60,68,72,0.9)';
-    ctx.fillRect(152, DECK_Y - 2, 38, 2);
-    ctx.strokeStyle = '#c8cdd0'; ctx.lineWidth = PIX * 2;
-    ctx.beginPath(); ctx.ellipse(171, DECK_Y - 1, 12, 1.6, 0, 0, TAU); ctx.stroke();
+    // (NO LANDING PAD. A grey bar with an anti-aliased ellipse stroked on it, on
+    // a deck of painted planks -- it was the one piece of scenery in the harbour
+    // drawn with vector primitives, and it looked like a decal somebody left on.
+    // The drone lands fine without a marker painted under it.)
 
     this.drawDrone(ctx);
 

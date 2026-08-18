@@ -128,11 +128,15 @@
     const d = visit.tx - visit.x;
     if (Math.abs(d) < 1.5) {
       visit.x = visit.tx;
-      visit.hold = 4 + Math.random() * 7;       // a good long stop, so they read as busy
+      // A FOUR-FRAME WALK NOBODY SEES IS A WASTED SHEET. The stop used to run
+      // 4-11 seconds against a walk of two or three, so the cast were standing
+      // still almost all the time and the walk frames barely got used. Short
+      // pauses, and they amble noticeably faster.
+      visit.hold = 1.2 + Math.random() * 2.4;
       return;
     }
     visit.dir = d < 0 ? -1 : 1;
-    visit.x += visit.dir * 26 * dt;             // an amble; Otto walks at 92
+    visit.x += visit.dir * 38 * dt;             // an amble; Otto walks at 92
     visit.walkT += dt * 7;
   };
 
