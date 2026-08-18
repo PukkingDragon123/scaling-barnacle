@@ -23,7 +23,7 @@ const IntroScene = {
   _finish() {
     Game.go(WorldScene, {});
     // the letter follows the cutscene, same as it would follow the menu
-    if (typeof Quests !== 'undefined' && G && G.flags && !G.flags.letter) Quests.letter = true;
+    if (typeof Quests !== 'undefined' && G && G.flags && !G.flags.letter) { Quests.letter = true; Quests._letT = 0; }
   },
 
   update(dt) {

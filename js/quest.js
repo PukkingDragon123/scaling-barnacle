@@ -208,15 +208,21 @@ const Quests = {
   },
 
   _drawLetter(c) {
-    c.fillStyle = 'rgba(6,10,16,0.62)';
+    // THE LETTER. This was a flat cream rectangle with a hairline stroke round
+    // it -- the first thing a new player sees, and it looked like a placeholder.
+    // It gets the game's own frame, a wax seal, and it BOUNCES in rather than
+    // appearing.
+    this._letT = Math.min(1, (this._letT || 0) + (Game.dt || 0.016) * 3.4);
+    const k = uiPop(this._letT);
+    c.fillStyle = `rgba(6,10,16,${(0.62 * Math.min(1, this._letT * 2)).toFixed(3)})`;
     c.fillRect(0, 0, W, H);
     const w = 300, h = 190, x = (W - w) / 2, y = (H - h) / 2 - 4;
-    // paper, not a UI panel: the letter is a prop, and it reads better warm
-    c.fillStyle = '#f2e6c8';
-    c.fillRect(x, y, w, h);
-    c.fillStyle = '#e0d0ac';
-    c.fillRect(x, y + h - 4, w, 4);
-    c.fillRect(x + w - 4, y, 4, h);
+    c.save();
+    c.translate(W / 2, H / 2);
+    c.scale(0.86 + 0.14 * k, 0.86 + 0.14 * k);
+    c.translate(-W / 2, -H / 2);
+    uiFrame(c, x, y, w, h, { border: 5 });
+    uiSeal(c, x + w - 26, y + h - 24, 9);
     c.strokeStyle = 'rgba(90,64,38,0.5)';
     c.lineWidth = PIX * 2;
     c.strokeRect(x + 3, y + 3, w - 6, h - 6);
@@ -225,8 +231,10 @@ const Quests = {
       text(c, this.LETTER[i], x + 18, ly, { size: 7, color: '#5a4026', shadow: false });
       ly += this.LETTER[i] === '' ? 5 : 11;
     }
+    c.restore();
     if (Math.sin((typeof Game !== 'undefined' ? Game.time : 0) * 3) > -0.4) {
-      text(c, '[E] fold it away', W / 2, y + h + 10, { size: 7, color: '#ffe6b0', align: 'center' });
+      text(c, (TouchUI.enabled ? 'tap' : '[E]') + ' fold it away', W / 2, y + h + 12,
+        { size: 7, color: '#f4bf69', align: 'center', shadow: true });
     }
   },
 
@@ -253,15 +261,7 @@ const Quests = {
     uiNote(c, x, y, w, h, { tape: true, rules: true });
 
     // header: the star, the name, the count, and a real close box
-    c.fillStyle = '#e8a93c';
-    c.beginPath();
-    for (let i = 0; i < 5; i++) {
-      const ang = -Math.PI / 2 + i * TAU / 5;
-      const ang2 = ang + TAU / 10;
-      c.lineTo(x + 17 + Math.cos(ang) * 4.5, y + 12 + Math.sin(ang) * 4.5);
-      c.lineTo(x + 17 + Math.cos(ang2) * 2, y + 12 + Math.sin(ang2) * 2);
-    }
-    c.closePath(); c.fill();
+    PixIcons.draw(c, 'star', x + 17, y + 12, 12, { t: this.time || 0, fx: 'pulse' });
     text(c, "OTTO'S JOURNAL", x + 26, y + 8, { size: 10, color: '#30150a', shadow: false });
 
     // ---- the two tabs, drawn as paper index tabs on the right of the header --

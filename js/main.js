@@ -809,7 +809,7 @@ const TitleScene = {
   // player always gets it once, and a test harness that jumps straight into a
   // scene is never parked behind a prop it has no key for.
   _armLetter() {
-    if (typeof Quests !== 'undefined' && G && G.flags && !G.flags.letter) Quests.letter = true;
+    if (typeof Quests !== 'undefined' && G && G.flags && !G.flags.letter) { Quests.letter = true; Quests._letT = 0; }
   },
 
   update(dt) {

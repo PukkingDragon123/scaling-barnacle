@@ -491,6 +491,39 @@ function uiPage(ctx, x, y, w, h, alpha = 1) {
   return r;
 }
 
+// BOUNCE. A back-out curve: overshoots past 1 and settles, which is what makes a
+// panel feel like it was tossed down rather than faded up. k is 0..1 in, and
+// uiPopOut mirrors it for a panel leaving.
+function uiPop(k) {
+  if (k <= 0) return 0;
+  if (k >= 1) return 1;
+  const c1 = 1.70158, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2);
+}
+function uiPopOut(k) { return 1 - uiPop(1 - clamp(k, 0, 1)); }
+
+// A drawn wax seal: a blob with a highlight and a pressed rim. Pixel art, so it
+// is rects on the texel grid rather than an arc.
+function uiSeal(ctx, cx, cy, r, col) {
+  const S = APIX, q = (v) => Math.round(v / S) * S;
+  ctx.fillStyle = '#5a1410';
+  for (let dy = -r; dy <= r; dy += S) {
+    const hw = Math.sqrt(Math.max(0, r * r - dy * dy));
+    if (hw < S) continue;
+    ctx.fillRect(q(cx - hw), q(cy + dy), q(hw * 2), S);
+  }
+  ctx.fillStyle = col || '#a8261e';
+  for (let dy = -r + S; dy <= r - S; dy += S) {
+    const hw = Math.sqrt(Math.max(0, (r - S) * (r - S) - dy * dy));
+    if (hw < S) continue;
+    ctx.fillRect(q(cx - hw), q(cy + dy), q(hw * 2), S);
+  }
+  ctx.fillStyle = 'rgba(255,220,200,0.30)';
+  ctx.fillRect(q(cx - r * 0.5), q(cy - r * 0.55), q(r * 0.7), S);
+  ctx.fillStyle = 'rgba(60,10,8,0.45)';
+  ctx.fillRect(q(cx - r * 0.35), q(cy + r * 0.25), q(r * 0.7), S);
+}
+
 // The open/close transition every big menu shares: a page does not blink on, it
 // is put down. Scale from 0.88 with a small overshoot, fade the backdrop in, and
 // hand back a boolean for "still animating". k is 0..1.
@@ -498,9 +531,12 @@ function uiPageOpen(ctx, k, cx, cy) {
   // A panel does not fade in, it is SET DOWN: overshoot past full size, settle
   // back, with a little tilt that unwinds as it lands. The backdrop darkens on
   // its own curve so the room dims before the panel has finished arriving.
-  const e = k >= 1 ? 1 : 1 - Math.pow(1 - k, 3);
-  const spring = Math.sin(Math.min(1, k) * Math.PI) * 0.055;
-  const sc = 0.82 + 0.18 * e + spring;
+  // uiPop OVERSHOOTS past 1 and settles, so the panel lands with a bounce rather
+  // than easing politely up to size. The extra sine is the second, smaller
+  // rebound -- one overshoot reads as a glitch, two read as weight.
+  const e = uiPop(k);
+  const spring = Math.sin(Math.min(1, k) * Math.PI) * 0.03;
+  const sc = 0.80 + 0.20 * e + spring;
   ctx.fillStyle = `rgba(8,12,18,${(0.6 * Math.min(1, k * 1.6)).toFixed(3)})`;
   ctx.fillRect(0, 0, W, H);
   ctx.translate(cx, cy);
