@@ -212,9 +212,7 @@ const DiveFX = {
     if (o.prying && o.power !== undefined && Math.abs(o.power) < 0.3) {
       ctx.globalAlpha = 0.5 + Math.sin(this.time * 30) * 0.2;
       ctx.fillStyle = '#ffe66e';
-      ctx.beginPath();
-      ctx.arc(this.tx - Math.sin(tilt) * h * 0.42, this.ty - Math.cos(tilt) * h * 0.42, 5, 0, TAU);
-      ctx.fill();
+      pixDisc(ctx, this.tx - Math.sin(tilt) * h * 0.42, this.ty - Math.cos(tilt) * h * 0.42, 5);
       ctx.globalAlpha = 1;
     }
   },
@@ -400,9 +398,7 @@ const DiveFX = {
       if (p.t <= 0) continue;
       const k = p.t / p.life;
       ctx.globalAlpha = k * 0.34;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r + (1 - k) * p.gr, 0, TAU);
-      ctx.fill();
+      pixDisc(ctx, p.x, p.y, p.r + (1 - k) * p.gr);
     }
     ctx.globalAlpha = 1;
 
@@ -414,9 +410,7 @@ const DiveFX = {
       const k = r.t / r.life;
       ctx.globalAlpha = k * 0.6;
       ctx.lineWidth = r.w * k;
-      ctx.beginPath();
-      ctx.arc(r.x, r.y, r.r, 0, TAU);
-      ctx.stroke();
+      pixRing(ctx, r.x, r.y, r.r, null, ctx.lineWidth);
     }
     ctx.globalAlpha = 1;
     ctx.lineWidth = 1;

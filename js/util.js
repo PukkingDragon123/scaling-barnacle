@@ -160,6 +160,53 @@ function textWrap(ctx, str, maxW, size = 8) {
   return out;
 }
 
+// ---- CIRCLES, IN TEXELS ------------------------------------------------------
+//
+// ctx.arc draws an anti-aliased curve. On a screen where every other edge is a
+// hard texel boundary, a soft round blob is the one thing that reads as a
+// different program showing through -- and there is no styling that fixes it,
+// because the problem is the sub-pixel coverage itself.
+//
+// So: no arcs in the world. A disc is horizontal spans snapped to the sprite
+// grid, which is the stair-stepped edge a hand-drawn circle has. A ring is the
+// same spans with the middle left out. Both cost one fillRect per texel row,
+// which is a couple of dozen for anything the size of a bubble.
+function pixDisc(ctx, cx, cy, r, col, q) {
+  const S = q || APIX;
+  if (r < S) return;
+  const snap = (v) => Math.round(v / S) * S;
+  if (col) ctx.fillStyle = col;
+  const x0 = snap(cx), y0 = snap(cy);
+  for (let dy = -r; dy <= r; dy += S) {
+    const hw = Math.sqrt(Math.max(0, r * r - dy * dy));
+    if (hw < S * 0.5) continue;
+    ctx.fillRect(snap(x0 - hw), snap(y0 + dy), Math.max(S, snap(hw * 2)), S);
+  }
+}
+
+// `thick` is the wall thickness in logical units, measured inwards.
+function pixRing(ctx, cx, cy, r, col, thick, q) {
+  const S = q || APIX;
+  if (r < S) return;
+  const t = Math.max(S, thick || S);
+  const ri = Math.max(0, r - t);
+  const snap = (v) => Math.round(v / S) * S;
+  if (col) ctx.fillStyle = col;
+  const x0 = snap(cx), y0 = snap(cy);
+  for (let dy = -r; dy <= r; dy += S) {
+    const ho = Math.sqrt(Math.max(0, r * r - dy * dy));
+    if (ho < S * 0.5) continue;
+    const hi = Math.abs(dy) <= ri ? Math.sqrt(Math.max(0, ri * ri - dy * dy)) : 0;
+    if (hi < S * 0.5) {
+      ctx.fillRect(snap(x0 - ho), snap(y0 + dy), Math.max(S, snap(ho * 2)), S);
+    } else {
+      const w = Math.max(S, snap(ho - hi));
+      ctx.fillRect(snap(x0 - ho), snap(y0 + dy), w, S);
+      ctx.fillRect(snap(x0 + hi), snap(y0 + dy), w, S);
+    }
+  }
+}
+
 function rrect(ctx, x, y, w, h, fill, stroke) {
   ctx.fillStyle = fill;
   ctx.fillRect(x, y, w, h);

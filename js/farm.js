@@ -993,17 +993,13 @@ const Farm = {
   _drawReady(ctx, p, x, topY) {
     const pulse = 0.5 + 0.5 * Math.sin(this.time * 3 + p.i);
     ctx.fillStyle = 'rgba(255,230,110,0.09)';
-    ctx.beginPath();
-    ctx.arc(x, topY + 4, 8 + pulse * 2.5, 0, TAU);
-    ctx.fill();
+    pixDisc(ctx, x, topY + 4, 8 + pulse * 2.5);
 
     const cdef = this.CROPS[p.crop];
     const art = cdef.shell || (cdef.art + '_p');
     const iy = topY - 10 - pulse * 1.2;
     ctx.fillStyle = 'rgba(6,14,18,0.4)';
-    ctx.beginPath();
-    ctx.arc(x, iy + 3.5, 5, 0, TAU);
-    ctx.fill();
+    pixDisc(ctx, x, iy + 3.5, 5);
     const iw = this._widthFor(art, 7);
     drawA(ctx, art, x - iw / 2, iy, iw, assetH(art, iw));
 
@@ -1039,9 +1035,7 @@ const Farm = {
     ctx.strokeStyle = 'rgba(255,230,110,0.75)';
     ctx.lineWidth = 1;
     ctx.globalAlpha = 0.45 + 0.35 * Math.sin(this.time * 4);
-    ctx.beginPath();
-    ctx.arc(p.x, by - 4, this.BED_W * 0.62 + Math.sin(this.time * 4) * 1.2, 0, TAU);
-    ctx.stroke();
+    pixRing(ctx, p.x, by - 4, this.BED_W * 0.62 + Math.sin(this.time * 4) * 1.2, null, ctx.lineWidth);
     ctx.globalAlpha = 1;
   },
 

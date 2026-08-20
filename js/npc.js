@@ -40,7 +40,8 @@ const NPCs = {
   shown: 0,            // characters revealed on the current page (float)
   animT: 0,
   gpage: 0,            // gift grid page
-  gain: null, gainT: 0,   // floating "+12" beside the heart row
+  gain: null, gainT: 0,   // a sparkle beside the heart row
+  qa: null,               // the question they have put to you, while it is open
   _blipT: 0,
   _installed: false,
 
@@ -79,6 +80,33 @@ const NPCs = {
       loved: ['crop_berry_p', 'crop_gourd_p', 'crop_moon_p', 'crop_curl_p', 'crop_blade_p'],
       liked: ['clam', 'mussel', 'clamMeat', 'musselMeat', 'tea'],
       disliked: ['barnacle', 'roe'],
+      topics: {
+        how: [
+          'Filthy. Happy. Those are usually the same day.',
+          'Two of the planters silted up overnight and I have been swearing at sand since six.',
+          'Good! Ask me again after the harvest and you will get a different answer.',
+        ],
+        like: [
+          'Sowing. Anyone can harvest. Sowing is the part where you decide to believe something.',
+          'The bit where a seed you buried does something. I have never got used to it.',
+          'Kelp. I know it is the boring one. It has never once let me down.',
+        ],
+        self: [
+          'I came out for one season, six years ago, to make some money and go home.',
+          'I grew up inland. Never saw the sea until I was grown, and then I could not leave it.',
+          'Farmhand, mostly. Whatever else needs a pair of arms.',
+        ],
+      },
+      asks: [
+        { q: 'Right -- are you sowing anything of your own yet, or just digging up what the sea made?',
+          a: [{ t: 'I have a planter going.', w: 3 },
+              { t: 'Not yet. Teach me?', w: 3 },
+              { t: 'Digging pays better.', w: 1 }] },
+        { q: 'Be honest. Do you water them every day, or only when you remember?',
+          a: [{ t: 'Every single day.', w: 3 },
+              { t: 'When I remember.', w: 2 },
+              { t: 'They are plants. They cope.', w: 1 }] },
+      ],
       lines: {
         first: [
           "Oh -- hello. I'm Sprout. I do the growing around here. Kelp, gourds, moon blooms... anything that holds still long enough.",
@@ -120,17 +148,48 @@ const NPCs = {
       romance: true,
     },
     {
-      key: 'prof', name: 'Fintan', full: 'Prof. Fintan Bellwether', role: 'whale scholar',
+      key: 'prof', name: 'Fintan', full: 'Grandpa Fintan', role: 'whale, and your grandfather',
       art: 'prof', x: 378, h: 46, flip: false,
       frames: { idle: [0, 1, 2, 3], walk: [4, 5, 6, 7], talk: [9, 8], emote: [11, 10, 12], happy: [12, 13], sad: [14, 15] },
       adore: ['tea', 'teaLeaf', 'crop_tea_p'],
       loved: ['pearl', 'pearlPol', 'abalonePol'],
       liked: ['oyster', 'oysterMeat', 'abalone', 'crop_moon_p'],
       disliked: ['barnacle', 'roe'],
+      topics: {
+        how: [
+          'Old, and pleased about it. Every year I get slower and the water gets more interesting. A fair trade.',
+          'My back hurts and my tea is cold and I have just identified a new whelk. Net positive.',
+          'Better for seeing you, which is the answer you were fishing for and also the true one.',
+        ],
+        like: [
+          'The hour before dawn, when the beds are all closed and the whole shelf looks like a cobbled street.',
+          'Being wrong about something small. It happens less than it should at my age.',
+          'This pier. Your grandmother and I argued about where to put it for a year. She was right.',
+        ],
+        self: [
+          'Forty years of measuring shellfish and one very long book nobody has finished, including me.',
+          'I came out here to write three chapters and stayed for a life. That is usually how it goes.',
+          'I am the last of the old survey. When I stop counting the beds, nobody counts them.',
+        ],
+      },
+      asks: [
+        { q: 'Tell me honestly -- are you sleeping out here? The nights get cold on a pier.',
+          a: [{ t: 'Warm as anything, I promise.', w: 2 },
+              { t: 'It is a bit cold, actually.', w: 3 },
+              { t: 'I sleep fine. Stop fussing.', w: 1 }] },
+        { q: 'What do you make of the work? The truth, not the polite version.',
+          a: [{ t: 'I love it out there.', w: 3 },
+              { t: 'Hard. Good hard, though.', w: 3 },
+              { t: 'Some days I would rather not.', w: 2 }] },
+        { q: 'Your grandmother taught me to crack a clam with one hand. Should I show you?',
+          a: [{ t: 'Yes. Show me.', w: 3 },
+              { t: 'Maybe tomorrow, Grandpa.', w: 1 },
+              { t: 'I already know how.', w: 2 }] },
+      ],
       lines: {
         first: [
-          'Ah. You must be Otto. Professor Fintan Bellwether: cetacean, scholar, and, when the kettle allows, a tea drinker.',
-          'I have been charting these beds for forty years. Ask me anything and I shall answer at length, whether you like it or not.',
+          'Otto! Look at you. Come here, let me see -- yes. You have your mother\'s paws and my terrible posture.',
+          'I have charted these beds for forty years, and I am very glad it is you who came. Ask me anything. I shall answer at length whether you like it or not; that is the privilege of a grandfather.',
         ],
         low: [
           'The crust on a shell is armour and nothing more. Scrape it away, then lever the shell loose. Force is for amateurs.',
@@ -138,12 +197,12 @@ const NPCs = {
           'Every bed regrows overnight, but only partly. A patient farmer out-earns a greedy one, and lives longer besides.',
         ],
         mid: [
-          'I read your hauls in the market ledger. Steady paws, that otter, they say. I do not correct them.',
+          'I read your hauls in the market ledger and I tell everyone that is my grandson. Steady paws, they say. I do not correct them.',
           'Marlow claims the deep piling is haunted. Marlow also claims his hat is lucky. Weigh the evidence accordingly.',
           'Do you know why a pearl forms? An irritation, wrapped in patience, over and over, until it shines. Rather like a career.',
         ],
         high: [
-          'Sit a moment. The tide is out, the kettle is on, and there is nobody I would rather bore about mollusc taxonomy.',
+          'Sit a moment, would you. The tide is out, the kettle is on, and there is nobody I would rather bore about mollusc taxonomy than my own grandson.',
           'I have willed you my field notes. Do not look alarmed: whales are long-lived, and the notes are dreadful.',
           'You have built something here. I have only ever measured things. I begin to suspect yours is the better trade.',
         ],
@@ -182,6 +241,33 @@ const NPCs = {
       loved: ['roe', 'musselMeat', 'abalone'],
       liked: ['mussel', 'clam', 'oyster', 'clamMeat', 'stock_hogfish_p', 'stock_sunfish_p'],
       disliked: ['pearl', 'tea'],
+      topics: {
+        how: [
+          'Same as yesterday. That is the good answer, at my age.',
+          'Aching. Caught nothing. Would not swap it.',
+          'Ah, you know. Wet.',
+        ],
+        like: [
+          'The deep piling at slack water. Nothing down there but you and whatever is watching.',
+          'Hot food after a cold dive. Nothing better has ever been invented.',
+          'Quiet company. You are all right at that.',
+        ],
+        self: [
+          'Fisherman. Forty years. Two boats, both sunk, both my own fault.',
+          'I do not talk much about before. There is not much of it worth the breath.',
+          'I taught your grandfather to swim, you know. He was terrible.',
+        ],
+      },
+      asks: [
+        { q: 'You go down to that piling alone. Does anyone know when you are down there?',
+          a: [{ t: 'Grandpa always knows.', w: 3 },
+              { t: 'No. I should tell someone.', w: 3 },
+              { t: 'I can look after myself.', w: 1 }] },
+        { q: 'Deep water or shallow, if you had to pick one for the rest of your life?',
+          a: [{ t: 'Deep. Every time.', w: 3 },
+              { t: 'Shallow. I like seeing the sky.', w: 2 },
+              { t: 'Whichever pays.', w: 1 }] },
+      ],
       lines: {
         first: [
           'Marlow. Old Marlow, if you are feeling formal. I fish the dark side of the pilings, on account of that is where the fish are.',
@@ -384,6 +470,9 @@ const NPCs = {
     else if (tk && tk.kind === 'ask') said.push(`(${n.name} has a job that wants doing.)`);
 
     this._setPages(said);
+    // ...and if they have something to ask you today, that is where the
+    // conversation goes as soon as they have finished saying hello.
+    this._pendingAsk = !!this.askOf(key);
     Game.save();
   },
 
@@ -414,6 +503,12 @@ const NPCs = {
   },
 
   advance() {
+    // The last NEXT of a greeting hands over to whatever they wanted to ask you.
+    if (this.mode === 'talk' && this._pendingAsk &&
+        this.shown >= this._pageLen() && this.page >= this.pages.length - 1) {
+      this._pendingAsk = false;
+      if (this.openAsk(this.who)) return;
+    }
     const full = this._pageLen();
     if (this.shown < full - 0.001) { this.shown = full; return; }
     if (this.page < this.pages.length - 1) { this.page++; this.shown = 0; SND.click(); return; }
@@ -575,6 +670,12 @@ const NPCs = {
     this.ensure();
     this.animT += dt;
     if (this.gainT > 0) this.gainT -= dt;
+    if (this.pays && this.pays.length) {
+      for (let i = this.pays.length - 1; i >= 0; i--) {
+        this.pays[i].t += dt;
+        if (this.pays[i].t >= this.pays[i].life) this.pays.splice(i, 1);
+      }
+    }
 
     const n = this.cur();
     if (!n) { this.open = false; return; }
@@ -598,8 +699,36 @@ const NPCs = {
     const adv = Input.p('KeyE') || Input.p('Space');
 
     if (Input.p('Escape')) {
-      if (this.mode === 'gift') { this.mode = 'talk'; SND.click(); }
+      if (this.mode === 'gift' || this.mode === 'topics') { this.mode = 'talk'; SND.click(); }
+      else if (this.mode === 'answer') { this.mode = 'talk'; this.qa = null; SND.click(); }
       else this.close();
+      return;
+    }
+
+    // ---- the topic menu ------------------------------------------------------
+    if (this.mode === 'topics') {
+      if (!clicked) return;
+      if (this._in(this._btn('topicback'), mx, my)) { this.mode = 'talk'; SND.click(); return; }
+      for (let i = 0; i < this.TOPICS.length; i++) {
+        if (!this._in(this._topicRect(i), mx, my)) continue;
+        const t = this.TOPICS[i];
+        this.mode = 'talk';
+        SND.click();
+        this._setPages([this.topicSay(this.who, t.k)]);
+        return;
+      }
+      return;
+    }
+
+    // ---- answering what they asked you --------------------------------------
+    if (this.mode === 'answer') {
+      const done0 = this.shown >= this._pageLen();
+      if (!done0) { if (clicked || adv) this.shown = this._pageLen(); return; }
+      if (!clicked) return;
+      const n = this.qa ? this.qa.a.length : 0;
+      for (let i = 0; i < n; i++) {
+        if (this._in(this._answerRect(i, n), mx, my)) { this.answer(i); SND.blip(); return; }
+      }
       return;
     }
 
@@ -653,12 +782,7 @@ const NPCs = {
       const tb = this._btn('task');
       if (this._in(tb, mx, my)) { this.doTask(this.who); return; }
       const ab = this._btn('ask');
-      if (this._in(ab, mx, my)) {
-        const nn = this.byKey(this.who);
-        this._setPages([`${nn ? nn.name : 'They'} thinks for a moment. "${this.hint()}"`]);
-        SND.click();
-        return;
-      }
+      if (this._in(ab, mx, my)) { this.openTopics(); return; }
     }
     // [Q] is the keyboard's version of the TASK button, so an errand can be
     // taken and handed in without a mouse.
@@ -666,9 +790,54 @@ const NPCs = {
     if (clicked || adv) this.advance();
   },
 
+  // A written quest line, made fit to say out loud.
+  //
+  // The quest text is hand-wrapped fragments with the speaker's name stapled to
+  // the front and quote marks straddling the joins: 'Sprout: "Right. The sand by
+  // your pier is doing nothing at all,' then 'and that is a waste of perfectly
+  // good sand."'. Fed to the pager one entry at a time, each FRAGMENT became its
+  // own page -- half a sentence, then a page turn -- and every one of them
+  // announced a speaker whose portrait and name are already at the top of the
+  // box. Joined, unquoted and un-prefixed, it reads as somebody talking.
+  _speech(list) {
+    let t = (Array.isArray(list) ? list : [list || '']).join(' ');
+    t = t.replace(/^\s*[A-Z][A-Za-z]+:\s*/, '');
+    t = t.replace(/["\u201c\u201d]/g, '');
+    return t.replace(/\s+/g, ' ').trim();
+  },
+
+  // A reward is a thing that flies out of the conversation and into your bag.
+  _payFx(label, icon) {
+    this.pays = this.pays || [];
+    if (this.pays.length > 5) this.pays.shift();
+    this.pays.push({ label: label, icon: icon, t: 0, life: 2.1, i: this.pays.length });
+    if (typeof SND !== 'undefined' && SND.cash) SND.cash();
+  },
+  _drawPays(c) {
+    if (!this.pays || !this.pays.length) return;
+    const r = this._rect();
+    for (let i = 0; i < this.pays.length; i++) {
+      const p = this.pays[i];
+      const k = clamp(p.t / p.life, 0, 1);
+      const rise = Math.round((6 + k * 26) / APIX) * APIX;
+      c.globalAlpha = k < 0.75 ? 1 : (1 - (k - 0.75) / 0.25);
+      const y = r.y - rise - i * 13;
+      const w = textWidth(c, p.label, 8) + 26;
+      const x = Math.round((r.x + r.w - 24 - w) / APIX) * APIX;
+      uiNote(c, x, y, w, 15, { alpha: 0.97 });
+      if (typeof drawItemIcon !== 'undefined' && ITEMS && ITEMS[p.icon]) drawItemIcon(c, p.icon, x + 10, y + 7.5, 12);
+      else if (typeof PixIcons !== 'undefined') PixIcons.draw(c, p.icon === 'coin' ? 'coin' : 'seed', x + 10, y + 7.5, 12, { t: this.animT });
+      text(c, p.label, x + 19, y + 4, { size: 8, color: '#30150a', shadow: false });
+      c.globalAlpha = 1;
+    }
+  },
+
   // ---- geometry (kept in one place so draw and update cannot drift) -------------
   _rect() {
-    return this.mode === 'gift'
+    // The gift grid, the topic menu and a question with three answers under it
+    // all need room the plain talk box does not have: at 92 tall the question ran
+    // straight into the first answer button.
+    return (this.mode === 'gift' || this.mode === 'topics' || this.mode === 'answer')
       ? { x: 18, y: 118, w: 444, h: 130 }
       : { x: 18, y: 156, w: 444, h: 92 };
   },
@@ -678,8 +847,55 @@ const NPCs = {
     if (which === 'next') return { x: r.x + 88, y: y, w: 60, h: 16 };
     if (which === 'ask') return { x: r.x + 184, y: y, w: 58, h: 16 };
     if (which === 'task') return { x: r.x + r.w - 200, y: y, w: 62, h: 16 };
+    if (which === 'topicback') return { x: r.x + r.w - 70, y: y, w: 56, h: 16 };
     if (which === 'gift') return { x: r.x + r.w - 134, y: y, w: 58, h: 16 };
     return { x: r.x + r.w - 70, y: y, w: 56, h: 16 };   // 'bye' and 'back' share the slot
+  },
+
+  // The four things you can ask about, laid out two by two in the text area.
+  _topicRect(i) {
+    const r = this._rect();
+    const w = 148, h = 17, gx = 8, gy = 5;
+    return { x: r.x + 88 + (i % 2) * (w + gx), y: r.y + 33 + ((i / 2) | 0) * (h + gy), w: w, h: h };
+  },
+  // ...and the ways you can answer what they asked you, stacked.
+  _answerRect(i, n) {
+    const r = this._rect();
+    const h = 17, gap = 4;
+    const top = r.y + r.h - 20 - (n - 1) * (h + gap);
+    return { x: r.x + 88, y: top + i * (h + gap), w: r.w - 104, h: h };
+  },
+
+  openTopics() {
+    this.mode = 'topics';
+    SND.click();
+  },
+  openAsk(key) {
+    const a = this.askOf(key);
+    if (!a) return false;
+    this.qa = a;
+    this.mode = 'answer';
+    this._setPages([a.q]);
+    return true;
+  },
+  answer(i) {
+    const a = this.qa;
+    const n = this.byKey(this.who);
+    if (!a || !n) { this.mode = 'talk'; return; }
+    const pickd = a.a[i];
+    if (!pickd) { this.mode = 'talk'; return; }
+    this.rec(this.who).askDay = G.day;
+    this.add(this.who, pickd.w || 1);
+    this.qa = null;
+    this.mode = 'talk';
+    const back = (a.r && a.r[i]) || null;
+    this._setPages([back || this._echo(pickd.t, n)]);
+  },
+  // A reply built out of what you said, so an answer is never a dead end. It
+  // reads as them taking it in, which is all a reply has to do.
+  _echo(said, n) {
+    const warm = ['Mm. Good.', 'Right you are.', 'I thought as much.', 'Fair enough.', 'Noted.'];
+    return '"' + said + '"  ' + pick(warm);
   },
 
   // ---- errands -------------------------------------------------------------------
@@ -713,20 +929,23 @@ const NPCs = {
     if (t.kind === 'in') {
       const paid = Side.handIn(q);
       if (!paid) { SND.alarm(); return; }
-      const said = (q.thanks || []).slice();
+      const said = [this._speech(q.thanks)];
+      // WHAT YOU WERE GIVEN IS A THING THAT HAPPENS, NOT A SENTENCE. This used to
+      // append "(You are handed $45, 3 seed packets.)" to the end of the
+      // conversation -- a stage direction in the middle of somebody talking. The
+      // reward flies up over the box instead; see _rewardFx and Quests' payout
+      // pop.
       const r = q.reward || {};
-      const bits = [];
-      if (r.money) bits.push(`$${r.money}`);
-      if (r.items) for (const k in r.items) bits.push(`${r.items[k]} ${Side.itemName(k)}`);
-      if (r.seeds) for (const k in r.seeds) bits.push(`${r.seeds[k]} seed packets`);
-      if (bits.length) said.push(`(You are handed ${bits.join(', ')}.)`);
+      if (r.money) this._payFx('$' + r.money, 'coin');
+      if (r.items) for (const k in r.items) this._payFx(r.items[k] + ' ' + Side.itemName(k), k);
+      if (r.seeds) for (const k in r.seeds) this._payFx(r.seeds[k] + ' seeds', 'seed');
       if (r.note) said.push(`(${r.note})`);
       this._setPages(said);
       return;
     }
     if (t.kind === 'ask') {
       if (!Side.accept(q)) { SND.alarm(); return; }
-      const said = (q.ask || []).slice();
+      const said = [this._speech(q.ask)];
       said.push(`(Errand taken: "${q.name}". It is in the journal -- [J].)`);
       if (q.how) said.push(`(${q.how})`);
       this._setPages(said);
@@ -841,7 +1060,15 @@ const NPCs = {
       c.globalAlpha = 1;
     }
 
+    this._drawPays(c);
     if (this.mode === 'gift') { this._drawGift(c, r, mx, my); return; }
+    if (this.mode === 'topics') {
+      text(c, 'What would you like to ask?', r.x + 88, r.y + 20, { size: 7.5, color: '#662907', shadow: false });
+      for (let i = 0; i < this.TOPICS.length; i++)
+        this._button(c, this._topicRect(i), this.TOPICS[i].label, true, mx, my);
+      this._button(c, this._btn('topicback'), 'NEVER MIND', true, mx, my);
+      return;
+    }
 
     // ---- the line, typewritten ----------------------------------------------------
     const lines = this.pages[this.page] || [''];
@@ -869,6 +1096,15 @@ const NPCs = {
       // anywhere in the box still turns the page, so this is an affordance and
       // not a new gate -- but it is the thing a thumb goes for.
       if (more) this._button(c, this._btn('next'), 'NEXT', true, mx, my);
+    }
+
+    // ---- the ways you can answer what they just asked -------------------------
+    if (this.mode === 'answer') {
+      if (!done) return;
+      const n = this.qa ? this.qa.a.length : 0;
+      for (let i = 0; i < n; i++)
+        this._button(c, this._answerRect(i, n), this.qa.a[i].t, true, mx, my);
+      return;
     }
 
     // ---- THE CHOICES, and they arrive when the talking stops ------------------
@@ -986,6 +1222,46 @@ const NPCs = {
   },
 
   // ---- world presence -------------------------------------------------------------
+  // ---- THINGS YOU CAN ASK, AND THINGS THEY ASK YOU ---------------------------
+  //
+  // A conversation used to be: they say a random line, you press NEXT, you leave.
+  // That is a vending machine with a face on it. Now there is a menu of things to
+  // ASK -- how they are, what they like about this place, what they think you
+  // should be doing -- and, once a day, they ask YOU something and you choose how
+  // to answer. Answering at all is worth a little affection; answering warmly is
+  // worth more. It is a small system and it is what makes them feel inhabited.
+  TOPICS: [
+    { k: 'how', label: 'HOW ARE YOU?' },
+    { k: 'like', label: 'FAVOURITE?' },
+    { k: 'advice', label: 'ADVICE' },
+    { k: 'self', label: 'ABOUT YOU' },
+  ],
+
+  // Fallbacks, so a character with nothing written still answers like a person.
+  TOPIC_ANY: {
+    how: ['Well enough. The tide came in, the tide went out, nobody drowned.'],
+    like: ['The quiet, mostly. And the smell of the boards after rain.'],
+    self: ['Not much to tell that you cannot see from here.'],
+  },
+
+  topicSay(key, topic) {
+    const n = this.byKey(key);
+    if (!n) return '';
+    if (topic === 'advice') return this.hint();
+    const pool = (n.topics && n.topics[topic]) || this.TOPIC_ANY[topic] || [''];
+    return pick(pool);
+  },
+
+  // The question they put to you, and the three ways you can take it. `w` is the
+  // warmth of the answer: it is what the affection is actually measuring.
+  askOf(key) {
+    const n = this.byKey(key);
+    if (!n || !n.asks || !n.asks.length) return null;
+    const r = this.rec(key);
+    if (r.askDay === G.day) return null;            // one a day, not one a click
+    return n.asks[(G.day + key.length) % n.asks.length];
+  },
+
   spots() {
     if (!G) return [];
     this.ensure();

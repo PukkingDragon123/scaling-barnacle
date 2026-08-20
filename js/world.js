@@ -319,7 +319,7 @@ const WorldScene = {
         ctx.fillRect(lx, ly, 1.5, 1.5);
         if (nite > 0.3) {
           ctx.fillStyle = 'rgba(255,220,150,0.12)';
-          ctx.beginPath(); ctx.arc(lx, ly, 4, 0, TAU); ctx.fill();
+          pixDisc(ctx, lx, ly, 4);
         }
       }
     }
@@ -344,11 +344,11 @@ const WorldScene = {
     // smoke + dust
     for (const s of this.smoke) {
       ctx.fillStyle = `rgba(220,220,225,${clamp(s.t / 3, 0, 0.45)})`;
-      ctx.beginPath(); ctx.arc(s.x, s.y, s.s, 0, TAU); ctx.fill();
+      pixDisc(ctx, s.x, s.y, s.s);
     }
     for (const d of this.dust) {
       ctx.fillStyle = `rgba(200,186,150,${clamp(d.t * 1.6, 0, 0.5)})`;
-      ctx.beginPath(); ctx.arc(d.x, d.y, d.s * (1.6 - d.t), 0, TAU); ctx.fill();
+      pixDisc(ctx, d.x, d.y, d.s * (1.6 - d.t));
     }
 
     // ---- player: the uploaded otter, with squash & stretch ---------------------------
@@ -424,12 +424,12 @@ const WorldScene = {
       const hh2 = assetH('house_body', HOUSE_W);
       const hy2 = DECK_Y - hh2;
       ctx.fillStyle = `rgba(255,214,120,${nite * 0.18})`;
-      ctx.beginPath(); ctx.arc(HOUSE_X + HOUSE_W * 0.535, hy2 + hh2 * 0.60, 12, 0, TAU); ctx.fill();
+      pixDisc(ctx, HOUSE_X + HOUSE_W * 0.535, hy2 + hh2 * 0.60, 12);
       // dock lanterns
       for (const g of this._lampGlows) {
         const fl = 0.8 + Math.sin(this.time * 8 + g.x) * 0.2;
         ctx.fillStyle = `rgba(255,200,110,${nite * 0.16 * fl})`;
-        ctx.beginPath(); ctx.arc(g.x, g.y, 13, 0, TAU); ctx.fill();
+        pixDisc(ctx, g.x, g.y, 13);
         ctx.fillStyle = `rgba(255,226,150,${nite * 0.85 * fl})`;
         ctx.fillRect(g.x - 1.5, g.y - 2, 3, 4);
       }

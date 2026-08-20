@@ -163,7 +163,7 @@ const HouseScene = {
     ctx.fillRect(DESK_X - 7, dTop - 6.2, 8, 1.2);
     if (nite > 0.2) {
       ctx.fillStyle = 'rgba(120,220,255,0.12)';
-      ctx.beginPath(); ctx.arc(DESK_X, dTop - 7, 16, 0, TAU); ctx.fill();
+      pixDisc(ctx, DESK_X, dTop - 7, 16);
     }
 
     const tblH = assetH('furn_2', 40);

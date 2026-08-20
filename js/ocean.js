@@ -1846,8 +1846,6 @@ const Ocean = {
   // One frame, resampled to exactly the pixels it will occupy on the canvas, so
   // the draw is a straight copy. Keyed on the destination size, so a zoom change
   // rebakes rather than stretching.
-  OUTLINE: '#191007',        // the ink every other sprite in this game wears
-
   _bakeFrame(name, pw, ph) {
     const img = ASSETS[name];
     if (!img || !img.width) return null;
@@ -1857,44 +1855,20 @@ const Ocean = {
     if (hit) return hit;
     if (this._fbakeN > 80) { this._fbake = {}; this._fbakeN = 0; }
 
-    // ---- AND WHILE WE ARE HERE, GIVE HIM AN OUTLINE ---------------------------
-    //
-    // The sheet does have one: 88% of its boundary pixels are dark. The problem
-    // is that it is ONE SOURCE PIXEL thick, and the sheet is drawn about 1.4x, so
-    // the ink lands on a pixel and a half -- against a game whose every other
-    // sprite is outlined a full texel (three device pixels) thick. A third of a
-    // texel of ink reads as no ink at all, which is why he looked like a cutout
-    // pasted onto the water while the pier behind him had a hard black edge.
-    //
-    // Since the frame is already being baked, the outline comes for free: stamp
-    // the silhouette in ink eight ways at one texel out, then the art on top. All
-    // compositing -- no pixel reads, which matters because a canvas that has had
-    // a file:// image drawn into it cannot be read at all.
-    const pad = Math.max(2, Math.round(APIX * DPX * (this.ZOOM || 1)));
+    // NO ADDED OUTLINE. I stamped a one-texel ink ring around him to match the
+    // weight the rest of the game's art carries, and it was too much: a thick
+    // black line around a soft-edged sheet reads as a sticker, not as art. The
+    // sheet's own one-pixel edge is what it was drawn with, so that is what it
+    // gets. The bake stays -- that is the part that stopped the tearing.
+    const pad = 0;
     const cv = document.createElement('canvas');
-    cv.width = pw + pad * 2; cv.height = ph + pad * 2;
+    cv.width = pw; cv.height = ph;
     const c = cv.getContext('2d');
+    // NEAREST. This is an UPSCALE (the sheets are smaller than the space they are
+    // drawn in), so nothing is lost by not interpolating, and interpolating would
+    // put grey along every edge of a hard-edged sprite.
     c.imageSmoothingEnabled = false;
-
-    const sil = document.createElement('canvas');
-    sil.width = pw; sil.height = ph;
-    const sc = sil.getContext('2d');
-    sc.imageSmoothingEnabled = false;
-    // NEAREST for the bake. This is an UPSCALE (the sheets are smaller than the
-    // space they are drawn in), so nothing is lost by not interpolating, and
-    // interpolating would put grey along every edge of a hard-edged sprite.
-    sc.drawImage(img, 0, 0, pw, ph);
-    sc.globalCompositeOperation = 'source-in';
-    sc.fillStyle = this.OUTLINE;
-    sc.fillRect(0, 0, pw, ph);
-
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        if (!dx && !dy) continue;
-        c.drawImage(sil, pad + dx * pad, pad + dy * pad);
-      }
-    }
-    c.drawImage(img, pad, pad, pw, ph);
+    c.drawImage(img, 0, 0, pw, ph);
 
     const rec = { cv: cv, pad: pad };
     this._fbake[key] = rec;
@@ -2443,14 +2417,14 @@ const Ocean = {
       const col = p[6];
       for (let i = 3; i >= 1; i--) {
         ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${0.06 * i})`;
-        ctx.beginPath(); ctx.arc(bx, by, R + i * 5, 0, TAU); ctx.fill();
+        pixDisc(ctx, bx, by, R + i * 5);
       }
       ctx.fillStyle = cssRGB(col);
-      ctx.beginPath(); ctx.arc(bx, by, R, 0, TAU); ctx.fill();
+      pixDisc(ctx, bx, by, R);
       if (!isDay) {
         // bite a crescent out of the moon with the sky behind it
         ctx.fillStyle = cssRGB(rgbLerp(p[0], p[1], 0.4));
-        ctx.beginPath(); ctx.arc(bx + R * 0.55, by - R * 0.3, R * 0.92, 0, TAU); ctx.fill();
+        pixDisc(ctx, bx + R * 0.55, by - R * 0.3, R * 0.92);
       }
     }
 
@@ -3328,9 +3302,7 @@ const Ocean = {
       // a cloud thins as it swells, so alpha falls off faster than the timer
       const k = clamp(d.t / Math.max(d.life, 0.01), 0, 1);
       ctx.globalAlpha = k * k * 0.34;
-      ctx.beginPath();
-      ctx.arc(sx, sy, d.r, 0, TAU);
-      ctx.fill();
+      pixDisc(ctx, sx, sy, d.r);
     }
     ctx.globalAlpha = 1;
   },
@@ -3458,9 +3430,7 @@ const Ocean = {
       const sx = b.x - this.camX, sy = b.y - this.camY;
       if (sx < -8 || sx > W + 8 || sy < -8 || sy > H + 8) continue;
       ctx.globalAlpha = clamp(b.t / b.life, 0, 1) * 0.6;
-      ctx.beginPath();
-      ctx.arc(sx, sy, b.r, 0, TAU);
-      ctx.stroke();
+      pixRing(ctx, sx, sy, b.r, null, ctx.lineWidth);
     }
     ctx.globalAlpha = 1;
     ctx.fillStyle = 'rgba(190,240,255,0.5)';
@@ -3469,9 +3439,7 @@ const Ocean = {
       if (b.t <= 0 || !b.air) continue;
       const sx = b.x - this.camX, sy = b.y - this.camY;
       if (sx < -8 || sx > W + 8 || sy < -8 || sy > H + 8) continue;
-      ctx.beginPath();
-      ctx.arc(sx, sy, b.r * 0.75, 0, TAU);
-      ctx.fill();
+      pixDisc(ctx, sx, sy, b.r * 0.75);
     }
     ctx.lineWidth = 1;
   },
@@ -3484,9 +3452,7 @@ const Ocean = {
       const k = r.t / r.life;
       ctx.globalAlpha = k * 0.55;
       ctx.lineWidth = r.w * k;
-      ctx.beginPath();
-      ctx.arc(r.x - this.camX, r.y - this.camY, r.r, 0, TAU);
-      ctx.stroke();
+      pixRing(ctx, r.x - this.camX, r.y - this.camY, r.r, null, ctx.lineWidth);
     }
     ctx.globalAlpha = 1;
     ctx.lineWidth = 1;
@@ -3838,8 +3804,8 @@ const Ocean = {
     uiNote(ctx, 6, gy, 126, 15, {});
     ctx.strokeStyle = pulse ? '#b23a34' : '#2a6a8a';
     ctx.lineWidth = PIX * 2;
-    ctx.beginPath(); ctx.arc(15, gy + 7.5, 3.5, 0, TAU); ctx.stroke();
-    ctx.beginPath(); ctx.arc(18.5, gy + 4, 1.4, 0, TAU); ctx.stroke();
+    pixRing(ctx, 15, gy + 7.5, 3.5, null, ctx.lineWidth);
+    pixRing(ctx, 18.5, gy + 4, 1.4, null, ctx.lineWidth);
     rrect(ctx, 24, gy + 3.5, 62, 8, '#08141c', '#2c4654');
     ctx.fillStyle = low ? '#e8434c' : '#5ad2f0';
     ctx.fillRect(25, gy + 4.5, 60 * frac, 6);
@@ -3966,11 +3932,9 @@ const Ocean = {
         const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
         if (b.icon === 'oroll') {
           // a curled arrow: the spin roll
-          c.strokeStyle = 'rgba(255,235,190,0.85)';
-          c.lineWidth = 1.4;
-          c.beginPath();
-          c.arc(cx, cy, 8, 0.5, TAU * 0.86);
-          c.stroke();
+          // a pixel ring, not an arc: the arrowhead below is what makes it read
+          // as a turn, so the ring does not need a gap in it
+          pixRing(c, cx, cy, 8, 'rgba(255,235,190,0.85)', 1.5);
           c.fillStyle = 'rgba(255,235,190,0.85)';
           c.beginPath();
           c.moveTo(cx + 8, cy - 5); c.lineTo(cx + 3.5, cy - 7.5); c.lineTo(cx + 9.5, cy - 9.5);

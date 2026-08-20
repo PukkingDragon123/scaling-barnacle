@@ -221,9 +221,9 @@ const TouchUI = {
       }
       const cx = b.x + b.w / 2, cy = b.y + b.h / 2, r = b.w / 2 - 2;
       c.fillStyle = held ? 'rgba(240,220,170,0.4)' : 'rgba(14,20,28,0.5)';
-      c.beginPath(); c.arc(cx, cy, r, 0, TAU); c.fill();
+      pixDisc(c, cx, cy, r);
       c.strokeStyle = 'rgba(230,200,150,0.55)'; c.lineWidth = 1;
-      c.beginPath(); c.arc(cx, cy, r, 0, TAU); c.stroke();
+      pixRing(c, cx, cy, r, null, c.lineWidth);
       c.fillStyle = held ? '#1a1108' : '#efe0bc';
       if (b.icon === 'left' || b.icon === 'right') {
         const d = b.icon === 'right' ? 1 : -1;
@@ -244,7 +244,7 @@ const TouchUI = {
         // paw print
         c.beginPath(); c.ellipse(cx, cy + 3, 6, 4.5, 0, 0, TAU); c.fill();
         for (let i = -1; i <= 1; i++) {
-          c.beginPath(); c.arc(cx + i * 5.5, cy - 4 + Math.abs(i) * 1.5, 2.2, 0, TAU); c.fill();
+          pixDisc(c, cx + i * 5.5, cy - 4 + Math.abs(i) * 1.5, 2.2);
         }
       }
     }

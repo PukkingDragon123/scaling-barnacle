@@ -1638,9 +1638,7 @@ const Hood = {
     ctx.fillStyle = '#ffd27a';
     for (var i = 4; i >= 1; i--) {
       ctx.globalAlpha = glow * 0.09 * i / 4;
-      ctx.beginPath();
-      ctx.arc(dx, dy, 5 + i * 8, 0, TAU);
-      ctx.fill();
+      pixDisc(ctx, dx, dy, 5 + i * 8);
     }
     ctx.globalAlpha = 1;
     if (inside) {
@@ -1870,7 +1868,7 @@ const Hood = {
       ctx.fillStyle = '#ffd27a';
       for (var g = 3; g >= 1; g--) {
         ctx.globalAlpha = nite * 0.10 * g / 3;
-        ctx.beginPath(); ctx.arc(lx, ly, 5 + g * 6, 0, TAU); ctx.fill();
+        pixDisc(ctx, lx, ly, 5 + g * 6);
       }
       ctx.globalAlpha = 1;
     }
@@ -1963,9 +1961,7 @@ const Hood = {
       ctx.fillStyle = '#ffd27a';
       for (var g = 4; g >= 1; g--) {
         ctx.globalAlpha = nite * 0.075 * g / 4;
-        ctx.beginPath();
-        ctx.arc(hm.x, win, 8 + g * 9, 0, TAU);
-        ctx.fill();
+        pixDisc(ctx, hm.x, win, 8 + g * 9);
       }
       ctx.globalAlpha = 1;
     }
@@ -2111,9 +2107,7 @@ const Hood = {
     ctx.strokeStyle = 'rgba(255,230,110,0.75)';
     ctx.lineWidth = 1;
     ctx.globalAlpha = 0.5 + 0.4 * Math.sin(t * 4);
-    ctx.beginPath();
-    ctx.arc(x, y, r + Math.sin(t * 4) * 1.2, 0, TAU);
-    ctx.stroke();
+    pixRing(ctx, x, y, r + Math.sin(t * 4) * 1.2, null, ctx.lineWidth);
     ctx.globalAlpha = 1;
   },
 

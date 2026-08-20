@@ -630,7 +630,7 @@ const DiveScene = {
       if (dx * dx + dy * dy < (n.r + 10) * (n.r + 10)) {
         ctx.strokeStyle = 'rgba(232,60,60,0.55)';
         ctx.lineWidth = PIX * 2;
-        ctx.beginPath(); ctx.arc(0, 0, n.r + 5, 0, TAU); ctx.stroke();
+        pixRing(ctx, 0, 0, n.r + 5, null, ctx.lineWidth);
       }
     } else {
       const art = NODE_ART[n.kind];
@@ -732,9 +732,9 @@ const DiveScene = {
     ctx.stroke();
     // eye — the horror bit
     ctx.fillStyle = '#e8e4da';
-    ctx.beginPath(); ctx.arc(44, -5, 3, 0, TAU); ctx.fill();
+    pixDisc(ctx, 44, -5, 3);
     ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.arc(44 + (sh.state === 'stare' ? 1 : 0), -5, 1.6, 0, TAU); ctx.fill();
+    pixDisc(ctx, 44 + (sh.state === 'stare' ? 1 : 0), -5, 1.6);
     if (sh.state === 'stare' && Math.sin(this.time * 9) > 0.7) {
       ctx.fillStyle = 'rgba(255,255,255,0.9)';
       ctx.fillRect(45, -7, 1, 1);
@@ -860,7 +860,7 @@ const DiveScene = {
       ctx.globalAlpha = clamp(pt.t * 2, 0, 1);
       if (pt.ring) {
         ctx.strokeStyle = pt.col; ctx.lineWidth = PIX * 2;
-        ctx.beginPath(); ctx.arc(pt.x, pt.y - this.camY, pt.r, 0, TAU); ctx.stroke();
+        pixRing(ctx, pt.x, pt.y - this.camY, pt.r, null, ctx.lineWidth);
       } else if (pt.chunk) {
         ctx.save();
         ctx.translate(pt.x, pt.y - this.camY);
@@ -887,7 +887,7 @@ const DiveScene = {
     // bubbles
     ctx.strokeStyle = 'rgba(200,230,240,0.5)';
     for (const bu of this.bubbles) {
-      ctx.beginPath(); ctx.arc(bu.x, bu.y, bu.r, 0, TAU); ctx.stroke();
+      pixRing(ctx, bu.x, bu.y, bu.r, null, ctx.lineWidth);
     }
 
     // marine snow
@@ -908,7 +908,7 @@ const DiveScene = {
       ctx.globalAlpha = 1;
       if (night) {
         ctx.fillStyle = 'rgba(248,190,225,0.1)';
-        ctx.beginPath(); ctx.arc(j2.x, sy2, j2.r * 1.7, 0, TAU); ctx.fill();
+        pixDisc(ctx, j2.x, sy2, j2.r * 1.7);
       }
     }
 
@@ -954,7 +954,7 @@ const DiveScene = {
       }
       if (G.gear.lamp) {
         ctx.fillStyle = 'rgba(255,240,190,0.06)';
-        ctx.beginPath(); ctx.arc(Input.mouse.x, Input.mouse.y, 60, 0, TAU); ctx.fill();
+        pixDisc(ctx, Input.mouse.x, Input.mouse.y, 60);
       }
     }
 
@@ -1000,7 +1000,7 @@ const DiveScene = {
       }
       ctx.restore();
       ctx.fillStyle = `rgba(255,255,255,${ba * 0.25})`;
-      ctx.beginPath(); ctx.arc(0, 0, 15 + t * 6, 0, TAU); ctx.fill();
+      pixDisc(ctx, 0, 0, 15 + t * 6);
       drawAC(ctx, r.art, 0, 0, 24 * pulse);
       ctx.restore();
       text(ctx, '+' + r.name + (r.extra ? ' +!' : ''), r.x, y - 22, { size: 8, color: '#fff8e0', align: 'center' });
@@ -1048,8 +1048,8 @@ const DiveScene = {
     uiNote(ctx, 6, H - 28, 108, 15, {});
     // bubble icon
     ctx.strokeStyle = o2Pulse ? '#b23a34' : '#2a6a8a'; ctx.lineWidth = PIX * 2;
-    ctx.beginPath(); ctx.arc(15, H - 20.5, 3.5, 0, TAU); ctx.stroke();
-    ctx.beginPath(); ctx.arc(18.5, H - 24, 1.4, 0, TAU); ctx.stroke();
+    pixRing(ctx, 15, H - 20.5, 3.5, null, ctx.lineWidth);
+    pixRing(ctx, 18.5, H - 24, 1.4, null, ctx.lineWidth);
     rrect(ctx, 24, H - 24.5, 84, 8, '#08141c', '#2c4654');
     ctx.fillStyle = low ? '#e8434c' : '#5ad2f0';
     ctx.fillRect(25, H - 23.5, 82 * o2Frac, 6);

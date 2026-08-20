@@ -239,7 +239,7 @@ function makeCloud(len, tall) {
   for (let i = 0; i < lobes; i++) {
     const r = tall * (0.32 + rng() * 0.26);
     const lx = clamp(8 + (len - 20) * (i / (lobes - 1)), r + 1, len - r - 1);
-    c.beginPath(); c.arc(lx, tall - r * 0.75, r, 0, TAU); c.fill();
+    pixDisc(c, lx, tall - r * 0.75, r);
   }
   c.fillRect(4, tall - tall * 0.4, len - 8, tall * 0.4 - 1);
   // shaded underside

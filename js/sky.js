@@ -401,7 +401,7 @@ const SKY = {
     // glow discs
     for (let i = 4; i >= 1; i--) {
       ctx.fillStyle = `rgba(${sunCol.join(',')},${0.05 * i})`;
-      ctx.beginPath(); ctx.arc(bx, by, R + i * 6, 0, TAU); ctx.fill();
+      pixDisc(ctx, bx, by, R + i * 6);
     }
     if (isDay) {
       // long straight god-rays fanning UP from the sun, as in the reference
@@ -421,12 +421,12 @@ const SKY = {
       ctx.restore();
     }
     ctx.fillStyle = cssRGB(sunCol);
-    ctx.beginPath(); ctx.arc(bx, by, R, 0, TAU); ctx.fill();
+    pixDisc(ctx, bx, by, R);
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.beginPath(); ctx.arc(bx - R * 0.3, by - R * 0.3, R * 0.45, 0, TAU); ctx.fill();
+    pixDisc(ctx, bx - R * 0.3, by - R * 0.3, R * 0.45);
     if (!isDay) {   // moon bite
       ctx.fillStyle = cssRGB(mid);
-      ctx.beginPath(); ctx.arc(bx + R * 0.45, by - R * 0.3, R * 0.85, 0, TAU); ctx.fill();
+      pixDisc(ctx, bx + R * 0.45, by - R * 0.3, R * 0.85);
     }
 
     // ---- the cloud bank on the horizon --------------------------------------------

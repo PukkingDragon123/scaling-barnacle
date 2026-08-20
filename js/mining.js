@@ -965,9 +965,7 @@ const Mining = {
       var k = 1 - o.t / 0.34;
       ctx.globalAlpha = (1 - k) * 0.8;
       ctx.lineWidth = 2.4 * (1 - k) + 0.5;
-      ctx.beginPath();
-      ctx.arc(o.x, o.y, o.r * (0.25 + k), 0, TAU);
-      ctx.stroke();
+      pixRing(ctx, o.x, o.y, o.r * (0.25 + k), null, ctx.lineWidth);
     }
     ctx.globalAlpha = 1;
   },
@@ -1432,9 +1430,7 @@ const Mining = {
       ctx.globalAlpha = hk;
       ctx.strokeStyle = '#e08a1a';
       ctx.lineWidth = PIX * 2;
-      ctx.beginPath();
-      ctx.arc(n.hitX, n.hitY, Math.max(0.1, 2 + (1 - hk) * 5), 0, TAU);
-      ctx.stroke();
+      pixRing(ctx, n.hitX, n.hitY, Math.max(0.1, 2 + (1 - hk) * 5), null, ctx.lineWidth);
       ctx.globalAlpha = 1;
     }
     ctx.restore();
@@ -1459,9 +1455,7 @@ const Mining = {
     ctx.translate(Math.round(sx * DPX) / DPX, Math.round(sy * DPX) / DPX);
     ctx.lineWidth = PIX * 2;
     ctx.strokeStyle = soft ? 'rgba(232,67,76,0.55)' : 'rgba(255,255,255,0.30)';
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, TAU);
-    ctx.stroke();
+    pixRing(ctx, 0, 0, r, null, ctx.lineWidth);
     if (!soft && p > 0) {
       ctx.strokeStyle = '#e08a1a';
       ctx.lineWidth = PIX * 3;

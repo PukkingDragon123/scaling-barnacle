@@ -2800,10 +2800,12 @@ const Tame = {
         var cx = b.x + b.w / 2, cy = b.y + b.h / 2;
         // a morsel in an open paw
         c.fillStyle = 'rgba(255,235,190,0.9)';
-        c.beginPath(); c.arc(cx, cy - 3, 3, 0, TAU); c.fill();
-        c.strokeStyle = 'rgba(255,235,190,0.85)';
-        c.lineWidth = 1.4;
-        c.beginPath(); c.arc(cx, cy + 3, 6, Math.PI * 0.15, Math.PI * 0.85); c.stroke();
+        pixDisc(c, cx, cy - 3, 3);
+        // the open paw under it, as three steps of a shallow bowl
+        c.fillStyle = 'rgba(255,235,190,0.85)';
+        c.fillRect(cx - 6, cy + 2, 2, 1.5);
+        c.fillRect(cx - 4.5, cy + 3.5, 9, 1.5);
+        c.fillRect(cx + 4, cy + 2, 2, 1.5);
       }
     };
 
