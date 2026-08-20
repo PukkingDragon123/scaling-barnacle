@@ -42,13 +42,21 @@ const Mining = {
   // the ordinary damage -- the game rewards skill, it never punishes you into a
   // stall. The window narrows as the node's tier goes up, which is what makes a
   // crystal cluster feel different from a log rather than merely slower.
+  // EASIER, AND YOU CAN SEE WHAT YOU ARE DOING. The window was a third of the bar
+  // with a one-ninth core, closing to almost nothing by tier 3, and a perfect blow
+  // was worth 2.6 -- so a well-timed swing on a driftwood pile still took two
+  // more. Now the zone is nearly half the bar, the core is a fifth, the sweep is
+  // slower, and a perfect strike is worth three and a half: one clean hit breaks
+  // soft timber outright, which is what makes it feel like a hit instead of a
+  // chore. The rock also has a HEALTH BAR now (see _drawHealth) -- it always had
+  // hit points, there was just no way to see them going down.
   BAR_W: 74,             // logical width of the bar over the node
-  SWEEP_T: 0.86,         // seconds for one full there-and-back
-  ZONE_W: 0.30,          // fraction of the bar that is the good zone, at tier 0
-  CORE_W: 0.11,          // ... and the perfect core inside it
-  ZONE_TIGHTEN: 0.055,   // subtracted per node tier
-  GOOD_MUL: 1.6,
-  PERFECT_MUL: 2.6,
+  SWEEP_T: 1.05,         // seconds for one full there-and-back
+  ZONE_W: 0.46,          // fraction of the bar that is the good zone, at tier 0
+  CORE_W: 0.20,          // ... and the perfect core inside it
+  ZONE_TIGHTEN: 0.03,    // subtracted per node tier
+  GOOD_MUL: 2.0,
+  PERFECT_MUL: 3.5,
   REACH: 42,             // how far in front of Otto a node can be mined (nodes grew, so did this)
   CURSOR_R: 20,          // click slop when aiming with the pointer
   NOTE_GAP: 1.4,         // rate limit on the "too soft" complaint
@@ -954,6 +962,40 @@ const Mining = {
       ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
       ctx.globalAlpha = 1;
     }
+
+    // ---- THE ROCK'S HEALTH, under the bar -------------------------------------
+    //
+    // Nodes have always had hit points. Nothing ever showed them, so a swing
+    // landed, a chip flew, and you had no idea whether you were a blow from
+    // breaking it or six. It is a bar with one notch per hit point, so you can
+    // count what is left at a glance.
+    var hy = y + h + 4;
+    var hw = w, frac = clamp(n.hp / Math.max(1, n.max), 0, 1);
+    ctx.fillStyle = '#0a1018';
+    ctx.fillRect(x - 1.5, hy - 1.5, hw + 3, 6);
+    ctx.fillStyle = '#3a2430';
+    ctx.fillRect(x, hy, hw, 3);
+    ctx.fillStyle = frac > 0.5 ? '#e8734a' : (frac > 0.25 ? '#e8a93c' : '#e8434c');
+    ctx.fillRect(x, hy, Math.max(APIX, hw * frac), 3);
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillRect(x, hy, Math.max(APIX, hw * frac), 1);
+    // one notch per hit point, up to a sane count
+    if (n.max <= 16) {
+      ctx.fillStyle = 'rgba(10,16,24,0.75)';
+      for (var i2 = 1; i2 < n.max; i2++) ctx.fillRect(x + (hw * i2 / n.max) - APIX / 2, hy, APIX, 3);
+    }
+
+    // ---- and the damage, rising off it ---------------------------------------
+    if (n.dmgT > 0 && n.dmg) {
+      var k = clamp(n.dmgT / 0.75, 0, 1);
+      var perfect = n.dmgGrade === 'perfect';
+      ctx.globalAlpha = k > 0.7 ? 1 : k / 0.7;
+      var dy2 = Math.round((n.y - n.h * 0.5 - 30 - (1 - k) * 16) / APIX) * APIX;
+      text(ctx, (perfect ? '' : '') + n.dmg, n.x, dy2,
+        { size: perfect ? 15 : 11, align: 'center', color: perfect ? '#ffd66e' : '#ffe6b0' });
+      if (perfect) text(ctx, 'PERFECT', n.x, dy2 - 11, { size: 8, align: 'center', color: '#ffd66e' });
+      ctx.globalAlpha = 1;
+    }
   },
 
   _drawRings: function (ctx, camX, camY) {
@@ -984,6 +1026,10 @@ const Mining = {
     this.lastHit = grade;
     this.lastHitT = grade ? 0.5 : 0;
     n.hp -= dmg;
+    // THE DAMAGE, SAID OUT LOUD. A hit you cannot measure is a hit you cannot
+    // learn from: the number rises off the rock, bigger and brighter for a
+    // perfect, and the health bar under it drops by exactly that much.
+    n.dmgT = 0.75; n.dmg = dmg; n.dmgGrade = grade;
     n.shakeT = grade === 'perfect' ? 0.4 : 0.22;
     n.shakeA = (1.1 + dmg * 0.25) * (grade === 'perfect' ? 1.7 : 1);
     // hitL is the spark's WHOLE lifetime and the draw divides by it. These used to
@@ -1267,6 +1313,7 @@ const Mining = {
       n = this.nodes[i];
       if (n.shakeT > 0) n.shakeT -= dt;
       if (n.hitT > 0) n.hitT -= dt;
+      if (n.dmgT > 0) n.dmgT -= dt;
     }
 
     // ---- drifting loot + vacuum ----

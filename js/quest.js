@@ -184,27 +184,107 @@ const Quests = {
   },
 
   // the letterboxed chapter card: bars ease in, the name and its tick sit centre
+  // ---- A CHAPTER FINISHING, DRAWN ---------------------------------------------
+  //
+  // This was two black letterbox bars and a tick made of four rectangles, with
+  // the chapter name set beside it in the middle of nowhere. Finishing a chapter
+  // is the biggest thing that happens in this game and it looked like a debug
+  // print.
+  //
+  // It is a card now: the game's own frame, popped in on a bounce, with a HAND
+  // DRAWN OPEN BOOK on it -- pages, a ribbon marker, a written line on each leaf
+  // -- a stamped COMPLETE ribbon across the corner, the reward on its own little
+  // plate, and sparks coming off it. Every pixel of it lands on the texel grid.
   _drawCard(c) {
     const k = this._card.t;
-    const inK = clamp((2.4 - k) / 0.3, 0, 1);
+    const inK = clamp((2.4 - k) / 0.34, 0, 1);
     const outK = clamp(k / 0.4, 0, 1);
     const a = Math.min(inK, outK);
-    const bar = 22 * a;
-    c.fillStyle = 'rgba(8,8,10,0.92)';
-    c.fillRect(0, 0, W, bar);
-    c.fillRect(0, H - bar, W, bar);
+    const pop = uiPop(inK);
+    const q = APIX, snap = (v) => Math.round(v / q) * q;
+
+    // a soft hold on the scene, not a pair of black bars
+    c.fillStyle = `rgba(8,10,16,${(0.5 * a).toFixed(3)})`;
+    c.fillRect(0, 0, W, H);
+
+    const w = 214, h = 96;
+    const x = snap((W - w) / 2), y = snap(H / 2 - h / 2 - 16);
+    c.save();
+    c.translate(W / 2, y + h / 2);
+    const sc = 0.88 + 0.12 * pop;
+    c.scale(sc, sc);
+    c.translate(-W / 2, -(y + h / 2));
     c.globalAlpha = a;
-    const cy = H / 2 - 70;
-    // the tick, big, drawn in pixels
-    c.fillStyle = '#3f9a58';
-    c.fillRect(W / 2 - 12, cy + 5, 3, 5);
-    c.fillRect(W / 2 - 9, cy + 8, 3, 3);
-    c.fillRect(W / 2 - 6, cy + 2, 3, 6);
-    c.fillRect(W / 2 - 3, cy - 2, 3, 4);
-    text(c, this._card.name, W / 2 + 10, cy, { size: 11, color: '#ffe6b0', align: 'left' });
-    if (this._card.money) text(c, `+$${this._card.money}`, W / 2, cy + 16, { size: 8, color: '#7dffb0', align: 'center' });
-    if (this._card.note) text(c, this._card.note, W / 2, cy + 27, { size: 7, color: '#c8d8dc', align: 'center' });
+    uiFrame(c, x, y, w, h, { border: 5 });
+
+    // ---- the book, drawn -------------------------------------------------------
+    const bx = snap(x + 34), by = snap(y + 46);
+    const P = 1;                                    // one book pixel
+    const page = '#fdf3d8', pageS = '#e0cfa6', cov = '#8f3b2a', covD = '#5e2418';
+    const ink = '#30150a', rib = '#c9536a';
+    // covers, splayed
+    c.fillStyle = covD;
+    c.fillRect(bx - 27 * P, by - 15 * P, 54 * P, 32 * P);
+    c.fillStyle = cov;
+    c.fillRect(bx - 26 * P, by - 14 * P, 52 * P, 30 * P);
+    // the two leaves, each tilted by stepping the top edge
+    for (let side = -1; side <= 1; side += 2) {
+      for (let i = 0; i < 24; i++) {
+        const step = Math.floor(i / 8);
+        const px0 = side < 0 ? bx - 25 * P + i * P : bx + 1 * P + i * P;
+        const top = by - 12 * P + (side < 0 ? (2 - step) : step) * P;
+        c.fillStyle = page;
+        c.fillRect(px0, top, P, 26 * P - Math.abs(step) * P);
+        c.fillStyle = pageS;
+        c.fillRect(px0, top + 26 * P - Math.abs(step) * P - P, P, P);
+      }
+    }
+    // written lines on both leaves
+    c.fillStyle = ink;
+    for (let l = 0; l < 4; l++) {
+      c.fillRect(bx - 22 * P, by - 8 * P + l * 5 * P, 17 * P, P);
+      c.fillRect(bx + 5 * P, by - 7 * P + l * 5 * P, 17 * P, P);
+    }
+    // the spine and the ribbon down it
+    c.fillStyle = covD;
+    c.fillRect(bx - P, by - 14 * P, 2 * P, 30 * P);
+    c.fillStyle = rib;
+    c.fillRect(bx - P, by + 14 * P, 2 * P, 7 * P);
+    c.fillRect(bx - 2 * P, by + 20 * P, 2 * P, 2 * P);
+
+    // ---- the words -------------------------------------------------------------
+    const tx = x + 74;
+    text(c, 'CHAPTER DONE', tx, y + 16, { size: 7, color: '#914007', shadow: false });
+    const lines = textWrap(c, this._card.name, w - 86, 9);
+    for (let i = 0; i < Math.min(2, lines.length); i++)
+      text(c, lines[i], tx, y + 27 + i * 11, { size: 9, color: '#30150a', shadow: false });
+    if (this._card.note) {
+      const nl = textWrap(c, this._card.note, w - 86, 7);
+      for (let i = 0; i < Math.min(2, nl.length); i++)
+        text(c, nl[i], tx, y + 51 + i * 9, { size: 7, color: '#662907', shadow: false });
+    }
+    if (this._card.money) {
+      const pw = 48;
+      uiNote(c, x + w - pw - 10, y + h - 22, pw, 15, { alpha: 0.98 });
+      PixIcons.draw(c, 'coin', x + w - pw - 1, y + h - 14.5, 12, { t: Game.time || 0 });
+      text(c, '+' + this._card.money, x + w - pw + 8, y + h - 19,
+        { size: 8, color: '#30150a', shadow: false });
+    }
+
+    // ---- the stamp, and the sparks --------------------------------------------
+    uiSeal(c, x + w - 16, y + 15, 8);
+    PixIcons.draw(c, 'check', x + w - 16, y + 15, 11, { t: Game.time || 0 });
+    const st = 2.4 - k;
+    for (let i = 0; i < 7; i++) {
+      const ang = i * 0.897;
+      const rr = 16 + st * 46 + i * 3;
+      const sx = snap(x + 34 + Math.cos(ang) * rr);
+      const sy = snap(y + 46 + Math.sin(ang) * rr * 0.7);
+      c.globalAlpha = a * clamp(1 - st / 0.9, 0, 1);
+      PixIcons.draw(c, 'spark', sx, sy, 9, { t: Game.time || 0, phase: i });
+    }
     c.globalAlpha = 1;
+    c.restore();
   },
 
   _drawLetter(c) {

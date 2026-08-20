@@ -168,6 +168,17 @@ const PixIcons = {
       '..oTooooTo..', '...oTTTTo...', '...oTTTTo...', '..oTooooTo..',
       '.oTo....oTo.', '.oo......oo.', '.o........o.', '............',
     ],
+    // an open book: two pale pages, a ribbon marker, a warm cover
+    book: [
+      '............', '..oo....oo..', '.oUUoooUUo..', 'oUkkUoUkkUo.',
+      'oUkkkUkkkUo.', 'oUkkkUkkkUo.', 'oUkkkUkkkUo.', 'oUkkkUkkkUo.',
+      'oUkkkUkkkUo.', '.oUUUoUUUo..', '..ooooooo...', '............',
+    ],
+    quill: [
+      '.........oo.', '........okko', '.......okko.', '......okko..',
+      '.....okko...', '....okko....', '...okko.....', '..oUko......',
+      '.oUUo.......', 'oUUo........', 'oo..........', '............',
+    ],
     gear: [
       '............', '...o.oo.o...', '..oSoSSoSo..', '.ooTTSSSSoo.',
       '.oSSSooSSSo.', 'ooSSo..oSSoo', 'ooSSo..oSSoo', '.oSSSooSSSo.',
