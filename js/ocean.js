@@ -140,6 +140,7 @@ const Ocean = {
 
   // ---- pool sizes -------------------------------------------------------------
   BUB_MAX: 96, MOTE_MAX: 72, RING_MAX: 10, SPILL_MAX: 8, SIL_MAX: 3, DROP_MAX: 30,
+  CRITTER_MAX: 9,         // crabs and starfish on the sand: see _drawCritters
 
   // ---- animation table --------------------------------------------------------
   // `box` is the longest side of the sprite in logical units, so a wide cruise
@@ -219,7 +220,13 @@ const Ocean = {
   // filled the screen before you could see what it was. A sprite texel covers
   // APIX * DPX * ZOOM device pixels, so at 1.25 that is 2.5 -- not whole, which
   // is why this scene sets imageSmoothingEnabled = false everywhere it draws.
-  ZOOM: 1.25,
+  // 1.5, NOT 1.25. A sprite texel covers APIX * DPX * ZOOM device pixels, so 1.25
+  // put every texel in this scene on TWO AND A HALF device pixels: half the texels
+  // came out three pixels wide and half two, the split moved as the camera moved,
+  // and that is the shimmer under everything out here. 1.5 gives exactly three.
+  // It is also what the dock uses, so Otto is finally the same size on both sides
+  // of the ladder instead of growing 20% when he climbs out.
+  ZOOM: 1.5,
   // How tall the painted sand strip stands, in logical units: SAND_TILE_W scaled by
   // the strip art's aspect (1447x83). The camera's floor cap is measured off this,
   // so the two cannot drift apart.
@@ -248,6 +255,7 @@ const Ocean = {
   _ft: 0.016, _qt: 0,
   _prevDir: null, _tapT: null, _prevDash: false,
   bubbles: null, motes: null, rings: null, spills: null, sils: null, drops: null,
+  critters: null,
   _chunks: null, _order: null,
   // seabed: one 1-D cache keyed by chunk COLUMN, plus two scratch sample rows for
   // the bed and the ridge behind it (allocated once, refilled every frame)
@@ -356,6 +364,21 @@ const Ocean = {
     this._tapT = [0, 0, 0, 0];
     this.sils = new Array(this.SIL_MAX);
     for (let i = 0; i < this.SIL_MAX; i++) this.sils[i] = { art: '', fx: 0, fy: 0, vx: 0, w: 120, ph: 0 };
+    // ---- THE NEIGHBOURS ON THE SAND -----------------------------------------
+    //
+    // The seabed was scenery you swam over. A handful of small animals living on
+    // it costs almost nothing -- a crab is nine quads -- and it is the difference
+    // between a floor and a place where things live. Crabs pick their way along
+    // and duck flat when you loom over them; starfish just hold on.
+    this.critters = new Array(this.CRITTER_MAX);
+    const krng = mulberry32(0x0C12AB5);
+    for (let i = 0; i < this.CRITTER_MAX; i++) {
+      this.critters[i] = {
+        kind: i % 3 === 2 ? 1 : 0,        // one in three is a starfish
+        x: 0, y: 0, dir: krng() < 0.5 ? -1 : 1, sp: 7 + krng() * 7,
+        ph: krng() * TAU, hide: 0, hue: (krng() * 3) | 0, seeded: false,
+      };
+    }
     // The cloud bank. Fixed count, fixed art, deterministic layout: it scrolls in
     // its own wide space and is pinned to the horizon, so it never needs updating.
     const crng = mulberry32(0x0C10D5);
@@ -1598,6 +1621,42 @@ const Ocean = {
       if (sy < -200) s.fy += H + 340;
       else if (sy > H + 200) s.fy -= H + 340;
     }
+    this._updateCritters(dt);
+  },
+
+  _updateCritters(dt) {
+    if (!this.critters) return;
+    for (let i = 0; i < this.critters.length; i++) {
+      const k = this.critters[i];
+      if (!k.seeded) {
+        k.seeded = true;
+        k.x = this.camX + (i / this.CRITTER_MAX) * this.VW * 1.4 - this.VW * 0.2;
+      }
+      // recycled around the camera, so nine of them cover the whole sea
+      const rel = k.x - this.camX;
+      if (rel < -140) { k.x += this.VW + 280; k.hide = 0; }
+      else if (rel > this.VW + 140) { k.x -= this.VW + 280; k.hide = 0; }
+      // they sit ON the sand, wherever the sand happens to be
+      k.y = this.floorAt(k.x) - 5;      // standing ON the sand, not sunk into it
+      // Otto looming: flatten, and stay flat a moment after he has gone
+      const near = Math.abs(this.px - k.x) < 26 && Math.abs(this.py - k.y) < 34;
+      if (near) k.hide = 1;
+      else if (k.hide > 0) k.hide = Math.max(0, k.hide - dt * 1.6);
+      if (k.kind === 0 && k.hide <= 0) {
+        k.x += k.dir * k.sp * dt;
+        // turn round now and then, so nobody walks off in a straight line forever
+        if (Math.sin(this.time * 0.31 + k.ph) > 0.995) k.dir = -k.dir;
+        // ...and back off a neighbour, or two crabs walk into each other and
+        // stand there overlapping, which reads as one broken crab
+        for (let j = 0; j < this.critters.length; j++) {
+          if (j === i) continue;
+          const o = this.critters[j];
+          if (!o.seeded) continue;
+          const d = k.x - o.x;
+          if (Math.abs(d) < 11) { k.dir = d >= 0 ? 1 : -1; break; }
+        }
+      }
+    }
   },
 
   // ---- camera -----------------------------------------------------------------
@@ -1734,14 +1793,45 @@ const Ocean = {
     this.animBox = def.box;
   },
 
+  // WHERE THE BODY IS IN EACH FRAME, as a fraction of that frame's own size.
+  //
+  // The sheets are tight crops, so each pose is centred on its own bounding box
+  // rather than on the animal. Frame 0 of the cruise is 233x97 with its mass
+  // sitting 3.3% low; frame 2 is 234x113 with its mass 1.2% high. Drawn centre to
+  // centre, that walks the otter's body up and down by a couple of units four
+  // times a second, on top of the poses actually changing -- which is the jitter
+  // that reads as the animation being broken.
+  //
+  // Aligning on the centre of MASS instead pins the body and lets the limbs do
+  // the moving, which is what an animation is. Measured offline off the alpha
+  // channel so there is no per-frame pixel reading at runtime.
+  ANCHOR: {
+    oswim_0: [0.064, 0.0331], oswim_1: [0.0345, 0.0053],
+    oswim_2: [0.0532, -0.0117], oswim_3: [0.0371, 0.0004],
+    oswim_4: [0.0512, 0.0329], oswim_5: [0.0083, 0.0372],
+    oswim_6: [0.0358, -0.0053], oswim_7: [0.0673, 0.0647],
+    oswim_8: [0.043, 0.0039], oswim_9: [0.0383, 0.0304],
+    oswim_10: [0.0089, 0.0713], oswim_11: [0.0119, 0.0896],
+    oswim_12: [0.0474, 0.0127], oswim_13: [-0.0095, 0.076],
+    oswim_14: [0.0209, 0.0384], oswim_15: [0.006, -0.0115],
+    ohurt_0: [0.0766, 0.021], ohurt_1: [0.0849, 0.0214],
+    ohurt_2: [0.0756, 0.0232], ohurt_3: [0.066, 0.0183],
+    ohurt_4: [0.0219, 0.0286], ohurt_5: [0.0616, 0.0698],
+    ohurt_6: [0.0243, 0.0404], ohurt_7: [0.0593, 0.0461],
+    ohurt_8: [0.0191, -0.256], ohurt_9: [0.0253, -0.2122],
+    ohurt_10: [0.015, -0.1815], ohurt_11: [0.0136, -0.1944],
+    ohurt_12: [0.0121, 0.0166], ohurt_13: [0.0165, -0.0152],
+    ohurt_14: [-0.0008, -0.0049], ohurt_15: [0.0285, 0.0266],
+    opick_0: [0.0667, 0.0396], opick_1: [0.0781, 0.0938],
+    opick_2: [0.0696, 0.0587], opick_3: [0.1061, 0.0663],
+  },
+
   // One frame, resampled to exactly the pixels it will occupy on the canvas, so
   // the draw is a straight copy. Keyed on the destination size, so a zoom change
   // rebakes rather than stretching.
-  _bakeFrame(name, dw, dh) {
+  _bakeFrame(name, pw, ph) {
     const img = ASSETS[name];
     if (!img || !img.width) return null;
-    const pw = Math.max(1, Math.round(dw * DPX * (this.ZOOM || 1)));
-    const ph = Math.max(1, Math.round(dh * DPX * (this.ZOOM || 1)));
     this._fbake = this._fbake || {};
     const key = name + '|' + pw + 'x' + ph;
     const hit = this._fbake[key];
@@ -1820,27 +1910,131 @@ const Ocean = {
     return cv;
   },
 
+  // ---- THE BACKDROP, DRAWN RATHER THAN BLURRED ------------------------------
+  //
+  // This used to be sea_bg.jpg downscaled twice and then blurred 1.6px, on the
+  // theory that "distance underwater IS blur". On a screen where everything else
+  // is hard-edged texels it is not distance, it is a smudge: a muddy blue-green
+  // field with soft blobs in it, and the single least pixel-art thing in the
+  // game.
+  //
+  // So it is generated instead, and generated the way pixel art actually does a
+  // gradient: a small ramp of flat colours with ORDERED DITHER between them, so
+  // the transitions are a visible checker of two tones rather than a thousand
+  // interpolated ones. Then three ridge lines of flat silhouette at descending
+  // depths, a stand of distant kelp, and a scatter of far-off specks. Every
+  // single pixel of it lands on the texel grid.
+  //
+  // It bakes once at exactly half the main canvas's density, so the blit up to
+  // the screen is an exact 2x -- chunky on purpose, which is what reads as far
+  // away -- and never a fractional resample.
+  FAR_RAMP: [
+    '#8df0e4', '#66d8d6', '#48b9c6', '#3599b2',
+    '#287b9c', '#1f6084', '#194a6b', '#143857',
+  ],
+  FAR_INK: ['#12324e', '#0e2842', '#0a1e34'],   // three ridge depths, far to near
+  FAR_WEED: '#17456a',   // between the water and the first ridge, never lighter
+
   _farLayer() {
     if (this._farCv) return this._farCv;
-    const img = ASSETS['sea_bg'];
-    if (!img || !img.width) return null;      // not loaded yet: try again next frame
-    const q = DPX / 2;
-    const lw = this.FAR_W, lh = lw * img.height / img.width;
-    const pw = Math.round(lw * q), ph = Math.round(lh * q);
-    const half = document.createElement('canvas');
-    half.width = Math.max(1, pw >> 1); half.height = Math.max(1, ph >> 1);
-    const hc = half.getContext('2d');
-    hc.imageSmoothingEnabled = true; hc.imageSmoothingQuality = 'high';
-    hc.drawImage(img, 0, 0, half.width, half.height);
+    const T = DPX / 2;                    // baked texels per logical unit
+    const lw = this.FAR_W, lh = 364;
+    const pw = Math.round(lw * T), ph = Math.round(lh * T);
     const cv = document.createElement('canvas');
     cv.width = pw; cv.height = ph;
     const c = cv.getContext('2d');
-    c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
-    // A real blur where it is available; the two-step downscale is already soft
-    // enough to pass without it.
-    if (typeof c.filter === 'string') c.filter = 'blur(1.6px)';
-    c.drawImage(half, 0, 0, pw, ph);
-    if (typeof c.filter === 'string') c.filter = 'none';
+    c.imageSmoothingEnabled = false;
+    const rng = mulberry32(0x0CEA9BE);
+    // the 4x4 Bayer matrix: the whole reason a two-colour dither reads as a third
+    const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    const R = this.FAR_RAMP, N = R.length;
+
+    // ---- the ramp, dithered over its WHOLE height ---------------------------
+    //
+    // Eight flat bands with six texels of checker between them still read as
+    // eight flat bands: the dither has to run the full distance or it is just a
+    // decorated hard edge. So every texel picks between the two ramp colours it
+    // sits between, thresholded against the Bayer matrix -- which is how a
+    // sixteen-colour machine drew a sky, and it is the look.
+    //
+    // Written as pixel data in one pass. A fillRect per texel would be 943,000
+    // canvas calls; this is one typed array and one putImageData.
+    const rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const RGB = R.map(rgb);
+    const id = c.createImageData(pw, ph);
+    const d = id.data;
+    for (let y = 0; y < ph; y++) {
+      // the same 1.55 curve as before: the light falls away fastest near the top
+      const f = Math.pow(y / ph, 1 / 1.55) * (N - 1);
+      const i0 = Math.min(N - 1, Math.floor(f));
+      const i1 = Math.min(N - 1, i0 + 1);
+      const frac = f - i0;
+      const row = y * pw * 4;
+      for (let x = 0; x < pw; x++) {
+        const pick = frac * 16 > BAYER[(x & 3) * 4 + (y & 3)] ? RGB[i1] : RGB[i0];
+        const o = row + x * 4;
+        d[o] = pick[0]; d[o + 1] = pick[1]; d[o + 2] = pick[2]; d[o + 3] = 255;
+      }
+    }
+    c.putImageData(id, 0, 0);
+
+    // ---- a stand of far kelp, BEHIND the ridges. Drawn after them it read as
+    // pale scratches across the silhouette; drawn before, it is a thicket the
+    // ridge line rises out of, which is the whole point of it.
+    c.fillStyle = this.FAR_WEED;
+    for (let i = 0; i < 110; i++) {
+      const x0 = Math.round(rng() * pw);
+      const hgt = 40 + Math.round(rng() * 120);
+      const y0 = Math.round(ph * (0.62 + rng() * 0.24));
+      const lean = (rng() - 0.5) * 0.5;
+      const wob = rng() * TAU;
+      for (let y = 0; y < hgt; y++) {
+        const yy = y0 - y;
+        if (yy < 0) break;
+        const x = Math.round(x0 + lean * y + Math.sin(y * 0.09 + wob) * 5);
+        c.fillRect(((x % pw) + pw) % pw, yy, y > hgt * 0.7 ? 1 : 2, 1);
+      }
+    }
+
+    // ---- three ridge lines. Flat silhouettes, no shading: a shape at this
+    // distance is a shape, and flat is what keeps it reading as far away.
+    const noise = (x, ph1, ph2, ph3) =>
+      Math.sin(x * 0.006 + ph1) * 0.55 + Math.sin(x * 0.017 + ph2) * 0.3 +
+      Math.sin(x * 0.041 + ph3) * 0.15;
+    for (let L = 0; L < 3; L++) {
+      const base = ph * (0.60 + L * 0.13);
+      const amp = 34 - L * 8;
+      const p1 = rng() * TAU, p2 = rng() * TAU, p3 = rng() * TAU;
+      c.fillStyle = this.FAR_INK[L];
+      for (let x = 0; x < pw; x++) {
+        const top = Math.round(base - amp * (0.5 + 0.5 * noise(x, p1, p2, p3)));
+        c.fillRect(x, top, 1, ph - top);
+      }
+      // a couple of rock stacks standing off each ridge, so the line has features
+      // ...and a few rock stacks standing off it, so the line has landmarks. They
+      // were 6-20 texels wide and up to 90 tall the first time, which is an
+      // antenna, not a rock: squat and broad reads as stone at this distance.
+      const stacks = L === 2 ? 1 : 3;
+      for (let k = 0; k < stacks; k++) {
+        const sx = Math.round(rng() * pw);
+        const sw = 22 + Math.round(rng() * 30);
+        const sh = 16 + Math.round(rng() * 30);
+        for (let x = 0; x < sw; x++) {
+          const t = Math.abs(x - sw / 2) / (sw / 2);
+          const h = Math.round(sh * (1 - t * t));
+          if (h <= 0) continue;
+          c.fillRect((sx + x) % pw, base - amp * 0.5 - h, 1, h + amp);
+        }
+      }
+    }
+
+    // ---- and specks, so the empty middle of the water is not empty
+    for (let i = 0; i < 420; i++) {
+      const x = Math.round(rng() * pw), y = Math.round(rng() * ph * 0.72);
+      c.fillStyle = rng() < 0.5 ? R[Math.max(0, Math.floor(y / ph * N) - 1)] : R[Math.min(N - 1, Math.floor(y / ph * N) + 1)];
+      c.fillRect(x, y, 1, 1);
+    }
+
     this._farCv = cv;
     this._farW = lw; this._farH = lh;
     return cv;
@@ -2074,6 +2268,7 @@ const Ocean = {
     // context rather than in the half-res backdrop -- and it goes down AFTER the
     // rays, because light shafts stop at the sand.
     this._drawFloor(ctx, t);
+    this._drawCritters(ctx, t);
     this._drawHome(ctx, t);
     this._drawProps(ctx, t, false);
     this._drawMotes(ctx, t);
@@ -2312,7 +2507,8 @@ const Ocean = {
     ctx.save();
     // The far layer is meant to be a suggestion, not a painting you can read: it
     // stays soft and low-contrast so the mid band and the seabed carry the depth.
-    ctx.globalAlpha = 0.6 * fade * (1 - this._nightF() * 0.55);
+    // 0.6 was hiding a blur; there is nothing to hide now.
+    ctx.globalAlpha = 0.92 * fade * (1 - this._nightF() * 0.5);
     // One copy of this layer is 648x364 logical — 2592x1456 device pixels, of
     // which at most 480x270 can ever land on screen. Blitting the whole rect and
     // letting the canvas clip cost 46ms a frame on a software canvas, so the
@@ -3243,6 +3439,82 @@ const Ocean = {
     ctx.lineWidth = 1;
   },
 
+  // A crab is a shell, two claws, four legs and two eyes on stalks -- nine quads
+  // and an outline, which at this zoom is about forty device pixels across and
+  // reads clearly. A starfish is five arms off a middle. Both are drawn from
+  // quads on the texel grid rather than from art, so there is nothing to
+  // resample and nothing to load.
+  CRIT_COL: [
+    ['#c8503c', '#8f3428', '#f0846a'],   // red crab
+    ['#d88a3c', '#9c5a22', '#f6b46a'],   // sand crab
+    ['#b45a9c', '#7a3468', '#e08cc8'],   // purple, for the rare one
+  ],
+  STAR_COL: [
+    ['#e8925a', '#a85c30', '#ffc088'],
+    ['#d8607a', '#963a50', '#f0a0b0'],
+    ['#e0c05a', '#a08830', '#f8e090'],
+  ],
+  _drawCritters(ctx, t) {
+    if (!this.critters) return;
+    // Every quad below is a multiple of q, so q IS the critter's pixel size. One
+    // texel made a crab four units across, which at this zoom is a speck you
+    // would never notice; two makes him eight, about a shell, which reads.
+    const q = APIX * 2;
+    const snap = (v) => Math.round(v / q) * q;
+    for (let i = 0; i < this.critters.length; i++) {
+      const k = this.critters[i];
+      if (!k.seeded) continue;
+      const sx = snap(k.x - this.camX), sy = snap(k.y - this.camY);
+      if (sx < -20 || sx > W + 20 || sy < -20 || sy > H + 20) continue;
+      const flat = k.hide;                                  // 0 upright, 1 ducked
+      if (k.kind === 1) {
+        // ---- starfish: five arms, and it clings tighter when you pass
+        const col = this.STAR_COL[k.hue];
+        const a = 1 - flat * 0.15;
+        const r = snap(3.5 * a);
+        ctx.fillStyle = col[1];
+        ctx.fillRect(sx - r - q, sy - r - q, (r + q) * 2, (r + q) * 2 - q);
+        ctx.fillStyle = col[0];
+        ctx.fillRect(sx - r, sy - r, r * 2, r * 2 - q);
+        // the arms, as four spurs and a middle highlight
+        ctx.fillRect(sx - r - q, sy - q, q, q * 2);
+        ctx.fillRect(sx + r, sy - q, q, q * 2);
+        ctx.fillRect(sx - q, sy - r - q, q * 2, q);
+        ctx.fillStyle = col[2];
+        ctx.fillRect(sx - q, sy - q, q * 2, q * 2);
+        continue;
+      }
+      // ---- crab
+      const col = this.CRIT_COL[k.hue];
+      const step = Math.sin(t * 7 + k.ph) > 0 ? q : 0;      // two-frame leg wiggle
+      const d = k.dir;
+      const lift = snap((1 - flat) * 1.5);                  // ducked = down on the sand
+      const cy = sy - lift;
+      // legs first, so the shell sits over them
+      ctx.fillStyle = col[1];
+      for (let L = -1; L <= 1; L += 2) {
+        ctx.fillRect(sx + L * q * 2, cy + q, q, q + (L > 0 ? step : q - step));
+        ctx.fillRect(sx + L * q * 4, cy + q, q, q + (L > 0 ? q - step : step));
+      }
+      // claws, held out in front
+      ctx.fillRect(sx + d * q * 5, cy - q, q * 2, q * 2);
+      ctx.fillRect(sx - d * q * 5, cy - q, q * 2, q * 2);
+      // the shell: outline, body, highlight
+      ctx.fillStyle = col[1];
+      ctx.fillRect(sx - q * 4, cy - q * 3, q * 8, q * 4);
+      ctx.fillStyle = col[0];
+      ctx.fillRect(sx - q * 3, cy - q * 2 - (1 - flat) * 0, q * 6, q * 3);
+      ctx.fillStyle = col[2];
+      ctx.fillRect(sx - q * 2, cy - q * 2, q * 4, q);
+      // eyes on stalks, and they go away when he ducks
+      if (flat < 0.5) {
+        ctx.fillStyle = '#11202c';
+        ctx.fillRect(sx - q * 2, cy - q * 4, q, q);
+        ctx.fillRect(sx + q, cy - q * 4, q, q);
+      }
+    }
+  },
+
   _drawSpills(ctx) {
     for (let i = 0; i < this.spills.length; i++) {
       const s = this.spills[i];
@@ -3331,7 +3603,10 @@ const Ocean = {
     ctx.save();
     // snapped to the SPRITE's texel pitch, not to DPX: at DPX he could land on a
     // half-texel and shimmer against everything else in the scene
-    const q2 = APIX * (this.ZOOM || 1);
+    // ...on a whole DEVICE pixel. A baked bitmap is not on the texel grid any
+    // more -- it is a picture -- so the finest correct grid for it is the screen's
+    // own, and anything coarser throws away smoothness of motion for nothing.
+    const q2 = 1 / (DPX * (this.ZOOM || 1));
     ctx.translate(Math.round(sx / q2) * q2, Math.round(sy / q2) * q2);
     // NO BANK, NO SQUASH. THIS IS WHY HE FLICKERED.
     //
@@ -3373,9 +3648,19 @@ const Ocean = {
     // The roll's and dash's squash goes on the drawn SIZE, snapped to whole
     // texels -- not on ctx.scale, which resamples. (It was being computed and
     // then silently dropped, so a barrel roll had no weight at all.)
-    const qw = APIX * (this.ZOOM || 1);
-    const dw = Math.max(qw, Math.round(w * sqx / qw) * qw);
-    const dh = Math.max(qw, Math.round(h * sqy / qw) * qw);
+    // EXACT AT ANY ZOOM.
+    //
+    // Snapping the drawn size to the texel grid is not enough on its own: the
+    // bitmap that gets blitted is an integer number of device pixels, so unless
+    // the DESTINATION is exactly that many device pixels too, the browser
+    // resamples it and we are back to dropped rows. So the integer bitmap size is
+    // the source of truth and the drawn size is derived from it -- then
+    // dw * DPX * ZOOM is the bitmap width by construction, whatever the zoom is.
+    const Z = DPX * (this.ZOOM || 1);          // device pixels per logical unit
+    const bw = Math.max(1, Math.round(w * sqx * Z));
+    const bh = Math.max(1, Math.round(h * sqy * Z));
+    const dw = bw / Z, dh = bh / Z;
+    const qw = 1 / Z;                          // one device pixel, in logical units
     // BAKE ONCE, BLIT 1:1. THIS IS THE TEAR.
     //
     // The cruise frames are 233x97 source pixels drawn at 324x135 canvas pixels
@@ -3390,8 +3675,17 @@ const Ocean = {
     // for good -- the bridge is resolved a single time, identically for the life
     // of the scene, and the blit that reaches the screen is a straight copy.
     // Nothing can drop a row per frame when nothing is scaled per frame.
-    const baked = this._bakeFrame(this.animFrame, dw, dh);
-    ctx.drawImage(baked || img, -dw / 2, -dh / 2, dw, dh);
+    // ...and shifted so the BODY lands in the same place every frame (see ANCHOR).
+    // Snapped, like everything else here, so the correction cannot itself put the
+    // sprite on a half texel.
+    const an = this.ANCHOR[this.animFrame];
+    let ax = 0, ay = 0;
+    if (an) {
+      ax = -Math.round(an[0] * dw / qw) * qw;
+      ay = -Math.round(an[1] * dh / qw) * qw;
+    }
+    const baked = this._bakeFrame(this.animFrame, bw, bh);
+    ctx.drawImage(baked || img, ax - dw / 2, ay - dh / 2, dw, dh);
     ctx.restore();
     ctx.globalAlpha = 1;
   },
