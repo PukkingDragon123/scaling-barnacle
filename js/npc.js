@@ -367,7 +367,12 @@ const NPCs = {
       this.add(key, NPC_TALK_PTS);
     }
     if (n.rewards) said = said.concat(this._claimRewards(n, r));
-    if (key === 'prof') said.push('Now then. Your next step, and I have thought about it: ' + this.hint());
+    // (THE HINT IS NOT PART OF THE GREETING ANY MORE. Every conversation with
+    // Fintan used to end with 'Now then. Your next step, and I have thought about
+    // it: ...' whether you wanted it or not, stapled onto whatever random line
+    // the pool had picked and whatever reward had just landed -- three unrelated
+    // paragraphs read as one, which is what made it not make sense. It is a
+    // question you ASK now: the ADVICE button.)
     // and then, last, whether they have work for you -- said plainly, because
     // the whole point of an errand is that somebody asked
     const tk = this._taskOf(key);
@@ -631,8 +636,12 @@ const NPCs = {
       return;
     }
 
-    // talk mode: buttons first, so a click on one never also advances the page
-    if (clicked) {
+    // talk mode: buttons first, so a click on one never also advances the page.
+    // They are only LIVE while they are DRAWN -- the draw shows them once the last
+    // page has finished typing -- or a click aimed at the page turn would land on
+    // a button that had not appeared yet.
+    const shown = this.shown >= this._pageLen() && this.page >= this.pages.length - 1;
+    if (clicked && shown) {
       const bye = this._btn('bye');
       if (this._in(bye, mx, my)) { this.close(); return; }
       const gb = this._btn('gift');
@@ -643,6 +652,13 @@ const NPCs = {
       }
       const tb = this._btn('task');
       if (this._in(tb, mx, my)) { this.doTask(this.who); return; }
+      const ab = this._btn('ask');
+      if (this._in(ab, mx, my)) {
+        const nn = this.byKey(this.who);
+        this._setPages([`${nn ? nn.name : 'They'} thinks for a moment. "${this.hint()}"`]);
+        SND.click();
+        return;
+      }
     }
     // [Q] is the keyboard's version of the TASK button, so an errand can be
     // taken and handed in without a mouse.
@@ -660,6 +676,7 @@ const NPCs = {
     const r = this._rect();
     const y = r.y + r.h - 20;
     if (which === 'next') return { x: r.x + 88, y: y, w: 60, h: 16 };
+    if (which === 'ask') return { x: r.x + 184, y: y, w: 58, h: 16 };
     if (which === 'task') return { x: r.x + r.w - 200, y: y, w: 62, h: 16 };
     if (which === 'gift') return { x: r.x + r.w - 134, y: y, w: 58, h: 16 };
     return { x: r.x + r.w - 70, y: y, w: 56, h: 16 };   // 'bye' and 'back' share the slot
@@ -851,13 +868,22 @@ const NPCs = {
       // ...and a button to press, rather than the name of a key. Clicking
       // anywhere in the box still turns the page, so this is an affordance and
       // not a new gate -- but it is the thing a thumb goes for.
-      this._button(c, this._btn('next'), more ? 'NEXT' : 'OK', true, mx, my);
+      if (more) this._button(c, this._btn('next'), 'NEXT', true, mx, my);
     }
 
+    // ---- THE CHOICES, and they arrive when the talking stops ------------------
+    //
+    // They used to be on screen from the first character of the first page, which
+    // is why a conversation felt like a form rather than a conversation: you were
+    // being asked to choose before anybody had finished a sentence. Now the box
+    // says its piece -- NEXT, NEXT -- and when there is nothing left to read, the
+    // four things you can do about it appear together.
+    if (!done || more) return;
     const canG = this.canGift(this.who);
     const gRec = this.rec(this.who);
     const gaveToday = gRec && gRec.giftDay === G.day;
     const tk = this._taskOf(this.who);
+    this._button(c, this._btn('ask'), 'ADVICE', true, mx, my);
     // a hand-in waiting is worth a nudge: the button gets a gold pip on it
     const tr = this._btn('task');
     this._button(c, tr, this._taskLabel(this.who), !!tk, mx, my);

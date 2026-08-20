@@ -140,7 +140,6 @@ const Ocean = {
 
   // ---- pool sizes -------------------------------------------------------------
   BUB_MAX: 96, MOTE_MAX: 72, RING_MAX: 10, SPILL_MAX: 8, SIL_MAX: 3, DROP_MAX: 30,
-  SHOAL_MAX: 4, SHOAL_N: 18,      // small fish, in shoals: see _drawShoals
 
   // ---- animation table --------------------------------------------------------
   // `box` is the longest side of the sprite in logical units, so a wide cruise
@@ -249,7 +248,6 @@ const Ocean = {
   _ft: 0.016, _qt: 0,
   _prevDir: null, _tapT: null, _prevDash: false,
   bubbles: null, motes: null, rings: null, spills: null, sils: null, drops: null,
-  shoals: null,
   _chunks: null, _order: null,
   // seabed: one 1-D cache keyed by chunk COLUMN, plus two scratch sample rows for
   // the bed and the ridge behind it (allocated once, refilled every frame)
@@ -358,36 +356,6 @@ const Ocean = {
     this._tapT = [0, 0, 0, 0];
     this.sils = new Array(this.SIL_MAX);
     for (let i = 0; i < this.SIL_MAX; i++) this.sils[i] = { art: '', fx: 0, fy: 0, vx: 0, w: 120, ph: 0 };
-    // ---- SHOALS ---------------------------------------------------------------
-    //
-    // The water column had NOTHING in it. Between the surface line and the sand
-    // there was a flat blue field: you swam through a hundred units of empty
-    // gradient to get anywhere, which is what makes the sea feel like a
-    // background instead of a place. Big silhouettes drift past (SIL_MAX is 3)
-    // but they are far-layer scenery, once a minute.
-    //
-    // Small fish, in shoals, are the cheapest possible fix and the right one:
-    // each fish is two quads, they hold formation with a wobble, and they turn
-    // as one. No gradients, no translucent bands, nothing procedural to look
-    // wrong -- just something alive between you and the floor.
-    this.shoals = new Array(this.SHOAL_MAX);
-    const srng = mulberry32(0x5F0A15);
-    for (let i = 0; i < this.SHOAL_MAX; i++) {
-      const fish = new Array(this.SHOAL_N);
-      for (let j = 0; j < this.SHOAL_N; j++) {
-        // A TIGHT formation. The first pass spread them over 74x30 units, which
-        // at this zoom is most of a screen: eighteen specks scattered that wide
-        // read as confetti, not as a shoal. Fish hold a body length or two off
-        // each other, and that is what makes a cluster read as one animal.
-        fish[j] = {
-          ox: (srng() - 0.5) * 34, oy: (srng() - 0.5) * 13,
-          ph: srng() * TAU, sp: 0.8 + srng() * 0.8, big: srng() < 0.3,
-        };
-      }
-      this.shoals[i] = {
-        x: 0, y: 0, vx: 0, dep: 0.4 + srng() * 0.5, hue: (srng() * 3) | 0, fish: fish, seeded: false,
-      };
-    }
     // The cloud bank. Fixed count, fixed art, deterministic layout: it scrolls in
     // its own wide space and is pinned to the horizon, so it never needs updating.
     const crng = mulberry32(0x0C10D5);
@@ -1630,43 +1598,6 @@ const Ocean = {
       if (sy < -200) s.fy += H + 340;
       else if (sy > H + 200) s.fy -= H + 340;
     }
-    this._updateShoals(dt);
-  },
-
-  // Shoals hold formation and get recycled around the camera, so four of them
-  // cover the whole sea without ever allocating.
-  _updateShoals(dt) {
-    if (!this.shoals) return;
-    const floorY = this.floorAt ? this.floorAt(this.px) : this.camY + this.VH;
-    for (let i = 0; i < this.shoals.length; i++) {
-      const sh = this.shoals[i];
-      if (!sh.seeded) {
-        sh.seeded = true;
-        sh.x = this.camX + (i % 2 ? -1 : 1) * (140 + i * 90);
-        // spread down the WHOLE column, not all bunched under the waterline
-        sh.y = this.camY + 30 + (i / this.SHOAL_MAX) * (this.VH - 70);
-        sh.vx = (i % 2 ? -1 : 1) * (16 + i * 5);
-      }
-      sh.x += sh.vx * dt;
-      // gentle vertical wander, and never below the sand or above the waterline
-      sh.y += Math.sin(this.time * 0.4 + i * 1.9) * 7 * dt;
-      const lo = this.camY + 16, hi = Math.min(this.camY + this.VH - 14, floorY - 22);
-      if (sh.y < lo) sh.y = lo;
-      if (sh.y > hi) sh.y = Math.max(lo, hi);
-      // off one side: come back on the other, at a fresh depth, going the other way
-      const rel = sh.x - this.camX;
-      const span = Math.max(40, this.VH - 70);
-      if (rel < -180) { sh.x = this.camX + this.VW + 150; sh.vx = -Math.abs(sh.vx); sh.y = this.camY + 30 + Math.abs((sh.x * 7) % span); }
-      else if (rel > this.VW + 180) { sh.x = this.camX - 150; sh.vx = Math.abs(sh.vx); sh.y = this.camY + 30 + Math.abs((sh.x * 11) % span); }
-      // ...and they SCATTER when Otto barges through them
-      const dx = this.px - sh.x, dy = this.py - sh.y;
-      if (dx * dx + dy * dy < 46 * 46) {
-        sh.vx += (sh.x < this.px ? -1 : 1) * 34 * dt;
-        sh.vx = clamp(sh.vx, -58, 58);
-      } else if (Math.abs(sh.vx) > 22) {
-        sh.vx += (sh.vx > 0 ? -1 : 1) * 12 * dt;    // settle back to a cruise
-      }
-    }
   },
 
   // ---- camera -----------------------------------------------------------------
@@ -1801,6 +1732,32 @@ const Ocean = {
     this.animPrev = def.f[prev];
     this.animMix = 1;
     this.animBox = def.box;
+  },
+
+  // One frame, resampled to exactly the pixels it will occupy on the canvas, so
+  // the draw is a straight copy. Keyed on the destination size, so a zoom change
+  // rebakes rather than stretching.
+  _bakeFrame(name, dw, dh) {
+    const img = ASSETS[name];
+    if (!img || !img.width) return null;
+    const pw = Math.max(1, Math.round(dw * DPX * (this.ZOOM || 1)));
+    const ph = Math.max(1, Math.round(dh * DPX * (this.ZOOM || 1)));
+    this._fbake = this._fbake || {};
+    const key = name + '|' + pw + 'x' + ph;
+    const hit = this._fbake[key];
+    if (hit) return hit;
+    if (this._fbakeN > 80) { this._fbake = {}; this._fbakeN = 0; }
+    const cv = document.createElement('canvas');
+    cv.width = pw; cv.height = ph;
+    const c = cv.getContext('2d');
+    // NEAREST for the bake. This is an UPSCALE (the sheets are smaller than the
+    // space they are drawn in), so nothing is lost by not interpolating, and
+    // interpolating would put grey along every edge of a hard-edged sprite.
+    c.imageSmoothingEnabled = false;
+    c.drawImage(img, 0, 0, pw, ph);
+    this._fbake[key] = cv;
+    this._fbakeN = (this._fbakeN || 0) + 1;
+    return cv;
   },
 
   // Pixels-per-logical-unit for an action, from the LARGEST frame in it, so every
@@ -2119,7 +2076,6 @@ const Ocean = {
     this._drawFloor(ctx, t);
     this._drawHome(ctx, t);
     this._drawProps(ctx, t, false);
-    this._drawShoals(ctx, t);
     this._drawMotes(ctx, t);
     this._drawBubbles(ctx);
     this._drawDrops(ctx);
@@ -3017,6 +2973,12 @@ const Ocean = {
   },
 
   _drawSunGlow(ctx, t) {
+    // OFF. An additive disc hung under the sun and washed a pale teal blob over
+    // the middle of the water -- a light with no source in the scene, sitting on
+    // top of a background that already paints its own shafts. Same reason the god
+    // rays and the caustics went.
+    return;
+    /* eslint-disable no-unreachable */
     if (typeof G === 'undefined' || !G) return;
     const clock = G.clock;
     const isDay = clock > 0.09 && clock < 0.72;
@@ -3281,42 +3243,6 @@ const Ocean = {
     ctx.lineWidth = 1;
   },
 
-  // Two quads a fish: a body and a tail notch, in one of three cool colours so a
-  // shoal reads as a species rather than as debris. They tint towards the water
-  // with depth, which is the only "effect" here -- no alpha bands, no gradients.
-  SHOAL_COL: [
-    ['#cfe9d8', '#8fbcae'],     // silver baitfish
-    ['#8fe0ea', '#4fa8c8'],     // blue-green
-    ['#e8b98a', '#b8865c'],     // warm, for the reef ones
-  ],
-  _drawShoals(ctx, t) {
-    if (!this.shoals) return;
-    const n = this.quality > 0 ? this.shoals.length : Math.max(1, this.shoals.length >> 1);
-    for (let i = 0; i < n; i++) {
-      const sh = this.shoals[i];
-      if (!sh.seeded) continue;
-      const bx = sh.x - this.camX * sh.dep - this.camX * (1 - sh.dep);
-      const by = sh.y - this.camY;
-      if (bx < -110 || bx > W + 110 || by < -70 || by > H + 70) continue;
-      const col = this.SHOAL_COL[sh.hue] || this.SHOAL_COL[0];
-      // far shoals sit back into the water rather than being drawn smaller only
-      ctx.globalAlpha = 0.35 + sh.dep * 0.5;
-      const dir = sh.vx >= 0 ? 1 : -1;
-      const q = APIX;
-      for (let j = 0; j < sh.fish.length; j++) {
-        const f = sh.fish[j];
-        const wob = Math.sin(t * (2.2 + f.sp) + f.ph) * 1.6;
-        const fx = Math.round((bx + f.ox * dir) / q) * q;
-        const fy = Math.round((by + f.oy + wob) / q) * q;
-        const w = f.big ? 4 : 3, h = f.big ? 2 : 1.5;
-        ctx.fillStyle = col[f.big ? 0 : 1];
-        ctx.fillRect(fx, fy, w, h);                       // body
-        ctx.fillRect(fx - dir * q * 2, fy - q, q * 2, h + q * 2);   // the forked tail
-      }
-      ctx.globalAlpha = 1;
-    }
-  },
-
   _drawSpills(ctx) {
     for (let i = 0; i < this.spills.length; i++) {
       const s = this.spills[i];
@@ -3450,7 +3376,22 @@ const Ocean = {
     const qw = APIX * (this.ZOOM || 1);
     const dw = Math.max(qw, Math.round(w * sqx / qw) * qw);
     const dh = Math.max(qw, Math.round(h * sqy / qw) * qw);
-    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+    // BAKE ONCE, BLIT 1:1. THIS IS THE TEAR.
+    //
+    // The cruise frames are 233x97 source pixels drawn at 324x135 canvas pixels
+    // -- a 1.39x scale, and nothing makes that a whole number. With smoothing off
+    // a fractional nearest-neighbour scale keeps some source rows and drops
+    // others, and WHICH ones depends on the exact destination. Otto's tail is
+    // joined to his body by a two-pixel bridge in the art, so the bridge survived
+    // at one size and vanished at the next: that is the severed tail, and it
+    // moves because the resampling moves.
+    //
+    // Resampling each frame ONCE into a bitmap of exactly the right size fixes it
+    // for good -- the bridge is resolved a single time, identically for the life
+    // of the scene, and the blit that reaches the screen is a straight copy.
+    // Nothing can drop a row per frame when nothing is scaled per frame.
+    const baked = this._bakeFrame(this.animFrame, dw, dh);
+    ctx.drawImage(baked || img, -dw / 2, -dh / 2, dw, dh);
     ctx.restore();
     ctx.globalAlpha = 1;
   },

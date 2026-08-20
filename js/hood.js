@@ -167,24 +167,30 @@ const Hood = {
   // dking_* is the pink dolphin elder with the trident, dfarm_* the dolphin
   // farmhand; Marlow keeps the anglerfish sheet he already had. All three are 4x4
   // sheets: 0-3 idle, 4-7 walking, 8-11 working, 12-15 the expressive row.
+  //
+  // deckH is how tall they stand ON THEIR OWN DECK, and it was wrong: 38-44 units
+  // against a house whose door alone is about 70, so a neighbour came up to two
+  // thirds of their own doorway and read as a child standing outside a building.
+  // A person is roughly a door tall. h -- their size out in the water, seen from
+  // a distance -- is unchanged; that one was never the complaint.
   CAST: {
     prof: {
       key: 'prof', name: 'Fintan', short: 'the elder', art: 'dking',
-      h: 30, deckH: 44, faceR: true,
+      h: 30, deckH: 66, faceR: true,
       idle: [0, 1, 2, 3], walk: [4, 5, 6, 7], work: [8, 9, 10, 11], wave: [12, 13, 14, 15],
       crop: 'moon',
       loves: ['pearl', 'pearlPol', 'abalonePol', 'crystal', 'abalone'],
     },
     farmer: {
       key: 'farmer', name: 'Sprout', short: 'the farmhand', art: 'dfarm',
-      h: 26, deckH: 38, faceR: true,
+      h: 26, deckH: 58, faceR: true,
       idle: [0, 1, 2, 3], walk: [4, 5, 6, 7], work: [8, 9, 10, 11], wave: [12, 13, 14, 15],
       crop: 'berry',
       loves: ['crop_berry_p', 'crop_gourd_p', 'crop_moon_p', 'crop_curl_p', 'crop_blade_p'],
     },
     angler: {
       key: 'angler', name: 'Marlow', short: 'the fisherman', art: 'angler',
-      h: 28, deckH: 40, faceR: true,
+      h: 28, deckH: 60, faceR: true,
       idle: [0, 1, 2, 3], walk: [4, 5, 6, 7], work: [8, 9, 10, 11], wave: [12, 13],
       crop: 'blade',
       loves: ['roe', 'musselMeat', 'abalone', 'mussel', 'clamMeat'],

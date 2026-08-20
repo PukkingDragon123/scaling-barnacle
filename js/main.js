@@ -721,8 +721,10 @@ const Game = {
     const a = Math.PI + tt * Math.PI;
     const sx2 = snapv(dx + Math.cos(a) * dr), sy2 = snapv(dy + Math.sin(a) * dr);
     // drawn art rather than hand-plotted rects, so the dial matches the icons
-    PixIcons.draw(c, isDay ? 'sun' : 'moon', sx2, sy2, 11,
-      { t: Game.time, fx: isDay ? 'spin' : 'bob' });
+    // The sun does NOT spin. A quarter-turn sun is still a sun, so spinning it
+    // says nothing -- and it was the one thing on the HUD being re-rasterised
+    // every frame. It rides the dial; that is the animation.
+    PixIcons.draw(c, isDay ? 'sun' : 'moon', sx2, sy2, 11, { t: Game.time, fx: 'bob' });
     // (the [H]/[J] hint used to live here; the tracker below is the affordance
     // now, and the help screen itself lists the keys)
 

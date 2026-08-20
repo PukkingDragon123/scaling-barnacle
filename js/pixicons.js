@@ -238,35 +238,49 @@ const PixIcons = {
     const rec = this.sheet(px);
     const w = px * this.S / DPX;
 
+    // NOTHING HERE IS ALLOWED TO RESAMPLE.
+    //
+    // 'spin' was a free ctx.rotate and 'pulse'/'tick' a free ctx.scale and a small
+    // rotate -- applied every frame to a twelve-by-twelve hard-edged glyph with
+    // smoothing off. That is nearest-neighbour resampling under a continuously
+    // changing transform: rows and columns of the icon get dropped, and which
+    // ones move. The day badge's sun was the worst of it. It span, so it was a
+    // differently mangled sun every single frame, which is exactly why it read as
+    // a fuzzy blob instead of pixel art.
+    //
+    // So: offsets snap to the icon's own pixel pitch, a squash changes the drawn
+    // SIZE in whole icon-pixels rather than going through ctx.scale, and rotation
+    // is only ever an exact quarter turn (a lossless transpose). Every effect
+    // still plays; none of them can eat a pixel.
     const t = o.t || 0, ph = o.phase || 0;
-    let dx = 0, dy = 0, sx = 1, sy = 1, rot = 0;
+    const q = px / DPX;                 // one icon-pixel, in logical units
+    const snap = (v) => Math.round(v / q) * q;
+    let dx = 0, dy = 0, ss = 1, quarter = 0;
     switch (o.fx) {
-      case 'bob':   dy = Math.round(Math.sin(t * 2.6 + ph) * 1.2 / APIX) * APIX; break;
-      case 'pulse': sx = sy = 1 + Math.sin(t * 4 + ph) * 0.08; break;
-      case 'tick':  rot = Math.sin(t * 3 + ph) * 0.10; break;
-      case 'spin':  rot = t * 1.4 + ph; break;
-      case 'shake': dx = Math.round(Math.sin(t * 26 + ph) * 0.8 / APIX) * APIX; break;
+      case 'bob':   dy = snap(Math.sin(t * 2.6 + ph) * 1.2); break;
+      case 'pulse': ss = 1 + Math.sin(t * 4 + ph) * 0.08; break;
+      case 'tick':  dy = snap(Math.sin(t * 3 + ph) * 0.7); break;   // a nod, not a tilt
+      case 'spin':  quarter = ((Math.floor(t * 1.4 + ph) % 4) + 4) % 4; break;
+      case 'shake': dx = snap(Math.sin(t * 26 + ph) * 0.8); break;
       default: break;
     }
-    if (o.pop > 0) {                       // squash out, settle back
-      const k = Math.sin(o.pop * Math.PI);
-      sx *= 1 + k * 0.35; sy *= 1 - k * 0.18;
-    }
+    if (o.pop > 0) ss *= 1 + Math.sin(o.pop * Math.PI) * 0.3;
+
+    // the squash lands on whole icon-pixels, so every row stays one pixel wide
+    const dw = Math.max(q, Math.round(w * ss / q) * q);
 
     const sm = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = false;
     if (o.alpha !== undefined) { ctx.save(); ctx.globalAlpha = o.alpha; }
-    if (rot || sx !== 1 || sy !== 1) {
+    if (quarter) {
       ctx.save();
-      ctx.translate(cx + dx, cy + dy);
-      ctx.rotate(rot);
-      ctx.scale(sx, sy);
-      ctx.drawImage(rec.cv, i * rec.cw, 0, rec.cw, rec.cw, -w / 2, -w / 2, w, w);
+      ctx.translate(snap(cx + dx), snap(cy + dy));
+      ctx.rotate(quarter * Math.PI / 2);
+      ctx.drawImage(rec.cv, i * rec.cw, 0, rec.cw, rec.cw, -dw / 2, -dw / 2, dw, dw);
       ctx.restore();
     } else {
-      const q = 1 / DPX;
       ctx.drawImage(rec.cv, i * rec.cw, 0, rec.cw, rec.cw,
-        Math.round((cx + dx - w / 2) / q) * q, Math.round((cy + dy - w / 2) / q) * q, w, w);
+        snap(cx + dx - dw / 2), snap(cy + dy - dw / 2), dw, dw);
     }
     if (o.alpha !== undefined) ctx.restore();
     ctx.imageSmoothingEnabled = sm;
