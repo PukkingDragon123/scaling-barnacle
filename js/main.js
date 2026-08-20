@@ -43,16 +43,42 @@ const Input = {
 // canvas is free to shrink-wrap it (its own width can't be the input, or the
 // measurement would be circular). Optional --fit-inset accounts for that frame.
 function fitHost() {
-  return canvas.closest('[data-fit]') || canvas.parentElement;
+  return canvas.closest('[data-fit]');
+}
+
+// THE VISIBLE AREA, NOT THE LAYOUT AREA.
+//
+// innerHeight (and a position:fixed element's own height) is the LAYOUT
+// viewport, which on iOS includes the strip sitting behind Safari's toolbar. On
+// an iPad that is the better part of an inch: the game was being centred in a
+// box taller than the screen, so the bottom of the picture -- the hotbar, the
+// touch pads -- lived underneath the tab bar where you cannot see or press it.
+// visualViewport is the part you can actually see, and it shrinks and grows as
+// the toolbar slides away, which is why it needs its own listeners below.
+function viewportSize() {
+  const vv = window.visualViewport;
+  if (vv && vv.width > 0 && vv.height > 0) {
+    // vv.scale is pinch zoom; dividing it out keeps a pinch from resizing the
+    // canvas underneath the player's fingers.
+    const k = vv.scale && vv.scale > 0 ? vv.scale : 1;
+    return { w: vv.width * k, h: vv.height * k };
+  }
+  return { w: window.innerWidth, h: window.innerHeight };
 }
 
 function resize() {
   const host = fitHost();
-  let availW = window.innerWidth, availH = window.innerHeight;
+  const vp = viewportSize();
+  let availW = vp.w, availH = vp.h;
   if (host && host.clientWidth) {
     const inset = parseFloat(getComputedStyle(host).getPropertyValue('--fit-inset')) || 0;
     availW = host.clientWidth - inset;
     availH = host.clientHeight - inset;
+  } else {
+    // the letterbox has to be the visible box too, or the picture is centred
+    // against the wrong middle
+    const wrap = canvas.parentElement;
+    if (wrap) { wrap.style.width = `${availW}px`; wrap.style.height = `${availH}px`; }
   }
   // SNAP IN DEVICE PIXELS, NOT CSS PIXELS.
   //
@@ -69,15 +95,31 @@ function resize() {
   // suggested. Snapping there gives 844/dpr3: floor(2532/480) = 5 physical
   // pixels per unit = 1.667 CSS, which fills 800 of the 844 AND is exactly
   // crisp. Falls back to the old half-step rule when dpr is 1.
+  //
+  // AND SNAP UP WHEN THE NEXT STEP ONLY JUST OVERFLOWS.
+  //
+  // Rounding down is what left an iPad looking un-fullscreen even with every
+  // toolbar gone. An 11-inch iPad in landscape is 1194x834 CSS at dpr 2, so
+  // 2388 device pixels across 480 units = 4.97 per unit -- and flooring that to
+  // 4 draws the game 960 CSS wide inside 1194, filling 58% of the screen with
+  // desk around it. The step it wanted was RIGHT THERE, 12 device pixels out of
+  // 2388 away: 0.5%. Allowing the picture to spill a couple of percent and be
+  // cropped by the letterbox takes the same iPad to 1200x675 -- the full width
+  // of the display -- and stays exactly on whole pixels. Nothing is lost: three
+  // CSS pixels a side is a fifth of a logical unit, and the HUD sits six units
+  // in. The budget is deliberately small; a screen that needs more than that is
+  // genuinely between steps and gets the letterbox.
   const dpr = Math.max(1, Math.min(4, window.devicePixelRatio || 1));
   const scaleRaw = Math.min(availW / W, availH / H);
+  const SPILL = 1.02;
   let scale;
   if (scaleRaw < 1) {
     scale = Math.max(0.1, scaleRaw);                       // smaller than 1:1: nothing to snap to
-  } else if (dpr > 1) {
-    scale = Math.max(1 / dpr, Math.floor(scaleRaw * dpr) / dpr);
   } else {
-    scale = Math.max(1, Math.floor(scaleRaw * 2) / 2);
+    const q = dpr > 1 ? dpr : 2;                           // step size: device pixels, or half steps at dpr 1
+    let n = Math.max(1, Math.floor(scaleRaw * q));
+    if ((n + 1) / q <= (availW / W) * SPILL && (n + 1) / q <= (availH / H) * SPILL) n += 1;
+    scale = Math.max(1 / q, n / q);
   }
   canvas.style.width = `${W * scale}px`;
   canvas.style.height = `${H * scale}px`;
@@ -87,6 +129,19 @@ if (window.ResizeObserver) {
   const host = fitHost();
   if (host) new ResizeObserver(resize).observe(host);
 }
+// iOS changes the visible area WITHOUT firing a window resize -- the toolbar
+// sliding away on a scroll, and the whole rotation, both arrive here instead.
+// It also reports stale sizes for a beat or two after a rotation, so re-measure
+// on a couple of delays rather than trusting the first answer.
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', resize);
+  window.visualViewport.addEventListener('scroll', resize);
+}
+window.addEventListener('orientationchange', () => {
+  resize();
+  setTimeout(resize, 120);
+  setTimeout(resize, 420);
+});
 
 window.addEventListener('keydown', (e) => {
   SND.init(); SND.resume();
@@ -236,7 +291,38 @@ const Fullscreen = {
     return !!(e.requestFullscreen || e.webkitRequestFullscreen ||
               e.webkitRequestFullScreen || e.msRequestFullscreen);
   },
+
+  // iPadOS reports itself as a Mac -- same user agent, same platform string --
+  // so the only thing that separates an iPad from a MacBook is that it has
+  // touch points. Both halves of the test are needed.
+  ios() {
+    const ua = navigator.userAgent || '';
+    if (/iPad|iPhone|iPod/.test(ua)) return true;
+    return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+  },
+
+  // Launched from the Home Screen the page already runs with no browser chrome
+  // whatsoever, so there is nothing left to toggle and no button to draw.
+  standalone() {
+    if (navigator.standalone) return true;
+    if (!window.matchMedia) return false;
+    return matchMedia('(display-mode: fullscreen)').matches ||
+           matchMedia('(display-mode: standalone)').matches;
+  },
+
+  // Safari on iPhone and iPad has never given the Fullscreen API to anything
+  // but a <video>, so on the device where the toolbars cost the MOST screen the
+  // button had nothing to call -- and, worse, was not drawn at all, so it read
+  // as "this game cannot do fullscreen". It draws there now and explains the
+  // one route that does work.
+  available() { return this.supported() || (this.ios() && !this.standalone()); },
+  hint: 0,                          // seconds left on that explanation
+
   toggle() {
+    if (!this.supported()) {
+      if (this.ios() && !this.standalone()) this.hint = this.hint > 0 ? 0 : 8;
+      return;
+    }
     try {
       if (this.on()) {
         const f = document.exitFullscreen || document.webkitExitFullscreen ||
@@ -580,13 +666,24 @@ const Game = {
       drawHeart(c, 11 + i * 10, 10, kind);
     }
     // the fullscreen toggle, if the browser will give us one at all
-    if (typeof Fullscreen !== 'undefined' && Fullscreen.supported()) {
+    if (typeof Fullscreen !== 'undefined' && Fullscreen.available()) {
       const fr = this._fsRect();
       const fh = !TouchUI.enabled && Input.mouse.x >= fr.x && Input.mouse.x <= fr.x + fr.w &&
                  Input.mouse.y >= fr.y && Input.mouse.y <= fr.y + fr.h;
       inkBox(c, fr.x, fr.y, fr.w, fr.h, fh ? UIPAL.lit : UIPAL.hi, UIPAL.mid, PIX * 2);
       PixIcons.draw(c, Fullscreen.on() ? 'shrink' : 'expand',
         fr.x + fr.w / 2, fr.y + fr.h / 2, 12, { t: Game.time, fx: fh ? 'pulse' : null });
+    }
+    // ...and, on an iPad, what to do about it. Tapping the button again (or
+    // waiting) puts this away.
+    if (typeof Fullscreen !== 'undefined' && Fullscreen.hint > 0) {
+      const bw = 190, bh = 56, bx = Math.round(W / 2 - bw / 2), by = 30;
+      uiNote(c, bx, by, bw, bh, { alpha: 0.97 });
+      PixIcons.draw(c, 'expand', bx + 15, by + 15, 13, { t: Game.time, fx: 'bob' });
+      text(c, 'FULL SCREEN ON IPAD', bx + 27, by + 11, { size: 8, color: UIPAL.ink, shadow: false });
+      const lines = textWrap(c, 'Safari cannot do it inside a tab. Tap Share, then Add to Home Screen -- it opens with no bars at all.', bw - 18, 7);
+      for (let i = 0; i < lines.length; i++)
+        text(c, lines[i], bx + 9, by + 24 + i * 9, { size: 7, color: UIPAL.ink2, shadow: false });
     }
     PixIcons.draw(c, 'coin', 15, 27, 13, { t: Game.time, fx: 'tick' });
     text(c, `${G.money}`, 24, 22.5, { size: 9, color: '#662907', shadow: false });
@@ -1094,8 +1191,9 @@ function frame(now) {
     Game.toast(muted ? 'Sound muted.' : 'Sound on.');
   }
   if (typeof Fullscreen !== 'undefined') {
+    if (Fullscreen.hint > 0) Fullscreen.hint -= dt;
     if (Input.p('KeyF')) Fullscreen.toggle();
-    else if (Input.mouse.clicked && G && Game.scene !== TitleScene && Fullscreen.supported()) {
+    else if (Input.mouse.clicked && G && Game.scene !== TitleScene && Fullscreen.available()) {
       const fr = Game._fsRect();
       if (Input.mouse.x >= fr.x && Input.mouse.x <= fr.x + fr.w &&
           Input.mouse.y >= fr.y && Input.mouse.y <= fr.y + fr.h) Fullscreen.toggle();

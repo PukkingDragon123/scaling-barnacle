@@ -1,0 +1,17 @@
+{
+  "name": "Mr. Otto's Clam Farm",
+  "short_name": "Clam Farm",
+  "description": "A cozy pier, a clam farm, and an otter with a satchel.",
+  "start_url": "index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#1a1208",
+  "theme_color": "#1a1208",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

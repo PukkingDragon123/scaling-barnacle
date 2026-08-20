@@ -3,10 +3,30 @@
 <head>
 <meta charset="utf-8">
 <title>Mr. Otto's Clam Farm</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+
+<!-- FULL SCREEN ON IPAD.
+     Safari on iPadOS does not implement the Fullscreen API for elements -- only
+     a <video> can go fullscreen -- so the [F] button has nothing to call there.
+     The one route that does work is the Home Screen: with these tags the page
+     launches as its own app with no address bar, no tab bar and no toolbar at
+     all, which is more screen than desktop fullscreen gives back. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Clam Farm">
+<meta name="theme-color" content="#1a1208">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
 <style>
   html, body {
-    margin:0; padding:0; height:100%; overflow:hidden;
+    margin:0; padding:0; overflow:hidden;
+    /* 100% resolves against the LAYOUT viewport, which on iOS includes the
+       strip hidden behind Safari's toolbar; dvh is the part you can see, and it
+       follows the toolbar as it slides away. resize() measures visualViewport
+       and sets #wrap in pixels regardless, so this is only the pre-script
+       paint. */
+    height:100%; height:100dvh;
     background:#1a1208;
     /* iOS rubber-bands the document even with overflow:hidden, which drags the
        whole picture up and down under your thumb while you play. */
@@ -19,8 +39,11 @@
      picture. Flat black there reads as a broken page, so it is a desk: warm
      boards with the sheet lying on them. */
   #wrap {
-    position:fixed; inset:0;
+    position:fixed; left:0; top:0; width:100%; height:100%;
     display:flex; align-items:center; justify-content:center;
+    /* the picture is allowed to spill a couple of percent to reach a whole
+       pixel step (see resize) -- the desk crops it, it does not scroll */
+    overflow:hidden;
     touch-action:none;
     background:
       repeating-linear-gradient(90deg,
