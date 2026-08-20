@@ -141,6 +141,7 @@ const Ocean = {
   // ---- pool sizes -------------------------------------------------------------
   BUB_MAX: 96, MOTE_MAX: 72, RING_MAX: 10, SPILL_MAX: 8, SIL_MAX: 3, DROP_MAX: 30,
   CRITTER_MAX: 9,         // crabs and starfish on the sand: see _drawCritters
+  ANGEL_MAX: 7,           // sea angels in the water column: see _drawAngels
 
   // ---- animation table --------------------------------------------------------
   // `box` is the longest side of the sprite in logical units, so a wide cruise
@@ -255,7 +256,7 @@ const Ocean = {
   _ft: 0.016, _qt: 0,
   _prevDir: null, _tapT: null, _prevDash: false,
   bubbles: null, motes: null, rings: null, spills: null, sils: null, drops: null,
-  critters: null,
+  critters: null, angels: null,
   _chunks: null, _order: null,
   // seabed: one 1-D cache keyed by chunk COLUMN, plus two scratch sample rows for
   // the bed and the ridge behind it (allocated once, refilled every frame)
@@ -377,6 +378,21 @@ const Ocean = {
         kind: i % 3 === 2 ? 1 : 0,        // one in three is a starfish
         x: 0, y: 0, dir: krng() < 0.5 ? -1 : 1, sp: 7 + krng() * 7,
         ph: krng() * TAU, hide: 0, hue: (krng() * 3) | 0, seeded: false,
+      };
+    }
+    // ---- SEA ANGELS -----------------------------------------------------------
+    //
+    // Clione: a sea slug the size of a thumbnail that swims by flapping two
+    // little wings, with its orange guts showing through a body you can see
+    // through. Real, and so obviously a cartoon that it needs no stylising -- and
+    // exactly the thing to put in a water column that had nothing in it. Seven of
+    // them, six quads each, flapping.
+    this.angels = new Array(this.ANGEL_MAX);
+    const arng = mulberry32(0x0A96E15);
+    for (let i = 0; i < this.ANGEL_MAX; i++) {
+      this.angels[i] = {
+        x: 0, y: 0, vx: (arng() - 0.5) * 9, ph: arng() * TAU,
+        sp: 2.6 + arng() * 2.2, rise: 5 + arng() * 7, seeded: false,
       };
     }
     // The cloud bank. Fixed count, fixed art, deterministic layout: it scrolls in
@@ -1622,6 +1638,7 @@ const Ocean = {
       else if (sy > H + 200) s.fy -= H + 340;
     }
     this._updateCritters(dt);
+    this._updateAngels(dt);
   },
 
   _updateCritters(dt) {
@@ -1829,6 +1846,8 @@ const Ocean = {
   // One frame, resampled to exactly the pixels it will occupy on the canvas, so
   // the draw is a straight copy. Keyed on the destination size, so a zoom change
   // rebakes rather than stretching.
+  OUTLINE: '#191007',        // the ink every other sprite in this game wears
+
   _bakeFrame(name, pw, ph) {
     const img = ASSETS[name];
     if (!img || !img.width) return null;
@@ -1837,17 +1856,50 @@ const Ocean = {
     const hit = this._fbake[key];
     if (hit) return hit;
     if (this._fbakeN > 80) { this._fbake = {}; this._fbakeN = 0; }
+
+    // ---- AND WHILE WE ARE HERE, GIVE HIM AN OUTLINE ---------------------------
+    //
+    // The sheet does have one: 88% of its boundary pixels are dark. The problem
+    // is that it is ONE SOURCE PIXEL thick, and the sheet is drawn about 1.4x, so
+    // the ink lands on a pixel and a half -- against a game whose every other
+    // sprite is outlined a full texel (three device pixels) thick. A third of a
+    // texel of ink reads as no ink at all, which is why he looked like a cutout
+    // pasted onto the water while the pier behind him had a hard black edge.
+    //
+    // Since the frame is already being baked, the outline comes for free: stamp
+    // the silhouette in ink eight ways at one texel out, then the art on top. All
+    // compositing -- no pixel reads, which matters because a canvas that has had
+    // a file:// image drawn into it cannot be read at all.
+    const pad = Math.max(2, Math.round(APIX * DPX * (this.ZOOM || 1)));
     const cv = document.createElement('canvas');
-    cv.width = pw; cv.height = ph;
+    cv.width = pw + pad * 2; cv.height = ph + pad * 2;
     const c = cv.getContext('2d');
+    c.imageSmoothingEnabled = false;
+
+    const sil = document.createElement('canvas');
+    sil.width = pw; sil.height = ph;
+    const sc = sil.getContext('2d');
+    sc.imageSmoothingEnabled = false;
     // NEAREST for the bake. This is an UPSCALE (the sheets are smaller than the
     // space they are drawn in), so nothing is lost by not interpolating, and
     // interpolating would put grey along every edge of a hard-edged sprite.
-    c.imageSmoothingEnabled = false;
-    c.drawImage(img, 0, 0, pw, ph);
-    this._fbake[key] = cv;
+    sc.drawImage(img, 0, 0, pw, ph);
+    sc.globalCompositeOperation = 'source-in';
+    sc.fillStyle = this.OUTLINE;
+    sc.fillRect(0, 0, pw, ph);
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        if (!dx && !dy) continue;
+        c.drawImage(sil, pad + dx * pad, pad + dy * pad);
+      }
+    }
+    c.drawImage(img, pad, pad, pw, ph);
+
+    const rec = { cv: cv, pad: pad };
+    this._fbake[key] = rec;
     this._fbakeN = (this._fbakeN || 0) + 1;
-    return cv;
+    return rec;
   },
 
   // Pixels-per-logical-unit for an action, from the LARGEST frame in it, so every
@@ -2269,6 +2321,7 @@ const Ocean = {
     // rays, because light shafts stop at the sand.
     this._drawFloor(ctx, t);
     this._drawCritters(ctx, t);
+    this._drawAngels(ctx, t);
     this._drawHome(ctx, t);
     this._drawProps(ctx, t, false);
     this._drawMotes(ctx, t);
@@ -3515,6 +3568,79 @@ const Ocean = {
     }
   },
 
+  // A sea angel: a see-through body with its orange middle showing, two wings
+  // that beat, and a wisp of a tail. Six quads and a flap.
+  _updateAngels(dt) {
+    if (!this.angels) return;
+    const surf = 6;
+    for (let i = 0; i < this.angels.length; i++) {
+      const a = this.angels[i];
+      if (!a.seeded) {
+        a.seeded = true;
+        a.x = this.camX + (i / this.ANGEL_MAX) * this.VW;
+        a.y = this.camY + 30 + (i * 37) % Math.max(40, this.VH - 60);
+      }
+      a.x += a.vx * dt + Math.sin(this.time * 0.7 + a.ph) * 5 * dt;
+      a.y -= a.rise * dt;                       // they climb, slowly
+      // ...and give Otto a wide berth, because something that size would
+      const dx = a.x - this.px, dy = a.y - this.py;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < 34 * 34 && d2 > 1) {
+        const d = Math.sqrt(d2);
+        a.x += (dx / d) * 26 * dt;
+        a.y += (dy / d) * 26 * dt;
+      }
+      // recycled around the camera: up through the surface, back in at the bottom
+      const floor = this.floorAt(a.x) - 12;
+      if (a.y < this.camY - 40 || a.y < surf) { a.y = Math.min(floor, this.camY + this.VH + 30); }
+      if (a.y > floor) a.y = floor;
+      const rel = a.x - this.camX;
+      if (rel < -60) a.x += this.VW + 120;
+      else if (rel > this.VW + 60) a.x -= this.VW + 120;
+    }
+  },
+
+  _drawAngels(ctx, t) {
+    if (!this.angels) return;
+    // q is the angel's pixel. One texel made it six texels across -- a speck --
+    // and two makes it about a third of Otto, which is the right size for a
+    // thumbnail-sized animal and big enough to see the wings beat. Two texels is
+    // six device pixels at this zoom, so it stays exactly on the grid.
+    const q = APIX * 2;
+    const snap = (v) => Math.round(v / q) * q;
+    for (let i = 0; i < this.angels.length; i++) {
+      const a = this.angels[i];
+      if (!a.seeded) continue;
+      const sx = snap(a.x - this.camX), sy = snap(a.y - this.camY);
+      if (sx < -12 || sx > W + 12 || sy < -12 || sy > H + 12) continue;
+      const flap = Math.sin(t * a.sp + a.ph);
+      const up = flap > 0 ? -q : q;              // two frames, no in-between
+      ctx.globalAlpha = 0.85;
+      // the body: pale and see-through, with a darker line down it
+      ctx.fillStyle = '#dff4ff';
+      ctx.fillRect(sx - q, sy - q * 2, q * 2, q * 5);
+      ctx.fillStyle = '#a8d8ee';
+      ctx.fillRect(sx - q, sy + q * 2, q * 2, q);
+      // the orange middle, which is the whole reason it is cute
+      ctx.fillStyle = '#ff9a4a';
+      ctx.fillRect(sx - q, sy - q, q * 2, q * 2);
+      ctx.fillStyle = '#ffd08a';
+      ctx.fillRect(sx - q, sy - q, q, q);
+      // the wings, beating
+      ctx.fillStyle = '#eafaff';
+      ctx.fillRect(sx - q * 3, sy - q * 2 + up, q * 2, q);
+      ctx.fillRect(sx + q, sy - q * 2 + up, q * 2, q);
+      ctx.fillStyle = '#bfe6f6';
+      ctx.fillRect(sx - q * 4, sy - q * 2 + up * 2, q, q);
+      ctx.fillRect(sx + q * 3, sy - q * 2 + up * 2, q, q);
+      // two hairs of a tail
+      ctx.fillStyle = 'rgba(223,244,255,0.55)';
+      ctx.fillRect(sx - q, sy + q * 3, q, q);
+      ctx.fillRect(sx, sy + q * 3 + (flap > 0 ? q : 0), q, q);
+      ctx.globalAlpha = 1;
+    }
+  },
+
   _drawSpills(ctx) {
     for (let i = 0; i < this.spills.length; i++) {
       const s = this.spills[i];
@@ -3685,7 +3811,14 @@ const Ocean = {
       ay = -Math.round(an[1] * dh / qw) * qw;
     }
     const baked = this._bakeFrame(this.animFrame, bw, bh);
-    ctx.drawImage(baked || img, ax - dw / 2, ay - dh / 2, dw, dh);
+    if (baked) {
+      // the ink ring is symmetric, so drawing the padded bitmap centred keeps the
+      // art exactly where the anchor put it
+      const ow = (bw + baked.pad * 2) / Z, oh = (bh + baked.pad * 2) / Z;
+      ctx.drawImage(baked.cv, ax - ow / 2, ay - oh / 2, ow, oh);
+    } else {
+      ctx.drawImage(img, ax - dw / 2, ay - dh / 2, dw, dh);
+    }
     ctx.restore();
     ctx.globalAlpha = 1;
   },

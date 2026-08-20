@@ -277,21 +277,98 @@ const SKY = {
   },
 
   // ---- the sky, cached per palette step ---------------------------------------
+  // ---- THE SKY ------------------------------------------------------------------
+  //
+  // This was seven flat bands from top to middle and six more down to the
+  // horizon, with a single row of one-pixel checker at each seam. Seven bands
+  // with a decorated edge is still seven bands: you could count the steps up the
+  // sky, and on a big screen they are stripes.
+  //
+  // A pixel-art sky is not a smooth gradient and it is not flat bands either. It
+  // is a SMALL PALETTE, ordered-dithered: each channel is quantised to a coarse
+  // step and the choice between the two nearest steps is made per pixel against
+  // the Bayer matrix. You get the fine gradation of a smooth ramp out of a dozen
+  // actual colours, and the texture of the dither is the look.
+  //
+  // On top of that the sun bleeds warmth into the sky around it, strongest along
+  // the horizon, which is the thing that makes a dawn read as a dawn rather than
+  // as a blue rectangle with an orange dot in it.
+  //
+  // Baked at half the canvas's density -- two pixels per logical unit, the game's
+  // own texel -- so the dither is a texel and not a device pixel, and the upscale
+  // to the screen is a whole number. That also makes it four times cheaper than
+  // the old one, and it rebakes 80 times a day instead of 200.
+  BAYER8: [
+    0, 32, 8, 40, 2, 34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26,
+    12, 44, 4, 36, 14, 46, 6, 38, 60, 28, 52, 20, 62, 30, 54, 22,
+    3, 35, 11, 43, 1, 33, 9, 41, 51, 19, 59, 27, 49, 17, 57, 25,
+    15, 47, 7, 39, 13, 45, 5, 37, 63, 31, 55, 23, 61, 29, 53, 21,
+  ],
+  SKY_STEP: 17,        // colour quantisation: about fifteen levels a channel
+
   skyCanvas(clock) {
-    const key = Math.round(clock * 200);
+    const key = Math.round(clock * 80);
     if (this._key === key && this._cv) return this._cv;
+    const Q = DPX / 2;
     if (!this._cv) {
       this._cv = document.createElement('canvas');
-      this._cv.width = W * DPX; this._cv.height = this.HORIZON * DPX;
+      this._cv.width = Math.round(W * Q);
+      this._cv.height = Math.round(this.HORIZON * Q);
       this._ctx = this._cv.getContext('2d');
-      this._ctx.scale(DPX, DPX);
+      this._ctx.imageSmoothingEnabled = false;
     }
     const c = this._ctx;
-    const [top, mid, low] = this.pal(clock);
-    const HZ = this.HORIZON;
-    // three-stop banded sky with dithered seams
-    bandedFill(c, 0, 0, W, HZ * 0.55, top, mid, 7);
-    bandedFill(c, 0, HZ * 0.55, W, HZ * 0.45, mid, low, 6);
+    const pal = this.pal(clock);
+    const top = pal[0], mid = pal[1], low = pal[2], sun = pal[6];
+    const pw = this._cv.width, ph = this._cv.height;
+    const B = this.BAYER8, STEP = this.SKY_STEP;
+
+    // where the sun (or moon) is on its arc, so the bloom sits under it
+    const isDay = clock > 0.09 && clock < 0.72;
+    const tt = clamp((clock - 0.09) / 0.63, 0, 1);
+    const sunX = (44 + tt * (W - 88)) * Q;
+    // warmest at dawn and dusk, barely there at noon, gone at night
+    const heat = isDay ? (1 - Math.abs(tt - 0.5) * 1.35) * 0.55 + 0.28 : 0.10;
+
+    const id = c.createImageData(pw, ph);
+    const d = id.data;
+    const rr = [0, 0, 0];
+    for (let y = 0; y < ph; y++) {
+      const f = y / Math.max(1, ph - 1);
+      // two segments, so the middle of the sky is a colour in its own right
+      let a, b, k;
+      if (f < 0.55) { a = top; b = mid; k = f / 0.55; }
+      else { a = mid; b = low; k = (f - 0.55) / 0.45; }
+      const row = y * pw * 4;
+      const yb = (y & 7) * 8;
+      // the bloom falls off with height above the horizon
+      const vg = Math.max(0, 1 - Math.abs(f - 0.97) * 2.1);
+      for (let x = 0; x < pw; x++) {
+        rr[0] = a[0] + (b[0] - a[0]) * k;
+        rr[1] = a[1] + (b[1] - a[1]) * k;
+        rr[2] = a[2] + (b[2] - a[2]) * k;
+        if (vg > 0) {
+          const hx = Math.abs(x - sunX) / (pw * 0.42);
+          const g = Math.max(0, 1 - hx) * vg * heat;
+          if (g > 0) {
+            rr[0] += (sun[0] - rr[0]) * g;
+            rr[1] += (sun[1] - rr[1]) * g;
+            rr[2] += (sun[2] - rr[2]) * g;
+          }
+        }
+        // ordered-dithered quantisation: the whole trick, three times
+        const thr = B[yb + (x & 7)];
+        const o = row + x * 4;
+        for (let ch = 0; ch < 3; ch++) {
+          const t = rr[ch] / STEP;
+          const i0 = Math.floor(t);
+          const v = ((t - i0) * 64 > thr ? i0 + 1 : i0) * STEP;
+          d[o + ch] = v > 255 ? 255 : v;
+        }
+        d[o + 3] = 255;
+      }
+    }
+    c.putImageData(id, 0, 0);
     this._key = key;
     return this._cv;
   },
