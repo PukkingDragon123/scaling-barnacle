@@ -2273,7 +2273,10 @@ const Tame = {
       for (j = 0; j < n; j++) ctx.fillRect(px + j * 4.5, py, 3, 3);
     }
     // pass 2: the empty ones
-    ctx.fillStyle = 'rgba(10,20,28,0.55)';
+    // The empties were as dark as the filled pips were bright, so an untrusting
+    // animal wore a row of five near-black blocks over its head -- which reads
+    // as a broken sprite, not as an empty meter. They are a hint of a socket now.
+    ctx.fillStyle = 'rgba(10,20,28,0.22)';
     for (i = 0; i < this.MAX_MOBS; i++) {
       m = this.mobs[i];
       if (!m.live || m.kind !== 0 || m.state === 2) continue;

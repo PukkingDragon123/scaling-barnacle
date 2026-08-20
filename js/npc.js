@@ -371,8 +371,12 @@ const NPCs = {
     // and then, last, whether they have work for you -- said plainly, because
     // the whole point of an errand is that somebody asked
     const tk = this._taskOf(key);
-    if (tk && tk.kind === 'in') said.push(`(${n.name} has noticed what you are carrying.  [Q] hand it over)`);
-    else if (tk && tk.kind === 'ask') said.push(`(${n.name} has a job that wants doing.  [Q] hear it)`);
+    // NO KEYSTROKE IN THE PROSE. This used to read "[Q] hand it over" -- naming a
+    // key for something that has a labelled button an inch below it, in a game
+    // that is played on a tablet as often as not. The button says HAND IN or
+    // A JOB? on its face and wears a blinking pip when something is waiting.
+    if (tk && tk.kind === 'in') said.push(`(${n.name} has noticed what you are carrying.)`);
+    else if (tk && tk.kind === 'ask') said.push(`(${n.name} has a job that wants doing.)`);
 
     this._setPages(said);
     Game.save();
@@ -655,6 +659,7 @@ const NPCs = {
   _btn(which) {
     const r = this._rect();
     const y = r.y + r.h - 20;
+    if (which === 'next') return { x: r.x + 88, y: y, w: 60, h: 16 };
     if (which === 'task') return { x: r.x + r.w - 200, y: y, w: 62, h: 16 };
     if (which === 'gift') return { x: r.x + r.w - 134, y: y, w: 58, h: 16 };
     return { x: r.x + r.w - 70, y: y, w: 56, h: 16 };   // 'bye' and 'back' share the slot
@@ -804,12 +809,18 @@ const NPCs = {
     c.fillRect(hx, hy + 8, barW, 1.6);
     c.fillStyle = pts >= NPC_MAX_PTS ? '#e8a93c' : '#c9536a';
     c.fillRect(hx, hy + 8, pts >= NPC_MAX_PTS ? barW : barW * frac, 1.6);
-    if (this.gainT > 0 && this.gain) {
-      c.globalAlpha = clamp(this.gainT, 0, 1);
-      text(c, this.gain, hx - 6, hy - 1 - (2.4 - this.gainT) * 3, {
-        size: 8, align: 'right', shadow: false,
-        color: this.gain.charAt(0) === '-' ? '#c0392b' : '#3f9a58',
-      });
+    // NO SCORE FLOATING OFF A FRIENDSHIP. This printed "+12" beside the hearts,
+    // which is the relationship-as-progress-bar the label already stopped doing.
+    // A liking went up: the hearts sparkle and the bar under them moves, and
+    // that is the whole report.
+    if (this.gainT > 0 && this.gain && this.gain.charAt(0) !== '-') {
+      const k = clamp(this.gainT / 2.4, 0, 1);
+      c.globalAlpha = k;
+      for (let i = 0; i < 3; i++) {
+        const a = this.animT * 3 + i * 2.1;
+        PixIcons.draw(c, 'spark', hx + barW * (0.2 + 0.3 * i) + Math.sin(a) * 2,
+          hy + 6 - (1 - k) * 7, 7, { t: this.animT, phase: i * 1.7 });
+      }
       c.globalAlpha = 1;
     }
 
@@ -835,12 +846,12 @@ const NPCs = {
       const cy = r.y + r.h - 13 + Math.sin(this.animT * 5) * 0.9;
       c.fillStyle = '#8a5a2c';
       c.beginPath();
-      c.moveTo(tx + 2, cy - 3); c.lineTo(tx + 9, cy - 3); c.lineTo(tx + 5.5, cy + 2);
+      c.moveTo(tx - 10, cy - 3); c.lineTo(tx - 3, cy - 3); c.lineTo(tx - 6.5, cy + 2);
       c.closePath(); c.fill();
-      const hint = more
-        ? (TouchUI.enabled ? 'tap for more' : '[E] more')
-        : (TouchUI.enabled ? 'tap to finish' : '[E] finish   [Esc] leave');
-      text(c, hint, tx + 14, r.y + r.h - 17, { size: 6.5, color: '#914007', shadow: false });
+      // ...and a button to press, rather than the name of a key. Clicking
+      // anywhere in the box still turns the page, so this is an affordance and
+      // not a new gate -- but it is the thing a thumb goes for.
+      this._button(c, this._btn('next'), more ? 'NEXT' : 'OK', true, mx, my);
     }
 
     const canG = this.canGift(this.who);

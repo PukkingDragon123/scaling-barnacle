@@ -140,6 +140,7 @@ const Ocean = {
 
   // ---- pool sizes -------------------------------------------------------------
   BUB_MAX: 96, MOTE_MAX: 72, RING_MAX: 10, SPILL_MAX: 8, SIL_MAX: 3, DROP_MAX: 30,
+  SHOAL_MAX: 4, SHOAL_N: 18,      // small fish, in shoals: see _drawShoals
 
   // ---- animation table --------------------------------------------------------
   // `box` is the longest side of the sprite in logical units, so a wide cruise
@@ -248,6 +249,7 @@ const Ocean = {
   _ft: 0.016, _qt: 0,
   _prevDir: null, _tapT: null, _prevDash: false,
   bubbles: null, motes: null, rings: null, spills: null, sils: null, drops: null,
+  shoals: null,
   _chunks: null, _order: null,
   // seabed: one 1-D cache keyed by chunk COLUMN, plus two scratch sample rows for
   // the bed and the ridge behind it (allocated once, refilled every frame)
@@ -356,6 +358,36 @@ const Ocean = {
     this._tapT = [0, 0, 0, 0];
     this.sils = new Array(this.SIL_MAX);
     for (let i = 0; i < this.SIL_MAX; i++) this.sils[i] = { art: '', fx: 0, fy: 0, vx: 0, w: 120, ph: 0 };
+    // ---- SHOALS ---------------------------------------------------------------
+    //
+    // The water column had NOTHING in it. Between the surface line and the sand
+    // there was a flat blue field: you swam through a hundred units of empty
+    // gradient to get anywhere, which is what makes the sea feel like a
+    // background instead of a place. Big silhouettes drift past (SIL_MAX is 3)
+    // but they are far-layer scenery, once a minute.
+    //
+    // Small fish, in shoals, are the cheapest possible fix and the right one:
+    // each fish is two quads, they hold formation with a wobble, and they turn
+    // as one. No gradients, no translucent bands, nothing procedural to look
+    // wrong -- just something alive between you and the floor.
+    this.shoals = new Array(this.SHOAL_MAX);
+    const srng = mulberry32(0x5F0A15);
+    for (let i = 0; i < this.SHOAL_MAX; i++) {
+      const fish = new Array(this.SHOAL_N);
+      for (let j = 0; j < this.SHOAL_N; j++) {
+        // A TIGHT formation. The first pass spread them over 74x30 units, which
+        // at this zoom is most of a screen: eighteen specks scattered that wide
+        // read as confetti, not as a shoal. Fish hold a body length or two off
+        // each other, and that is what makes a cluster read as one animal.
+        fish[j] = {
+          ox: (srng() - 0.5) * 34, oy: (srng() - 0.5) * 13,
+          ph: srng() * TAU, sp: 0.8 + srng() * 0.8, big: srng() < 0.3,
+        };
+      }
+      this.shoals[i] = {
+        x: 0, y: 0, vx: 0, dep: 0.4 + srng() * 0.5, hue: (srng() * 3) | 0, fish: fish, seeded: false,
+      };
+    }
     // The cloud bank. Fixed count, fixed art, deterministic layout: it scrolls in
     // its own wide space and is pinned to the horizon, so it never needs updating.
     const crng = mulberry32(0x0C10D5);
@@ -1598,6 +1630,43 @@ const Ocean = {
       if (sy < -200) s.fy += H + 340;
       else if (sy > H + 200) s.fy -= H + 340;
     }
+    this._updateShoals(dt);
+  },
+
+  // Shoals hold formation and get recycled around the camera, so four of them
+  // cover the whole sea without ever allocating.
+  _updateShoals(dt) {
+    if (!this.shoals) return;
+    const floorY = this.floorAt ? this.floorAt(this.px) : this.camY + this.VH;
+    for (let i = 0; i < this.shoals.length; i++) {
+      const sh = this.shoals[i];
+      if (!sh.seeded) {
+        sh.seeded = true;
+        sh.x = this.camX + (i % 2 ? -1 : 1) * (140 + i * 90);
+        // spread down the WHOLE column, not all bunched under the waterline
+        sh.y = this.camY + 30 + (i / this.SHOAL_MAX) * (this.VH - 70);
+        sh.vx = (i % 2 ? -1 : 1) * (16 + i * 5);
+      }
+      sh.x += sh.vx * dt;
+      // gentle vertical wander, and never below the sand or above the waterline
+      sh.y += Math.sin(this.time * 0.4 + i * 1.9) * 7 * dt;
+      const lo = this.camY + 16, hi = Math.min(this.camY + this.VH - 14, floorY - 22);
+      if (sh.y < lo) sh.y = lo;
+      if (sh.y > hi) sh.y = Math.max(lo, hi);
+      // off one side: come back on the other, at a fresh depth, going the other way
+      const rel = sh.x - this.camX;
+      const span = Math.max(40, this.VH - 70);
+      if (rel < -180) { sh.x = this.camX + this.VW + 150; sh.vx = -Math.abs(sh.vx); sh.y = this.camY + 30 + Math.abs((sh.x * 7) % span); }
+      else if (rel > this.VW + 180) { sh.x = this.camX - 150; sh.vx = Math.abs(sh.vx); sh.y = this.camY + 30 + Math.abs((sh.x * 11) % span); }
+      // ...and they SCATTER when Otto barges through them
+      const dx = this.px - sh.x, dy = this.py - sh.y;
+      if (dx * dx + dy * dy < 46 * 46) {
+        sh.vx += (sh.x < this.px ? -1 : 1) * 34 * dt;
+        sh.vx = clamp(sh.vx, -58, 58);
+      } else if (Math.abs(sh.vx) > 22) {
+        sh.vx += (sh.vx > 0 ? -1 : 1) * 12 * dt;    // settle back to a cruise
+      }
+    }
   },
 
   // ---- camera -----------------------------------------------------------------
@@ -1726,13 +1795,33 @@ const Ocean = {
     idx = wrap ? ((idx % n) + n) % n : clamp(idx, 0, n - 1);
     const prev = wrap ? ((idx - 1 + n) % n) : Math.max(0, idx - 1);
     this.animFrame = def.f[idx];
+    // animPrev/animMix drove a cross-fade that was removed for good reason (two
+    // half-transparent otters stacked is what "hollow" was). They are kept only
+    // so anything still reading them sees a settled frame.
     this.animPrev = def.f[prev];
-    // Cross-fade across the first 45% of each frame's dwell. Beyond that only one
-    // frame is drawn, so the two-blit path is the exception, not the rule.
-    const BL = 0.45;
-    if (phase >= BL || prev === idx) this.animMix = 1;
-    else { const k = phase / BL; this.animMix = k * k * (3 - 2 * k); }
+    this.animMix = 1;
     this.animBox = def.box;
+  },
+
+  // Pixels-per-logical-unit for an action, from the LARGEST frame in it, so every
+  // frame of that action is drawn at the same scale. Cached, but only once all of
+  // the frames have actually loaded -- caching a partly loaded sheet would pin
+  // the whole action to whichever frame arrived first.
+  _animScale(name, box) {
+    this._ascale = this._ascale || {};
+    const hit = this._ascale[name];
+    if (hit) return hit;
+    const def = Object.prototype.hasOwnProperty.call(this.ANIM, name) ? this.ANIM[name] : this.ANIM.cruise;
+    let m = 0, all = true;
+    for (let i = 0; i < def.f.length; i++) {
+      const im = ASSETS[def.f[i]];
+      if (!im || !im.width) { all = false; continue; }
+      m = Math.max(m, im.width, im.height);
+    }
+    if (!m) return box / 200;                       // nothing loaded yet: a sane guess
+    const k = box / m;
+    if (all) this._ascale[name] = k;
+    return k;
   },
 
   // ---- adaptive quality -------------------------------------------------------
@@ -2030,6 +2119,7 @@ const Ocean = {
     this._drawFloor(ctx, t);
     this._drawHome(ctx, t);
     this._drawProps(ctx, t, false);
+    this._drawShoals(ctx, t);
     this._drawMotes(ctx, t);
     this._drawBubbles(ctx);
     this._drawDrops(ctx);
@@ -3191,6 +3281,42 @@ const Ocean = {
     ctx.lineWidth = 1;
   },
 
+  // Two quads a fish: a body and a tail notch, in one of three cool colours so a
+  // shoal reads as a species rather than as debris. They tint towards the water
+  // with depth, which is the only "effect" here -- no alpha bands, no gradients.
+  SHOAL_COL: [
+    ['#cfe9d8', '#8fbcae'],     // silver baitfish
+    ['#8fe0ea', '#4fa8c8'],     // blue-green
+    ['#e8b98a', '#b8865c'],     // warm, for the reef ones
+  ],
+  _drawShoals(ctx, t) {
+    if (!this.shoals) return;
+    const n = this.quality > 0 ? this.shoals.length : Math.max(1, this.shoals.length >> 1);
+    for (let i = 0; i < n; i++) {
+      const sh = this.shoals[i];
+      if (!sh.seeded) continue;
+      const bx = sh.x - this.camX * sh.dep - this.camX * (1 - sh.dep);
+      const by = sh.y - this.camY;
+      if (bx < -110 || bx > W + 110 || by < -70 || by > H + 70) continue;
+      const col = this.SHOAL_COL[sh.hue] || this.SHOAL_COL[0];
+      // far shoals sit back into the water rather than being drawn smaller only
+      ctx.globalAlpha = 0.35 + sh.dep * 0.5;
+      const dir = sh.vx >= 0 ? 1 : -1;
+      const q = APIX;
+      for (let j = 0; j < sh.fish.length; j++) {
+        const f = sh.fish[j];
+        const wob = Math.sin(t * (2.2 + f.sp) + f.ph) * 1.6;
+        const fx = Math.round((bx + f.ox * dir) / q) * q;
+        const fy = Math.round((by + f.oy + wob) / q) * q;
+        const w = f.big ? 4 : 3, h = f.big ? 2 : 1.5;
+        ctx.fillStyle = col[f.big ? 0 : 1];
+        ctx.fillRect(fx, fy, w, h);                       // body
+        ctx.fillRect(fx - dir * q * 2, fy - q, q * 2, h + q * 2);   // the forked tail
+      }
+      ctx.globalAlpha = 1;
+    }
+  },
+
   _drawSpills(ctx) {
     for (let i = 0; i < this.spills.length; i++) {
       const s = this.spills[i];
@@ -3246,10 +3372,19 @@ const Ocean = {
     if (this.iframe > 0 && this.rollT <= 0 && Math.floor(this.time * 22) % 2) {
       ctx.globalAlpha = 0.4;
     }
+    // ONE SCALE FOR THE WHOLE ACTION.
+    //
+    // Every frame on these sheets is a TIGHT CROP, so the four cruise poses come
+    // in at 233x97, 236x113, 234x113 and 219x117. Sizing each frame by its own
+    // longest side -- which is what this did -- gives each one a different
+    // pixels-per-unit, so across one cycle the otter's height went 22.5, 26, 26,
+    // 28.8 and back: he THROBBED, four times a second, and no amount of snapping
+    // the position fixes a body that is changing size. The fix is to derive one
+    // scale from the biggest frame in the action and let each frame keep its own
+    // crop against it, which is what a sheet's frames are relative to anyway.
     const box = this.animBox || 54;
-    const wide = img.width >= img.height;
-    const w = wide ? box : box * img.width / img.height;
-    const h = wide ? box * img.height / img.width : box;
+    const k = this._animScale(this.anim, box);
+    const w = img.width * k, h = img.height * k;
 
     // the roll squashes and stretches through its revolution, which is what
     // gives a flipbook barrel roll any weight
@@ -3309,9 +3444,12 @@ const Ocean = {
     // what the sheet's own four poses are for.
     // and the drawn SIZE lands on whole sprite texels, so no row is ever a
     // fraction of a pixel wide
+    // The roll's and dash's squash goes on the drawn SIZE, snapped to whole
+    // texels -- not on ctx.scale, which resamples. (It was being computed and
+    // then silently dropped, so a barrel roll had no weight at all.)
     const qw = APIX * (this.ZOOM || 1);
-    const dw = Math.max(qw, Math.round(w / qw) * qw);
-    const dh = Math.max(qw, Math.round(h / qw) * qw);
+    const dw = Math.max(qw, Math.round(w * sqx / qw) * qw);
+    const dh = Math.max(qw, Math.round(h * sqy / qw) * qw);
     ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
     ctx.restore();
     ctx.globalAlpha = 1;

@@ -85,15 +85,19 @@
     { x: 238, act: 'work', say: 'tidying the workshop lane' },
     { x: 260, act: 'lean', say: 'watching the water go by' },
   ];
-  // ...and while they are WALKING they can pass anything. Rather than confine the
-  // round to one clear stretch, their [E] spot is simply withheld while they are
-  // squeezing past a fixture: you talk to somebody who has stopped, which is what
-  // you would do anyway, and no two spots are ever within reach of each other.
+  // THE TALK SPOT IS NEVER WITHHELD ANY MORE.
+  //
+  // It used to be: while the visitor stood within 27 units of a fixture their [E]
+  // spot was dropped, so that two spots could never fight over the search. The
+  // stops above were placed "at least 26" away -- and 26 is less than 27, so
+  // three of the four stops (82, 212, 260) silently had no talk spot AT ALL, and
+  // the fourth only worked because it happened to land 48 clear. Walking up to a
+  // neighbour and pressing [E] did nothing, over and over, which is exactly the
+  // "it is really hard to talk to him" of it. The withholding was also solving a
+  // problem that no longer exists: WorldScene.pick() scores by priority now, so
+  // a person beats a hatch in the planks without anybody having to disappear.
   const FIXED_X = [30, 56, 108, 134, 160, 186, 286];
-  const visitClear = (x) => {
-    for (let i = 0; i < FIXED_X.length; i++) if (Math.abs(x - FIXED_X[i]) < 27) return false;
-    return true;
-  };
+  const visitClear = () => true;
   const visit = {
     key: null,        // who is here today
     x: 212,           // where they are
@@ -150,7 +154,7 @@
     const nspots = M.NPCs.spots.bind(M.NPCs);
     M.NPCs.spots = function () {
       const keep = this.LIST;
-      this.LIST = visitClear(visit.x) ? pick() : [];
+      this.LIST = visitClear() ? pick() : [];
       const r = nspots(); this.LIST = keep;
       // mark it MOBILE, so Forge's placement check knows it is a person walking
       // past and not a fixture nailed to the planks (see craftgate placeWhy)

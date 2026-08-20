@@ -32,9 +32,11 @@ const DECK_Y = 214;   // the dock sits low in frame, water filling the bottom
 // so the two scenes finally read as one place at one scale.
 // ZOOM. A sprite texel covers APIX * DPX * ZOOM device pixels, so only whole
 // multiples keep the art crisp: 1.5 gives 3, 1.0 gives 2, and 1.25 would give
-// 2.5 -- uneven texels and a shimmer. Stepping out from 1.5 therefore means 1.0,
-// which shows half again as much deck.
-const WORLD_ZOOM = 1.0;
+// 2.5 -- uneven texels and a shimmer. So the choice is 1.0 or 1.5 and nothing
+// between them. Back to 1.5: at 1.0 the pier read as a model of a pier seen from
+// across the bay, and it is the same slice the ocean uses, so walking out and
+// jumping in no longer changes how big Otto is.
+const WORLD_ZOOM = 1.5;
 const WVW = W / WORLD_ZOOM, WVH = H / WORLD_ZOOM;
 // With the zoom on, DECK_Y (214) sits past the bottom of a 180-unit slice, so the
 // world needs a vertical camera too. This puts the deck at 74% of the frame: the
@@ -123,17 +125,21 @@ const WorldScene = {
   //     conversation meant lining Otto up inside a 44-unit window against a
   //     moving target, which is what "it is really hard to talk to him" is.
   //     People get 34.
-  //   * a spot may declare a PRIORITY, and priority beats distance. Otherwise a
-  //     scenery spot standing a unit nearer silently eats the only interaction
-  //     that advances the quest.
+  //   * a spot may declare a PRIORITY, which is worth ten units of nearness.
+  //     Otherwise a scenery spot standing a unit closer silently eats the only
+  //     interaction that advances the quest. It is a BONUS rather than an
+  //     override on purpose: priority winning outright meant a neighbour who
+  //     happened to stop near the piling made the piling unusable until they
+  //     wandered off. Ten units is more than enough for a person to beat a hatch
+  //     you are both near, and not enough to beat one you are standing on.
   pick() {
-    let best = null, bd = 1e9, bp = -1;
+    let best = null, bs = 1e9;
     for (const s of this.spots()) {
       const reach = s.r || 22;
       const d = Math.abs(this.px - s.x);
       if (d > reach) continue;
-      const prio = s.prio || 0;
-      if (prio > bp || (prio === bp && d < bd)) { bp = prio; bd = d; best = s; }
+      const score = d - (s.prio || 0) * 10;
+      if (score < bs) { bs = score; best = s; }
     }
     return best;
   },
