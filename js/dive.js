@@ -1058,26 +1058,10 @@ const DiveScene = {
     // tick marks
     ctx.fillStyle = 'rgba(8,20,28,0.7)';
     for (let i = 1; i < 4; i++) ctx.fillRect(24 + i * 21, H - 24, PIX * 2, 7);
-    // bag: little net sack + count
-    const cap = BAGS[G.gear.bag].cap;
-    const bagFull = this.bagCount >= cap;
-    const bp = this.bagPulse > 0 ? 1 + this.bagPulse * 1.2 : 1;
-    uiNote(ctx, W - 74, H - 28, 68, 15, {});
-    ctx.save();
-    ctx.translate(W - 63, H - 20);
-    ctx.scale(bp, bp);
-    ctx.fillStyle = '#8a7040';
-    ctx.beginPath(); ctx.moveTo(-4, -5); ctx.lineTo(4, -5); ctx.lineTo(5.5, 5); ctx.lineTo(-5.5, 5); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(40,28,12,0.8)'; ctx.lineWidth = PIX;
-    for (let i = -1; i <= 1; i++) {
-      ctx.beginPath(); ctx.moveTo(i * 3 - 1, -5); ctx.lineTo(i * 3.5 - 1, 5); ctx.stroke();
-    }
-    ctx.beginPath(); ctx.moveTo(-4.7, -1); ctx.lineTo(4.7, -1); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-5.2, 2); ctx.lineTo(5.2, 2); ctx.stroke();
-    ctx.fillStyle = '#5a4526';
-    ctx.fillRect(-4.5, -6.5, 9, 2);
-    ctx.restore();
-    text(ctx, `${this.bagCount}/${cap}`, W - 52, H - 24, { size: 8, shadow: false, color: bagFull ? '#b23a34' : '#30150a' });
+    // (NO BAG COUNTER. Same as the open water: the sack and its "3/8" sat in the
+    // corner for the whole dive to report something the game tells you when it
+    // matters -- 'Bag full! Swim up to the surface!' -- and counts out properly
+    // at the surface.)
     // depth panel
     uiNote(ctx, W - 46, 26, 42, 13, {});
     text(ctx, `${Math.round((this.camY + H * 0.5) / 12)}m`, W - 9, 29, { size: 8, color: '#2a5068', align: 'right', shadow: false });

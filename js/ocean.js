@@ -3487,27 +3487,11 @@ const Ocean = {
     // that no longer exists, and the roll's own cooldown is short enough to read
     // off the roll itself. The air bar owns this corner alone.)
 
-    // the bag
-    const cap = this.bagCap();
-    const full = this.bagCount >= cap;
-    const by = touch ? 58 : H - 28;   // clear of the help tab at y 24..42
-    const bp = this.bagPulse > 0 ? 1 + this.bagPulse * 1.1 : 1;
-    uiNote(ctx, W - 74, by, 68, 15, {});
-    ctx.save();
-    ctx.translate(W - 63, by + 7.5);
-    ctx.scale(bp, bp);
-    ctx.fillStyle = '#8a7040';
-    ctx.beginPath();
-    ctx.moveTo(-4, -5); ctx.lineTo(4, -5); ctx.lineTo(5.5, 5); ctx.lineTo(-5.5, 5);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(40,28,12,0.8)';
-    ctx.lineWidth = PIX;
-    ctx.beginPath(); ctx.moveTo(-4.7, -1); ctx.lineTo(4.7, -1); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-5.2, 2); ctx.lineTo(5.2, 2); ctx.stroke();
-    ctx.fillStyle = '#5a4526';
-    ctx.fillRect(-4.5, -6.5, 9, 2);
-    ctx.restore();
-    text(ctx, `${this.bagCount}/${cap}`, W - 52, by + 4, { size: 8, shadow: false, color: full ? '#b23a34' : '#30150a' });
+    // (THE BAG COUNTER IS GONE. A basket and "0/8" parked in the corner of the
+    // sea for the whole dive, to report a number you find out about anyway the
+    // moment it matters: the bag announces itself when it is full, and the haul
+    // is counted out for you when you climb the ladder. One less panel between
+    // the player and the water.)
 
     // The ladder prompt, and only when he is actually at it.
     if (!this.over && !this.leaving && this.atDock) {
