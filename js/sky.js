@@ -62,7 +62,7 @@ const SKY = {
       for (let i = 0; i < n; i++) {
         const t = i / (n - 1);
         const r = (3.4 + rng() * 7) * bigness * (0.5 + Math.sin(t * Math.PI) * 0.85);
-        cluster.push({ dx: cx, dy: -r * (0.35 + rng() * 0.45), r });
+        cluster.push({ dx: cx, dy: -r * (0.35 + rng() * 0.45), r, sd: (rng() * 4) | 0 });
         top = Math.max(top, r);
         cx += r * (0.5 + rng() * 0.3);
       }
@@ -73,6 +73,7 @@ const SKY = {
           dx: host.dx + (rng() - 0.5) * host.r * 1.1,
           dy: host.dy - host.r * (0.45 + rng() * 0.35),
           r: host.r * (0.3 + rng() * 0.28),
+          sd: (rng() * 4) | 0,
         });
       }
       this.clouds.push({ x, w: cx, puffs: cluster, layer: rng() < 0.35 ? 0 : 1 });
@@ -101,14 +102,50 @@ const SKY = {
   // rasteriser over ~10 clouds x 6 puffs x 3 layers is thousands of fillRects,
   // which is fine once per sunrise and absurd once per frame. The bake is keyed
   // on the palette, so it redraws only when the light actually changes.
-  _disc(c, cx, cy, r) {
+  // ---- A CLOUD LUMP, AND IT IS NOT A CIRCLE ----------------------------------
+  //
+  // These were discs. Even rasterised in texels, a cloud made of circles reads as
+  // circles: a row of even bubbles with even round tops, and nothing in the sky
+  // has ever looked like that. What a hand-drawn pixel cloud is made of is
+  // horizontal RUNS -- a stack of rows, each a little wider or narrower than the
+  // one above, with the widest part low and the shoulders squared off.
+  //
+  // So a lump is a table of row widths, and the table is not symmetrical: the
+  // profile leans, the top is flat for a row or two, and the bottom edge is
+  // straight because a cloud sits ON the air like a thing on a shelf. `seed` picks
+  // between a few written profiles so no two lumps in a bank match.
+  //
+  // Widths are fractions of the lump's radius, top row first.
+  LUMP: [
+    [0.34, 0.62, 0.80, 0.92, 0.99, 1.00, 0.97, 0.88, 0.74],
+    [0.22, 0.48, 0.70, 0.86, 0.96, 1.00, 1.00, 0.94, 0.80],
+    [0.44, 0.70, 0.86, 0.95, 1.00, 0.98, 0.90, 0.78, 0.60],
+    [0.30, 0.52, 0.66, 0.84, 0.94, 1.00, 0.99, 0.90, 0.72],
+  ],
+  // ...and how far each row is shoved sideways, so the lump leans instead of
+  // standing to attention.
+  LEAN: [
+    [0.10, 0.06, 0.03, 0.01, 0.00, 0.00, -0.02, -0.04, -0.06],
+    [-0.08, -0.05, -0.02, 0.00, 0.01, 0.02, 0.03, 0.04, 0.05],
+    [0.04, 0.02, 0.00, -0.01, -0.02, -0.02, -0.03, -0.03, -0.04],
+    [-0.03, 0.00, 0.02, 0.03, 0.03, 0.02, 0.01, 0.00, -0.01],
+  ],
+
+  _disc(c, cx, cy, r, seed) {
     const S = APIX;
     if (r <= S) return;
     const q = (v) => Math.round(v / S) * S;
-    for (let dy = -r; dy <= r; dy += S) {
-      const hw = Math.sqrt(Math.max(0, r * r - dy * dy));
-      if (hw < S * 0.5) continue;
-      c.fillRect(q(cx - hw), q(cy + dy), q(hw * 2), S);
+    const prof = this.LUMP[(seed || 0) % this.LUMP.length];
+    const lean = this.LEAN[(seed || 0) % this.LEAN.length];
+    const rows = prof.length;
+    // the lump stands on its base line, so a bank of them shares a flat bottom
+    const base = q(cy + r * 0.62);
+    const step = Math.max(S, q((r * 1.62) / rows));
+    for (let i = 0; i < rows; i++) {
+      const hw = q(r * prof[i]);
+      if (hw < S) continue;
+      const x0 = q(cx + r * lean[i] - hw);
+      c.fillRect(x0, base - (rows - i) * step, q(hw * 2), step + S * 0.5);
     }
   },
 
@@ -148,7 +185,10 @@ const SKY = {
     for (const cl of this.clouds) {
       const layer = (col, dy, shrink, dx) => {
         c.fillStyle = cssRGB(col);
-        for (const p of cl.puffs) this._disc(c, cl.x + p.dx + (dx || 0), pad + p.dy + dy, p.r - shrink);
+        for (let pi = 0; pi < cl.puffs.length; pi++) {
+          const p = cl.puffs[pi];
+          this._disc(c, cl.x + p.dx + (dx || 0), pad + p.dy + dy, p.r - shrink, p.sd);
+        }
         c.fillRect(cl.x - 1, pad + dy - 1, cl.w + 2, Math.max(APIX, 3 - shrink * 0.4));
       };
       layer(cDark, 1.5, 0);
@@ -157,15 +197,23 @@ const SKY = {
       // and the lit top is scattered rather than cut, which is the difference
       // between a shaded cloud and a stack of paper circles.
       c.fillStyle = cssRGB(cBody);
-      for (const p of cl.puffs) {
+      for (let pi = 0; pi < cl.puffs.length; pi++) {
+        const p = cl.puffs[pi];
         const r0 = p.r - 3.5;
-        if (r0 < APIX * 2) continue;
-        const cx0 = cl.x + p.dx, cy0 = pad + p.dy - 2;
-        for (let a = 0; a < 26; a++) {
-          const ang = (a / 26) * Math.PI + Math.PI;      // the top half only
-          const px0 = Math.round((cx0 + Math.cos(ang) * r0) / APIX) * APIX;
-          const py0 = Math.round((cy0 + Math.sin(ang) * r0 * 0.9) / APIX) * APIX;
-          if (BAY[(a & 3) * 4 + (a >> 2 & 3)] > 7) c.fillRect(px0, py0, APIX, APIX);
+        if (r0 < APIX * 3) continue;
+        const prof = this.LUMP[(p.sd || 0) % this.LUMP.length];
+        const lean = this.LEAN[(p.sd || 0) % this.LEAN.length];
+        const step = Math.max(APIX, Math.round((r0 * 1.62 / prof.length) / APIX) * APIX);
+        const base = Math.round((pad + p.dy - 2 + r0 * 0.62) / APIX) * APIX;
+        // scatter along the TOP shoulder of each row, which is where the light
+        // stops -- following the lump, not a circle
+        for (let i = 0; i < prof.length - 3; i++) {
+          const hw = r0 * prof[i];
+          const y0 = base - (prof.length - i) * step;
+          for (let xx = -hw; xx <= hw; xx += APIX) {
+            const gx = Math.round((cl.x + p.dx + r0 * lean[i] + xx) / APIX) * APIX;
+            if (BAY[((gx / APIX) & 3) * 4 + ((y0 / APIX) & 3)] > 7) c.fillRect(gx, y0, APIX, APIX);
+          }
         }
       }
       layer(cLit, -2, 3.5);

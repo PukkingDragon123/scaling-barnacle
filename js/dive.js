@@ -628,9 +628,16 @@ const DiveScene = {
       drawAC(ctx, `urchin_${n.seed % 4}`, 0, 0, w * pulse);
       const dx = Input.mouse.x - n.x, dy = (Input.mouse.y + this.camY) - n.y;
       if (dx * dx + dy * dy < (n.r + 10) * (n.r + 10)) {
-        ctx.strokeStyle = 'rgba(232,60,60,0.55)';
-        ctx.lineWidth = PIX * 2;
-        pixRing(ctx, 0, 0, n.r + 5, null, ctx.lineWidth);
+        // four corner brackets, not a ring: a reticle is a pixel-art shape and a
+        // circle is not
+        ctx.fillStyle = 'rgba(232,60,60,0.7)';
+        const R2 = Math.round((n.r + 5) / APIX) * APIX, L2 = 4;
+        for (let sx2 = -1; sx2 <= 1; sx2 += 2) {
+          for (let sy2 = -1; sy2 <= 1; sy2 += 2) {
+            ctx.fillRect(sx2 < 0 ? -R2 : R2 - L2, sy2 < 0 ? -R2 : R2 - APIX, L2, APIX);
+            ctx.fillRect(sx2 < 0 ? -R2 : R2 - APIX, sy2 < 0 ? -R2 : R2 - L2, APIX, L2);
+          }
+        }
       }
     } else {
       const art = NODE_ART[n.kind];
@@ -782,12 +789,20 @@ const DiveScene = {
     // painted deep water, drifting with your depth
     const depthFrac = this.depthFrac();
     const night = isNight(G.clock) ? 0.55 : 0;
-    const bgH = 432, bgOver = bgH - H;
-    const bgOff = Math.min(bgOver, this.camY * 0.06);
+    // A LOT BIGGER. The painted deep was squeezed into exactly the screen's width
+    // -- a 1440px painting at 480 units, a third of its size -- so all of its
+    // detail arrived tiny and the whole thing read as texture rather than as a
+    // place. Drawn at 1.85x now: you see a crop of it instead of all of it, at a
+    // scale where the ridges and the wreck in it are actually legible, and it
+    // drifts sideways a little with depth so the crop is not always the same one.
+    const bgW = Math.round(W * 1.85);
+    const bgH = Math.round(bgW * 0.9);
     const bgName = `bg_deep${Math.floor(this.time * 5) % 8}`;
-    const bgCv = this.scaled(bgName, W, bgH, 0);
-    if (bgCv) ctx.drawImage(bgCv, 0, -bgOff, W, bgH);
-    else drawA(ctx, bgName, 0, -bgOff, W, bgH);
+    const bgX = Math.round((-(bgW - W) / 2 + Math.sin(this.camY * 0.0016) * 26) / APIX) * APIX;
+    const bgOff = Math.min(bgH - H, this.camY * 0.06);
+    const bgCv = this.scaled(bgName, bgW, bgH, 0);
+    if (bgCv) ctx.drawImage(bgCv, bgX, -bgOff, bgW, bgH);
+    else drawA(ctx, bgName, bgX, -bgOff, bgW, bgH);
     // the deeper you go, the bluer and blacker it gets (headlamp overlay handles the rest)
     ctx.fillStyle = `rgba(3,10,22,${clamp(depthFrac * 0.45 + night * 0.3, 0, 0.7)})`;
     ctx.fillRect(0, 0, W, H);
@@ -922,40 +937,22 @@ const DiveScene = {
       }
     }
 
-    // darkness of the deep (with headlamp hole)
+    // ---- THE DARK OF THE DEEP, WITH NO SPOTLIGHT --------------------------
+    //
+    // This was a radial gradient of darkness following the mouse: a soft round
+    // hole, with a soft round edge, over a pixel-art scene, plus a second
+    // translucent disc on top of it for the lamp's glow. Two circles and a blur
+    // in the one place the player is looking.
+    //
+    // The deep is dark because it is deep. It is a flat veil now, and the lamp
+    // makes the WHOLE scene brighter rather than cutting a porthole in it -- which
+    // is also what a lamp on your head actually does to what you can see.
     const darkBase = clamp(depthFrac * 0.72 + night * 0.35, 0, 0.9) + this.gloom * 0.5;
-    const dark = clamp(darkBase, 0, 0.94);
+    let dark = clamp(darkBase, 0, 0.94);
+    if (G.gear.lamp) dark *= 0.42;
     if (dark > 0.02) {
-      // The dark used to be built on its own full-size canvas each frame —
-      // clear, fill, punch a hole, blit — which is four full-screen passes at
-      // device density. Instead: paint the falloff ONLY in the lamp's box, and
-      // fence the rest of the screen with four flat rects. Same picture, one
-      // small gradient fill.
-      const solid = `rgba(2,6,10,${dark})`;
-      if (G.gear.lamp) {
-        const lx = Input.mouse.x, ly = Input.mouse.y, R = 96;
-        const rg = ctx.createRadialGradient(lx, ly, 8, lx, ly, R);
-        rg.addColorStop(0, 'rgba(2,6,10,0)');
-        rg.addColorStop(0.55, `rgba(2,6,10,${dark * 0.45})`);
-        rg.addColorStop(1, solid);
-        ctx.fillStyle = rg;
-        ctx.fillRect(lx - R, ly - R, R * 2, R * 2);
-        ctx.fillStyle = solid;
-        // the four bands around the lamp box, clamped to the screen
-        const x0 = Math.max(0, lx - R), x1 = Math.min(W, lx + R);
-        const y0 = Math.max(0, ly - R), y1 = Math.min(H, ly + R);
-        if (y0 > 0) ctx.fillRect(0, 0, W, y0);
-        if (y1 < H) ctx.fillRect(0, y1, W, H - y1);
-        if (x0 > 0) ctx.fillRect(0, y0, x0, y1 - y0);
-        if (x1 < W) ctx.fillRect(x1, y0, W - x1, y1 - y0);
-      } else {
-        ctx.fillStyle = solid;
-        ctx.fillRect(0, 0, W, H);
-      }
-      if (G.gear.lamp) {
-        ctx.fillStyle = 'rgba(255,240,190,0.06)';
-        pixDisc(ctx, Input.mouse.x, Input.mouse.y, 60);
-      }
+      ctx.fillStyle = `rgba(2,6,10,${dark.toFixed(3)})`;
+      ctx.fillRect(0, 0, W, H);
     }
 
     // shark stare / attack / leave (in front)
@@ -999,8 +996,8 @@ const DiveScene = {
         ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(2.5, -17 - t * 8); ctx.lineTo(-2.5, -17 - t * 8); ctx.closePath(); ctx.fill();
       }
       ctx.restore();
-      ctx.fillStyle = `rgba(255,255,255,${ba * 0.25})`;
-      pixDisc(ctx, 0, 0, 15 + t * 6);
+      // (no glow disc behind it: the six rays above already say "shining", and a
+      // translucent circle behind a sprite is the softest thing on the screen)
       drawAC(ctx, r.art, 0, 0, 24 * pulse);
       ctx.restore();
       text(ctx, '+' + r.name + (r.extra ? ' +!' : ''), r.x, y - 22, { size: 8, color: '#fff8e0', align: 'center' });
