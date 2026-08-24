@@ -50,16 +50,30 @@ const SKY = {
     this.clouds = [];
     let x = 0;
     while (x < this.BANK_W) {
+      // MORE, AND SMALLER. Four to nine big puffs give a cloud a bubbly outline
+      // you can count; a cumulus is lumpy at two or three scales at once. So the
+      // main run is finer, and then a scatter of CROWN puffs half the size goes
+      // over the top of it, which is what breaks the silhouette up into something
+      // that looks drawn rather than assembled out of circles.
       const cluster = [];
-      const n = 4 + Math.floor(rng() * 6);
+      const n = 6 + Math.floor(rng() * 8);
       const bigness = 0.5 + rng() * rng() * 1.5;      // mostly small, a few towers
       let cx = 0, top = 0;
       for (let i = 0; i < n; i++) {
         const t = i / (n - 1);
-        const r = (4 + rng() * 8) * bigness * (0.5 + Math.sin(t * Math.PI) * 0.8);
-        cluster.push({ dx: cx, dy: -r * (0.35 + rng() * 0.4), r });
+        const r = (3.4 + rng() * 7) * bigness * (0.5 + Math.sin(t * Math.PI) * 0.85);
+        cluster.push({ dx: cx, dy: -r * (0.35 + rng() * 0.45), r });
         top = Math.max(top, r);
-        cx += r * (0.55 + rng() * 0.35);
+        cx += r * (0.5 + rng() * 0.3);
+      }
+      const crowns = 2 + Math.floor(rng() * 4);
+      for (let i = 0; i < crowns; i++) {
+        const host = cluster[Math.floor(rng() * cluster.length)];
+        cluster.push({
+          dx: host.dx + (rng() - 0.5) * host.r * 1.1,
+          dy: host.dy - host.r * (0.45 + rng() * 0.35),
+          r: host.r * (0.3 + rng() * 0.28),
+        });
       }
       this.clouds.push({ x, w: cx, puffs: cluster, layer: rng() < 0.35 ? 0 : 1 });
       x += cx + rng() * 26;
@@ -126,18 +140,36 @@ const SKY = {
     c.clearRect(0, 0, this.BANK_W, pad + 12);
 
     const cLit = rgbLerp([255, 255, 255], cloudC, 0.10);
+    const cRim = rgbLerp([255, 255, 255], cloudC, 0.02);   // the sunward edge
     const cBody = rgbLerp(cloudC, [206, 226, 244], 0.55);
     const cDark = rgbLerp(cloudC, [150, 182, 214], 0.75);
+    const BAY = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 
     for (const cl of this.clouds) {
-      const layer = (col, dy, shrink) => {
+      const layer = (col, dy, shrink, dx) => {
         c.fillStyle = cssRGB(col);
-        for (const p of cl.puffs) this._disc(c, cl.x + p.dx, pad + p.dy + dy, p.r - shrink);
+        for (const p of cl.puffs) this._disc(c, cl.x + p.dx + (dx || 0), pad + p.dy + dy, p.r - shrink);
         c.fillRect(cl.x - 1, pad + dy - 1, cl.w + 2, Math.max(APIX, 3 - shrink * 0.4));
       };
       layer(cDark, 1.5, 0);
       layer(cBody, 0, 1.5);
+      // FOUR TONES AND A DITHER, not three hard steps. The band between the body
+      // and the lit top is scattered rather than cut, which is the difference
+      // between a shaded cloud and a stack of paper circles.
+      c.fillStyle = cssRGB(cBody);
+      for (const p of cl.puffs) {
+        const r0 = p.r - 3.5;
+        if (r0 < APIX * 2) continue;
+        const cx0 = cl.x + p.dx, cy0 = pad + p.dy - 2;
+        for (let a = 0; a < 26; a++) {
+          const ang = (a / 26) * Math.PI + Math.PI;      // the top half only
+          const px0 = Math.round((cx0 + Math.cos(ang) * r0) / APIX) * APIX;
+          const py0 = Math.round((cy0 + Math.sin(ang) * r0 * 0.9) / APIX) * APIX;
+          if (BAY[(a & 3) * 4 + (a >> 2 & 3)] > 7) c.fillRect(px0, py0, APIX, APIX);
+        }
+      }
       layer(cLit, -2, 3.5);
+      layer(cRim, -3.5, 5.5, -1);
     }
     this._cloudKey = key;
     return this._cloudCv;

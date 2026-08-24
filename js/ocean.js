@@ -140,6 +140,7 @@ const Ocean = {
 
   // ---- pool sizes -------------------------------------------------------------
   BUB_MAX: 96, MOTE_MAX: 72, RING_MAX: 10, SPILL_MAX: 8, SIL_MAX: 3, DROP_MAX: 30,
+  FARFISH_MAX: 12,        // small fish, blurred, far back: see _drawFarFish
   CRITTER_MAX: 9,         // crabs and starfish on the sand: see _drawCritters
   ANGEL_MAX: 7,           // sea angels in the water column: see _drawAngels
 
@@ -256,7 +257,7 @@ const Ocean = {
   _ft: 0.016, _qt: 0,
   _prevDir: null, _tapT: null, _prevDash: false,
   bubbles: null, motes: null, rings: null, spills: null, sils: null, drops: null,
-  critters: null, angels: null,
+  critters: null, angels: null, farfish: null,
   _chunks: null, _order: null,
   // seabed: one 1-D cache keyed by chunk COLUMN, plus two scratch sample rows for
   // the bed and the ridge behind it (allocated once, refilled every frame)
@@ -449,6 +450,26 @@ const Ocean = {
       s.fy = this.camY * 0.35 + rand(-120, H + 160);
       s.vx = (Math.random() < 0.5 ? -1 : 1) * rand(5, 13);
       s.ph = rand(TAU);
+    }
+    // ---- AND SMALL FISH, FAR BACK AND OUT OF FOCUS --------------------------
+    //
+    // Real sprites, not quads: the sheets already have a puffer, a sunfish, a
+    // hogfish and a clownfish in them. They are baked BLURRED and washed towards
+    // the water's own colour, which is what puts something behind something else
+    // -- and then drawn small, at the far layer's parallax, in loose groups. Not
+    // a shoal of confetti in your face; a suggestion of fish, forty feet away.
+    const FART = ['stock_puffer_0', 'stock_sunfish_0', 'stock_hogfish_0', 'tame_clown_0', 'tame_pig_0'];
+    this.farfish = new Array(this.FARFISH_MAX);
+    for (let i = 0; i < this.FARFISH_MAX; i++) {
+      const grp = (i / 3) | 0;
+      this.farfish[i] = {
+        art: FART[grp % FART.length],
+        w: 13 + (i % 3) * 4 + grp * 2,
+        fx: this.camX * 0.42 + rand(-500, W + 500),
+        fy: this.camY * 0.42 + rand(-60, H + 120),
+        vx: (grp % 2 ? -1 : 1) * rand(7, 15),
+        ph: rand(TAU),
+      };
     }
   },
 
@@ -2205,6 +2226,58 @@ const Ocean = {
     return rec;
   },
 
+  // The same trick as the big silhouettes, but blurred and only PART way to the
+  // water's colour, so a far fish still has a hint of its own markings in it.
+  _farFishCv(name) {
+    this._ffCv = this._ffCv || {};
+    const hit = this._ffCv[name];
+    if (hit !== undefined) return hit;
+    const img = ASSETS[name];
+    if (!img || !img.width) return null;            // not loaded: try again later
+    const q = DPX / 2;
+    const w = 46, h = w * img.height / img.width;
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(w * q));
+    cv.height = Math.max(1, Math.round(h * q));
+    const c = cv.getContext('2d');
+    c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+    if (typeof c.filter === 'string') c.filter = 'blur(1.2px)';
+    c.drawImage(img, 0, 0, cv.width, cv.height);
+    if (typeof c.filter === 'string') c.filter = 'none';
+    c.globalCompositeOperation = 'source-atop';
+    c.fillStyle = 'rgba(24,74,104,0.62)';
+    c.fillRect(0, 0, cv.width, cv.height);
+    const rec = { cv: cv, ar: h / w };
+    this._ffCv[name] = rec;
+    return rec;
+  },
+
+  _drawFarFish(ctx, t) {
+    if (!this.farfish) return;
+    for (let i = 0; i < this.farfish.length; i++) {
+      const f = this.farfish[i];
+      f.fx += f.vx * (Game.dt || 0.016);
+      const sx = f.fx - this.camX * 0.42;
+      const sy = f.fy - this.camY * 0.42 + Math.sin(t * 0.8 + f.ph) * 3;
+      if (sx < -140) { f.fx += W + 280; continue; }
+      if (sx > W + 140) { f.fx -= W + 280; continue; }
+      if (sx < -40 || sx > W + 40 || sy < -40 || sy > H + 40) continue;
+      const rec = this._farFishCv(f.art);
+      if (!rec) continue;
+      const w = f.w, h = w * rec.ar;
+      const sm = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = true;
+      ctx.globalAlpha = 0.42;
+      ctx.save();
+      ctx.translate(Math.round((sx) / APIX) * APIX, Math.round(sy / APIX) * APIX);
+      if (f.vx < 0) ctx.scale(-1, 1);
+      ctx.drawImage(rec.cv, -w / 2, -h / 2, w, h);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+      ctx.imageSmoothingEnabled = sm;
+    }
+  },
+
   // centred, at whatever width the caller wants
   _silDraw(ctx, name, cx, cy, w, flip, alpha) {
     const r = this._sil(name);
@@ -2284,6 +2357,7 @@ const Ocean = {
     // full-copy the optimisation was originally built for).
     this._drawWater(ctx, t);
     this._drawFar(ctx, t);
+    this._drawFarFish(ctx, t);
     this._drawMid(ctx, t);
     this._drawFloorFar(ctx);
     this._drawHaze(ctx);

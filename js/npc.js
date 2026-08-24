@@ -466,8 +466,9 @@ const NPCs = {
     // key for something that has a labelled button an inch below it, in a game
     // that is played on a tablet as often as not. The button says HAND IN or
     // A JOB? on its face and wears a blinking pip when something is waiting.
-    if (tk && tk.kind === 'in') said.push(`(${n.name} has noticed what you are carrying.)`);
-    else if (tk && tk.kind === 'ask') said.push(`(${n.name} has a job that wants doing.)`);
+    // (No '(Fintan has a job that wants doing.)' either. The button below says
+    // A JOB? on its face and wears a blinking pip when a hand-in is waiting,
+    // which is the same information without a narrator.)
 
     this._setPages(said);
     // ...and if they have something to ask you today, that is where the
@@ -939,26 +940,35 @@ const NPCs = {
       if (r.money) this._payFx('$' + r.money, 'coin');
       if (r.items) for (const k in r.items) this._payFx(r.items[k] + ' ' + Side.itemName(k), k);
       if (r.seeds) for (const k in r.seeds) this._payFx(r.seeds[k] + ' seeds', 'seed');
-      if (r.note) said.push(`(${r.note})`);
+      if (r.note) this._payFx(r.note, 'star');
       this._setPages(said);
       return;
     }
     if (t.kind === 'ask') {
       if (!Side.accept(q)) { SND.alarm(); return; }
-      const said = [this._speech(q.ask)];
-      said.push(`(Errand taken: "${q.name}". It is in the journal -- [J].)`);
-      if (q.how) said.push(`(${q.how})`);
-      this._setPages(said);
+      // NO STAGE DIRECTIONS AND NO INSTRUCTIONS. This used to append
+      // '(Errand taken: "X". It is in the journal -- [J].)' and then, worse,
+      // '(buy a Sea Planter at the stall, swim down, [E] on the sand by the
+      // pier)' -- a walkthrough line, in brackets, in the middle of a person
+      // speaking. The errand is in the journal because it is in the journal; the
+      // tracker under the day badge already names the next step. What the
+      // character says is what they say.
+      if (typeof Game !== 'undefined' && Game.toast) Game.toast('New errand: ' + q.name);
+      this._setPages([this._speech(q.ask)]);
       return;
     }
     // still carrying it: they ask how it is going, and the answer is the numbers
+    // ...and they ASK, in their own voice, instead of the box printing a counter
+    // and a set of directions. The journal has the numbers.
     const p = Side.prog(q);
-    const said = [`${n.name}: "How is that going, then -- ${q.name.toLowerCase()}?"`];
-    if (q.deliver) said.push(`(You have ${Side.deliverText(q)}.)`);
-    else if (p) said.push(`(${p.n} of ${p.of} so far.)`);
-    if (q.how) said.push(`(${q.how})`);
+    let line = 'How is that going, then -- ' + q.name.toLowerCase() + '?';
+    if (p && p.of) {
+      line += p.n <= 0 ? ' Not started? No shame in it.'
+        : (p.n >= p.of ? ' Ah -- that looks like all of it. Hand it over.'
+          : ' Part way, by the look of you. Keep at it.');
+    }
     SND.blip();
-    this._setPages(said);
+    this._setPages([line]);
   },
   _giftRect(i) {
     const r = this._rect();

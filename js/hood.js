@@ -1703,19 +1703,12 @@ const Hood = {
     cottage: [{ art: 'furn_5', w: 30 }, { art: 'ftool_1', w: 11 }],
     shack: [{ art: 'furn_12', w: 32 }, { art: 'g_netbag', w: 12 }],
   },
+  // NOTHING LAID ON TOP ANY MORE. Each house sprite arrives already dressed --
+  // the cottage has planters and a watering can painted on its deck, the shack a
+  // barrel and a net, the lighthouse its rail and lamp room. Stacking a second
+  // watering can and a crate on top of that is not dressing a deck, it is
+  // clutter, and it is what made the neighbourhood read as busy in a bad way.
   _drawProps: function (ctx, FLOOR, t) {
-    var home = this.home;
-    var list = this.PROPS[home.key] || [];
-    var bx = this.PROP_X;
-    for (var i = 0; i < list.length; i++) {
-      var pr = list[i];
-      var w = pr.w;
-      var h = assetH(pr.art, w);
-      var px = bx + (i === 0 ? 0 : 14);
-      drawA(ctx, pr.art, px - w / 2, FLOOR - h - (pr.lift || 0), w, h);
-    }
-    // the procedural crate needs no art at all, so the deck is never bare
-    if (typeof drawCrate === 'function') drawCrate(ctx, bx - 32, FLOOR - 12, 12);
   },
 
   _drawOtto: function (ctx, FLOOR, t) {
@@ -1851,16 +1844,10 @@ const Hood = {
       ctx.globalAlpha = 1;
     };
     var side = hm.climbDX < 0 ? -1 : 1;             // the ladder's side of the house
-    // the rope fence runs along the side AWAY from the ladder, so it never draws
-    // across the one thing the player has to be able to reach
-    var img = ASSETS.kit_ropefence;
-    if (img && img.width) {
-      var fh = 13, fw = fh * img.width / img.height;
-      var fx = hm.x - side * (hm.w * 0.14) - fw / 2;
-      ctx.globalAlpha = 0.95 * dim;
-      ctx.drawImage(img, Math.round(fx * DPX) / DPX, hm.deckY - fh + 1, fw, fh);
-      ctx.globalAlpha = 1;
-    }
+    // (NO ROPE FENCE. It ran the length of the open side of every deck and it was
+    // the thing standing between the player and the house: a railing in front of
+    // somebody's front door. The three house sprites already have their own rails
+    // painted on. A mooring post and a lamp are enough of a deck.)
     stand('kit_mooring', hm.x + side * (hm.w * 0.34), 18);
     stand('kit_lamp', hm.x - side * (hm.w * 0.34), 17);
     if (nite > 0.1) {
@@ -1934,8 +1921,8 @@ const Hood = {
     var p = this.plotOf(hm.key);
     if (p) {
       var px = hm.x + hm.plotDX;
-      ctx.fillStyle = '#5a4526';
-      ctx.fillRect(px - 5, hm.deckY - 4, 10, 4);
+      // (No pot drawn under it. Every one of these decks has real planters in the
+      // art already; a brown rectangle beside them read as a second, worse one.)
       var art = 'crop_' + p.crop + '_' + p.stage;
       var img = ASSETS[art];
       if (img && img.width) {

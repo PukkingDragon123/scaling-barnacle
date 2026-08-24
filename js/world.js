@@ -437,40 +437,85 @@ const WorldScene = {
     }
   },
 
+  // ---- THE SUPPLY DRONE ---------------------------------------------------------
+  //
+  // It used to hover at cruise height and fire a translucent blue trapezoid at
+  // the deck, and the crate rose up the middle of it. A tractor beam, on a pier,
+  // in a game about an otter with a satchel -- and worse, nothing ever touched
+  // anything: the crate levitated and the claw stayed shut.
+  //
+  // Now it does the job with its hands. It comes in from the right, DROPS to the
+  // deck, opens the claw, closes it on the crate with a bump and a puff of dust,
+  // lifts with the crate slung underneath on two lines, and carries it away. The
+  // crate's position is the drone's position from the moment it is grabbed, which
+  // is what makes it read as carried rather than as animated separately.
+  //
+  //   t 10 .. 4.6   fly in, cruise height
+  //   t 4.6 .. 3.4  descend to the deck
+  //   t 3.4 .. 2.6  claw closes on the crate
+  //   t 2.6 .. 1.4  lift, crate slung under
+  //   t 1.4 .. 0    away to the left, still carrying
   drawDrone(ctx) {
     const pc = G.pendingCrate;
     if (!pc) return;
     const padX = 171, padY = DECK_Y - 1;
-    let crateY = padY - 10;
-    let leaving = pc.t <= 1.1;
-    if (pc.t <= 2.4 && pc.t > 1.1) crateY = padY - 10 - (2.4 - pc.t) * 30;
-    if (!leaving) drawCrate(ctx, padX - 6, crateY);
+    const t = pc.t;
+    const CRUISE = 34, LOW = padY - 26;
+    const q = APIX, snap = (v) => Math.round(v / q) * q;
 
-    if (pc.t <= 10) {
-      let dx, dy, img = 'drone_fly';
-      if (pc.t > 4) {
-        const f = (10 - pc.t) / 6;
-        dx = lerp(this.worldW() + 30, padX, f);
-        dy = lerp(34, 52, f);
-      } else if (pc.t > 1.1) {
-        dx = padX + Math.sin(this.time * 2) * 2;
-        dy = 52 + Math.sin(this.time * 3) * 2;
-        img = 'drone_claw';
-        if (pc.t <= 2.4) {
-          ctx.fillStyle = `rgba(120,220,255,${0.25 + Math.sin(this.time * 12) * 0.08})`;
-          ctx.beginPath();
-          ctx.moveTo(dx - 3, dy + 8); ctx.lineTo(dx + 3, dy + 8);
-          ctx.lineTo(dx + 10, crateY + 8); ctx.lineTo(dx - 10, crateY + 8);
-          ctx.closePath(); ctx.fill();
-        }
-      } else {
-        const f = 1 - pc.t / 1.1;
-        dx = lerp(padX, -60, f);
-        dy = lerp(52, 18, f);
-        img = Math.floor(this.time * 7) % 2 ? 'drone_go' : 'drone_go2';
-      }
-      if (img === 'drone_claw' && pc.t <= 2.4) img = Math.floor(this.time * 7) % 2 ? 'drone_lift' : 'drone_lift2';
-      drawAC(ctx, img, dx, dy + Math.sin(this.time * 5) * 1.2, 30);
+    let dx, dy, img = 'drone_fly';
+    let held = false, holdK = 0;
+    if (t > 4.6) {                                  // coming in
+      const f = clamp((10 - t) / 5.4, 0, 1);
+      dx = lerp(this.worldW() + 30, padX, f * f * (3 - 2 * f));
+      dy = lerp(CRUISE, CRUISE + 6, f);
+    } else if (t > 3.4) {                           // dropping onto the deck
+      const f = clamp((4.6 - t) / 1.2, 0, 1);
+      dx = padX;
+      dy = lerp(CRUISE + 6, LOW, f * f * (3 - 2 * f));
+      img = 'drone_claw';
+    } else if (t > 2.6) {                           // the grab
+      const f = clamp((3.4 - t) / 0.8, 0, 1);
+      dx = padX + (f > 0.45 && f < 0.75 ? (Math.floor(this.time * 24) % 2 ? q : -q) : 0);
+      dy = LOW + Math.sin(f * Math.PI) * 2;
+      img = Math.floor(this.time * 9) % 2 ? 'drone_lift' : 'drone_lift2';
+      held = f > 0.55; holdK = 0;
+    } else if (t > 1.4) {                           // lifting away
+      const f = clamp((2.6 - t) / 1.2, 0, 1);
+      dx = padX;
+      dy = lerp(LOW, CRUISE, f * f * (3 - 2 * f));
+      img = Math.floor(this.time * 7) % 2 ? 'drone_lift' : 'drone_lift2';
+      held = true; holdK = f;
+    } else {                                        // off, with the crate
+      const f = clamp(1 - t / 1.4, 0, 1);
+      dx = lerp(padX, -60, f * f);
+      dy = lerp(CRUISE, 18, f);
+      img = Math.floor(this.time * 7) % 2 ? 'drone_go' : 'drone_go2';
+      held = true; holdK = 1;
     }
+    const bob = Math.sin(this.time * 5) * 1.2;
+    dx = snap(dx); dy = snap(dy + bob);
+
+    // the crate: on the deck until the claw closes, under the drone after
+    if (held) {
+      const cy = snap(dy + 15);
+      // two lines, not a beam
+      ctx.fillStyle = '#3a2a18';
+      ctx.fillRect(snap(dx - 5), snap(dy + 7), q, cy - dy - 7);
+      ctx.fillRect(snap(dx + 4), snap(dy + 7), q, cy - dy - 7);
+      drawCrate(ctx, snap(dx - 6), cy);
+    } else if (t > 2.6) {
+      drawCrate(ctx, padX - 6, padY - 10);
+    }
+
+    // dust off the boards, the moment it touches down and the moment it lifts
+    if ((t > 3.2 && t < 3.5) || (t > 2.4 && t < 2.7)) {
+      ctx.fillStyle = 'rgba(214,196,160,0.5)';
+      for (let i = 0; i < 5; i++) {
+        const s2 = (i - 2) * 5;
+        ctx.fillRect(snap(padX + s2), snap(padY - 2 - (i % 2)), q * 2, q);
+      }
+    }
+    drawAC(ctx, img, dx, dy, 30);
   },
 };
