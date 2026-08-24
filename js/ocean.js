@@ -149,7 +149,13 @@ const Ocean = {
   // frame and a tall curled-up hurt frame both land at a sane size. Frame lists
   // are read straight off the 4x4 sheets described in the manifest.
   ANIM: {
-    cruise: { f: ['oswim_0', 'oswim_1', 'oswim_2', 'oswim_3'], fps: 6.5, box: 54 },
+    // A TWO-BEAT STROKE OUT OF A ROW THAT ONLY HAS ONE. Frames 0, 2 and 3 of the
+    // cruise row are all the same tucked pose with tiny differences; only frame 1
+    // is the arms-forward reach. Played 0,1,2,3 that is one beat of movement and
+    // three of nothing, which is the twitch. Ordered tuck-reach-tuck-reach it is
+    // a paddle: the reach comes round twice a cycle, and the two tucks are
+    // different enough from each other to keep it from looking like a loop of two.
+    cruise: { f: ['oswim_0', 'oswim_1', 'oswim_2', 'oswim_1'], fps: 5.6, box: 54 },
     dive:   { f: ['oswim_12', 'oswim_13', 'oswim_14', 'oswim_15'], fps: 7, box: 54 },
     dash:   { f: ['oswim_4', 'oswim_5', 'oswim_6', 'oswim_7'], fps: 15, box: 58 },
     roll:   { f: ['oswim_8', 'oswim_9', 'oswim_10', 'oswim_11'], fps: 0, box: 52 },
@@ -3773,7 +3779,16 @@ const Ocean = {
     // more -- it is a picture -- so the finest correct grid for it is the screen's
     // own, and anything coarser throws away smoothness of motion for nothing.
     const q2 = 1 / (DPX * (this.ZOOM || 1));
-    ctx.translate(Math.round(sx / q2) * q2, Math.round(sy / q2) * q2);
+    // ...and an undulation. A swimming animal does not travel along a straight
+    // line: the whole body rises and falls with the stroke. It is a translation of
+    // a baked bitmap by a WHOLE number of device pixels, so it costs nothing and
+    // cannot resample -- and it is what turns four poses into swimming.
+    let und = 0;
+    if (!this.over && this.anim === 'cruise') {
+      const spd = clamp(this.speed() / 120, 0.25, 1);
+      und = Math.round(Math.sin(this.animT * TAU * 0.5) * 1.6 * spd / q2) * q2;
+    }
+    ctx.translate(Math.round(sx / q2) * q2, Math.round((sy + und) / q2) * q2);
     // NO BANK, NO SQUASH. THIS IS WHY HE FLICKERED.
     //
     // I checked the art first this time: the oswim sheet has ZERO partially
