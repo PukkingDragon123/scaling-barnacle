@@ -223,6 +223,51 @@ const SKY = {
     return this._cloudCv;
   },
 
+  // Thin fibrous cloud, baked once per palette. Long flat runs with a soft top
+  // edge and a harder bottom, exactly like the cumulus lumps but stretched.
+  cirrusCanvas(col) {
+    const q8 = (v) => (v + 4) >> 3;
+    const key = (q8(col[0]) << 16) | (q8(col[1]) << 8) | q8(col[2]);
+    if (this._cirKey === key && this._cirCv) return this._cirCv;
+    if (!this.clouds) this.init();
+    const HT = 30;
+    if (!this._cirCv) {
+      this._cirCv = document.createElement('canvas');
+      this._cirCv.width = this.BANK_W * DPX;
+      this._cirCv.height = HT * DPX;
+    }
+    const c = this._cirCv.getContext('2d');
+    c.setTransform(DPX, 0, 0, DPX, 0, 0);
+    c.clearRect(0, 0, this.BANK_W, HT);
+    const rng = mulberry32(0x0C1AA5);
+    c.fillStyle = cssRGB(col);
+    const S = APIX, snap2 = (v) => Math.round(v / S) * S;
+    let x = 0;
+    while (x < this.BANK_W) {
+      const len = 30 + rng() * 90;
+      const y0 = snap2(4 + rng() * (HT - 12));
+      const rows = 2 + ((rng() * 3) | 0);
+      const slope = (rng() - 0.5) * 0.06;
+      for (let r = 0; r < rows; r++) {
+        // each row is a run, shorter and offset as it goes down: a feathered wisp
+        const shrink = r * (0.12 + rng() * 0.10);
+        const w = Math.max(S, snap2(len * (1 - shrink)));
+        const xo = snap2(x + len * shrink * 0.5 + r * 2);
+        const yy = snap2(y0 + r * S + (x - 0) * slope);
+        // broken into dashes, so it is fibrous rather than a bar
+        let dx = 0;
+        while (dx < w) {
+          const seg = snap2(3 + rng() * 12);
+          if (rng() > 0.24) c.fillRect(xo + dx, yy, Math.min(seg, w - dx), S);
+          dx += seg + snap2(rng() * 5);
+        }
+      }
+      x += len + 20 + rng() * 80;
+    }
+    this._cirKey = key;
+    return this._cirCv;
+  },
+
   // a 4-point pixel star, like the reference sparkles
   spark(ctx, x, y, s, col) {
     ctx.fillStyle = col;
@@ -384,7 +429,7 @@ const SKY = {
     3, 35, 11, 43, 1, 33, 9, 41, 51, 19, 59, 27, 49, 17, 57, 25,
     15, 47, 7, 39, 13, 45, 5, 37, 63, 31, 55, 23, 61, 29, 53, 21,
   ],
-  SKY_STEP: 17,        // colour quantisation: about fifteen levels a channel
+  SKY_STEP: 11,        // colour quantisation: about twenty-three levels a channel
 
   skyCanvas(clock) {
     const key = Math.round(clock * 80);
@@ -423,10 +468,29 @@ const SKY = {
       const yb = (y & 7) * 8;
       // the bloom falls off with height above the horizon
       const vg = Math.max(0, 1 - Math.abs(f - 0.97) * 2.1);
+      // ...and the whole sky leans towards the sun's side. A real sky is not the
+      // same colour left and right: it is warmer and paler where the light comes
+      // from and colder and deeper away from it, all the way up. This is the one
+      // thing that separates a painted sky from a vertical gradient.
+      const lean = 0.16 + 0.20 * (1 - f);
+      // a soft column of light standing above the sun, strongest low down
+      const col = Math.max(0, 1 - Math.abs(f - 0.6) * 1.5) * 0.16 * (isDay ? 1 : 0.35);
       for (let x = 0; x < pw; x++) {
         rr[0] = a[0] + (b[0] - a[0]) * k;
         rr[1] = a[1] + (b[1] - a[1]) * k;
         rr[2] = a[2] + (b[2] - a[2]) * k;
+        // across: towards the sun's colour on its side, away from it on the other
+        const across = 1 - Math.min(1, Math.abs(x - sunX) / (pw * 0.85));
+        const lw = lean * (across - 0.35);
+        rr[0] += (sun[0] - rr[0]) * lw * 0.9;
+        rr[1] += (sun[1] - rr[1]) * lw * 0.7;
+        rr[2] += (sun[2] - rr[2]) * lw * 0.4;
+        if (col > 0) {
+          const cw = col * Math.max(0, 1 - Math.abs(x - sunX) / (pw * 0.13));
+          rr[0] += (sun[0] - rr[0]) * cw;
+          rr[1] += (sun[1] - rr[1]) * cw;
+          rr[2] += (sun[2] - rr[2]) * cw;
+        }
         if (vg > 0) {
           const hx = Math.abs(x - sunX) / (pw * 0.42);
           const g = Math.max(0, 1 - hx) * vg * heat;
@@ -528,6 +592,24 @@ const SKY = {
         const x = snap(-off + t * this.BANK_W - 90);
         if (x > W || x + this.BANK_W < 0) continue;
         ctx.drawImage(bank, x, snap(baseY), this.BANK_W, bank.height / DPX);
+      }
+    }
+    // ---- CIRRUS, high up ------------------------------------------------------
+    //
+    // A sky with one bank of cumulus on the horizon and nothing above it is a
+    // backdrop. Real weather is layered: fair-weather cumulus low down and thin
+    // fibrous cirrus a long way above it, moving at a different speed because it
+    // is a long way further off. These are long, thin, almost flat runs of the
+    // same lump technique -- five or six texels tall and forty across -- drawn
+    // pale over the top third of the sky.
+    const cir = this.cirrusCanvas(rgbLerp([255, 255, 255], cloudC, 0.18));
+    if (cir) {
+      const off2 = (((time * 0.55 + cam * 0.05) % this.BANK_W) + this.BANK_W) % this.BANK_W;
+      ctx.globalAlpha = 0.42;
+      for (let t2 = -1; t2 <= 1; t2++) {
+        const x = snap(-off2 + t2 * this.BANK_W - 40);
+        if (x > W || x + this.BANK_W < 0) continue;
+        ctx.drawImage(cir, x, snap(HZ * 0.10), this.BANK_W, cir.height / DPX);
       }
     }
     ctx.globalAlpha = 1;
