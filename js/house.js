@@ -195,7 +195,7 @@ const HouseScene = {
       sqx = 1 - (sqy - 1) * 0.7;
     }
     ctx.fillStyle = 'rgba(40,20,10,0.2)';
-    ctx.beginPath(); ctx.ellipse(this.px, FLOOR + 0.8, Math.max(3.5, 6 - hop * 0.9), 1.3, 0, 0, TAU); ctx.fill();
+    pixEllipse(ctx, this.px, FLOOR + 0.8, Math.max(3.5, 6 - hop * 0.9), 1.3);
     const oimg = ASSETS[walking ? OTTER_WALK[frameN] : OTTER_IDLE[Math.floor(this.time * 2.2) % 4]];
     if (oimg && oimg.width) {
       const oh = 30, ow = oh * oimg.width / oimg.height;

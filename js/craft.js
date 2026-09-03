@@ -808,9 +808,9 @@ const Craft = {
       ctx.stroke();
     } else if (g === 'plate') {
       ctx.fillStyle = '#f2e6c9';
-      ctx.beginPath(); ctx.ellipse(0, 1.6 * u, 5 * u, 2.2 * u, 0, 0, TAU); ctx.fill();
+      pixEllipse(ctx, 0, 1.6 * u, 5 * u, 2.2 * u);
       ctx.fillStyle = '#c98a52';                        // the fish
-      ctx.beginPath(); ctx.ellipse(-0.4 * u, 0.4 * u, 3.4 * u, 1.6 * u, 0, 0, TAU); ctx.fill();
+      pixEllipse(ctx, -0.4 * u, 0.4 * u, 3.4 * u, 1.6 * u);
       ctx.fillStyle = '#a86432';
       ctx.beginPath();
       ctx.moveTo(2.8 * u, 0.4 * u); ctx.lineTo(4.6 * u, -1 * u); ctx.lineTo(4.6 * u, 1.8 * u);
@@ -822,18 +822,18 @@ const Craft = {
       ctx.fillStyle = '#e8e2f2';
       ctx.fillRect(-3.4 * u, -0.6 * u, 6.8 * u, 4 * u);
       ctx.fillStyle = '#fff4c9';                        // set custard
-      ctx.beginPath(); ctx.ellipse(0, -0.6 * u, 3.4 * u, 1.4 * u, 0, 0, TAU); ctx.fill();
+      pixEllipse(ctx, 0, -0.6 * u, 3.4 * u, 1.4 * u);
       ctx.fillStyle = '#e0b0ff';                        // moonbloom petal
       ctx.beginPath(); ctx.arc(0.8 * u, -1.4 * u, 1.1 * u, 0, TAU); ctx.fill();
       ctx.fillStyle = '#cfc8dc';
       ctx.fillRect(-3.4 * u, 3.4 * u, 6.8 * u, 0.8 * u);
     } else if (g === 'roll') {
       ctx.fillStyle = '#3f6a3a';                        // two kelp-wrapped rolls
-      ctx.beginPath(); ctx.ellipse(-2.4 * u, 0.6 * u, 2.6 * u, 3 * u, 0, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(2.6 * u, 1 * u, 2.6 * u, 3 * u, 0, 0, TAU); ctx.fill();
+      pixEllipse(ctx, -2.4 * u, 0.6 * u, 2.6 * u, 3 * u);
+      pixEllipse(ctx, 2.6 * u, 1 * u, 2.6 * u, 3 * u);
       ctx.fillStyle = '#f2e6c9';                        // the pale middle
-      ctx.beginPath(); ctx.ellipse(-2.4 * u, 0.6 * u, 1.5 * u, 1.9 * u, 0, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(2.6 * u, 1 * u, 1.5 * u, 1.9 * u, 0, 0, TAU); ctx.fill();
+      pixEllipse(ctx, -2.4 * u, 0.6 * u, 1.5 * u, 1.9 * u);
+      pixEllipse(ctx, 2.6 * u, 1 * u, 1.5 * u, 1.9 * u);
       ctx.fillStyle = '#eda93e';                        // roe
       ctx.beginPath(); ctx.arc(-2.4 * u, 0.6 * u, 0.9 * u, 0, TAU); ctx.fill();
       ctx.beginPath(); ctx.arc(2.6 * u, 1 * u, 0.9 * u, 0, TAU); ctx.fill();
@@ -1184,9 +1184,9 @@ const Craft = {
       ctx.fillRect(rx - 6.4, D - 14.6, 12.8, 1.4);
       ctx.fillRect(rx - 6.4, D - 5.4, 12.8, 1.4);
       ctx.fillStyle = '#9fc4d4';                     // rim, seen from slightly above
-      ctx.beginPath(); ctx.ellipse(rx, D - 18, 5.6, 1.7, 0, 0, TAU); ctx.fill();
+      pixEllipse(ctx, rx, D - 18, 5.6, 1.7);
       ctx.fillStyle = '#5ad2f0';                     // rainwater
-      ctx.beginPath(); ctx.ellipse(rx, D - 17.8, 4.4, 1.2, 0, 0, TAU); ctx.fill();
+      pixEllipse(ctx, rx, D - 17.8, 4.4, 1.2);
       ctx.fillStyle = 'rgba(191,232,245,0.75)';
       ctx.fillRect(rx - 3.4, D - 18.4, 5, 0.6);
     }

@@ -1342,9 +1342,7 @@ const NPCs = {
       const lean = walking ? Math.sin(wph) * 0.035 : 0;
 
       c.fillStyle = 'rgba(40,20,10,0.18)';
-      c.beginPath();
-      c.ellipse(n.x, DECK_Y + 0.8, n.h * 0.22, 1.4, 0, 0, TAU);
-      c.fill();
+      pixEllipse(c, n.x, DECK_Y + 0.8, n.h * 0.22, 1.4);
 
       const img = ASSETS[n.art + '_' + pool[fi]];
       if (img && img.width) {

@@ -730,7 +730,7 @@ const Stock = {
       const fxx = cx - hw + 7 + i * (hw - 1);
       const fy = top - 3.4 + Math.sin(this.time * 1.7 + i * 1.9) * 0.5;
       ctx.fillStyle = i === 1 ? '#e8434c' : '#f2e6c9';
-      ctx.beginPath(); ctx.ellipse(fxx, fy, 2.6, 1.9, 0, 0, TAU); ctx.fill();
+      pixEllipse(ctx, fxx, fy, 2.6, 1.9);
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.fillRect(fxx - 1.4, fy - 1.4, 1.4, 0.5);
     }

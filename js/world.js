@@ -369,7 +369,7 @@ const WorldScene = {
       hop = Math.max(0, Math.sin(this.time * 2.1)) * 0.35;
     }
     ctx.fillStyle = 'rgba(40,20,10,0.18)';
-    ctx.beginPath(); ctx.ellipse(this.px, DECK_Y + 0.8, Math.max(3.5, 6 - hop * 0.9), 1.3, 0, 0, TAU); ctx.fill();
+    pixEllipse(ctx, this.px, DECK_Y + 0.8, Math.max(3.5, 6 - hop * 0.9), 1.3);
     const oimg = ASSETS[walking ? OTTER_WALK[frameN] : OTTER_IDLE[Math.floor(this.time * 2.2) % 4]];
     if (oimg && oimg.width) {
       // EVERYTHING THAT MOVES HIM IS QUANTISED TO A SPRITE TEXEL.

@@ -180,13 +180,10 @@ const DiveFX = {
     ctx.translate(cx, cy);
     ctx.rotate(tilt);
 
-    // a soft shadow on the wall behind it, offset by the depth of the swing
-    ctx.globalAlpha = 0.2;
-    ctx.fillStyle = '#04121c';
-    ctx.beginPath();
-    ctx.ellipse(4, 5, h * 0.16, h * 0.30, 0, 0, TAU);
-    ctx.fill();
-    ctx.globalAlpha = 1;
+    // (NO SHADOW BLOB. There was a soft dark ellipse drawn behind the tool, and
+    // since the tool follows the pointer it was a grey circle trailing the cursor
+    // around the whole scene -- the roundest thing on screen, in the one place
+    // the player is always looking.)
 
     const img = ASSETS[pry ? 'g_crowbar' : 'g_scraper'];
     if (img && img.width) {
@@ -200,13 +197,10 @@ const DiveFX = {
     }
     ctx.restore();
 
-    // the paw grip: two dark knuckle blobs at the handle end, so the tool is held
-    const gx = cx + Math.sin(tilt) * h * 0.34;
-    const gy = cy + Math.cos(tilt) * h * 0.34;
-    ctx.fillStyle = '#3b2a1e';
-    ctx.beginPath(); ctx.ellipse(gx, gy, 5.4, 4.2, tilt, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#5a4331';
-    ctx.beginPath(); ctx.ellipse(gx - 1, gy - 1, 3.6, 2.6, tilt, 0, TAU); ctx.fill();
+    // (NO 'PAW GRIP'. This was two dark ovals at the handle end, meant to read as
+    // a paw holding the tool -- but there is no paw sprite around them, so what it
+    // actually was is a dark circle floating next to the cursor, everywhere the
+    // cursor went. The tools have handles painted on them already.)
 
     // the sweet spot glows while a pry is in its window
     if (o.prying && o.power !== undefined && Math.abs(o.power) < 0.3) {

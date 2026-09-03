@@ -184,6 +184,50 @@ function pixDisc(ctx, cx, cy, r, col, q) {
   }
 }
 
+// An ELLIPSE, in texels. Same reasoning as pixDisc: ctx.ellipse is a smooth
+// curve, and it is what every ground shadow and highlight in this game was made
+// of, so there was a soft round thing under every character's feet. Rotation is
+// deliberately ignored -- these are all small and axis-aligned in practice, and a
+// rotated raster would resample.
+function pixEllipse(ctx, cx, cy, rx, ry, col, q) {
+  const S = q || APIX;
+  if (rx < S || ry < S) return;
+  const snap = (v) => Math.round(v / S) * S;
+  if (col) ctx.fillStyle = col;
+  const x0 = snap(cx), y0 = snap(cy);
+  for (let dy = -ry; dy <= ry; dy += S) {
+    const k = 1 - (dy * dy) / (ry * ry);
+    if (k <= 0) continue;
+    const hw = rx * Math.sqrt(k);
+    if (hw < S * 0.5) continue;
+    ctx.fillRect(snap(x0 - hw), snap(y0 + dy), Math.max(S, snap(hw * 2)), S);
+  }
+}
+
+function pixEllipseRing(ctx, cx, cy, rx, ry, col, thick, q) {
+  const S = q || APIX;
+  if (rx < S || ry < S) return;
+  const t = Math.max(S, thick || S);
+  const snap = (v) => Math.round(v / S) * S;
+  if (col) ctx.fillStyle = col;
+  const x0 = snap(cx), y0 = snap(cy);
+  const ix = Math.max(0, rx - t), iy = Math.max(0, ry - t);
+  for (let dy = -ry; dy <= ry; dy += S) {
+    const ko = 1 - (dy * dy) / (ry * ry);
+    if (ko <= 0) continue;
+    const ho = rx * Math.sqrt(ko);
+    const ki = iy > 0 ? 1 - (dy * dy) / (iy * iy) : -1;
+    const hi = ki > 0 ? ix * Math.sqrt(ki) : 0;
+    if (hi < S * 0.5) {
+      ctx.fillRect(snap(x0 - ho), snap(y0 + dy), Math.max(S, snap(ho * 2)), S);
+    } else {
+      const w = Math.max(S, snap(ho - hi));
+      ctx.fillRect(snap(x0 - ho), snap(y0 + dy), w, S);
+      ctx.fillRect(snap(x0 + hi), snap(y0 + dy), w, S);
+    }
+  }
+}
+
 // `thick` is the wall thickness in logical units, measured inwards.
 function pixRing(ctx, cx, cy, r, col, thick, q) {
   const S = q || APIX;

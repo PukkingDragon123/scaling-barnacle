@@ -1727,9 +1727,7 @@ const Hood = {
       sqx = 1 - (sqy - 1) * 0.7;
     }
     ctx.fillStyle = 'rgba(40,20,10,0.2)';
-    ctx.beginPath();
-    ctx.ellipse(this.px, FLOOR + 0.8, Math.max(3.5, 6 - hop * 0.9), 1.3, 0, 0, TAU);
-    ctx.fill();
+    pixEllipse(ctx, this.px, FLOOR + 0.8, Math.max(3.5, 6 - hop * 0.9), 1.3);
     var img = ASSETS[walking ? WALK[frameN] : IDLE[Math.floor(t * 2.2) % 4]];
     if (img && img.width) {
       var oh = 30, ow = oh * img.width / img.height;
@@ -1993,9 +1991,7 @@ const Hood = {
 
     if (upright) {
       ctx.fillStyle = 'rgba(20,14,8,0.22)';
-      ctx.beginPath();
-      ctx.ellipse(cx, feetY + 0.8, boxH * 0.2, 1.3, 0, 0, TAU);
-      ctx.fill();
+      pixEllipse(ctx, cx, feetY + 0.8, boxH * 0.2, 1.3);
     }
     if (!img || !img.width) return;
     var h = boxH, w = h * img.width / img.height;

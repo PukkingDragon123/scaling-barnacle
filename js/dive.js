@@ -617,11 +617,18 @@ const DiveScene = {
     ctx.save();
     ctx.translate(Math.round(sx * DPX) / DPX, Math.round(jy * DPX) / DPX);
     if (n.clampT > 0) ctx.scale(1, 0.88);   // clamped down tight
-    ctx.rotate(((n.seed % 5) - 2) * 0.05);
+    // NO PER-NODE ROTATION. Every shell was turned by up to a tenth of a radian
+    // to make the bed look less regular -- and an arbitrary rotation of a
+    // hard-edged sprite with smoothing off is nearest-neighbour resampling: the
+    // outline comes out stepped in a way that does not match its own pixel grid,
+    // which reads as a bad cut-out with a pale fringe on it. That is the "the
+    // background removal is still broken" on these shells, and it was never the
+    // png. The beds get their variety from four different shell arts, their
+    // sizes and their placement instead.
     const w = n.r * 2.35;
     // soft contact shadow — grown on, not floating
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.beginPath(); ctx.ellipse(1, 1.6, n.r * 1.02, n.r * 0.78, 0, 0, TAU); ctx.fill();
+    pixEllipse(ctx, 1, 1.6, n.r * 1.02, n.r * 0.78);
 
     if (n.kind === 'urchin') {
       const pulse = 1 + Math.sin(this.time * 1.5 + n.phase) * 0.04;
@@ -652,7 +659,7 @@ const DiveScene = {
       if (n.stage === 'exposed') {
         ctx.strokeStyle = `rgba(160,242,180,${0.28 + Math.sin(this.time * 3 + n.phase) * 0.16})`;
         ctx.lineWidth = PIX * 2;
-        ctx.beginPath(); ctx.ellipse(0, 0.5, n.r * 1.16, n.r * 0.95, 0, 0, TAU); ctx.stroke();
+        pixEllipseRing(ctx, 0, 0.5, n.r * 1.16, n.r * 0.95, null, ctx.lineWidth);
       }
     }
     ctx.restore();
@@ -665,9 +672,9 @@ const DiveScene = {
     ctx.translate(Math.round(n.x * DPX) / DPX, Math.round(sy * DPX) / DPX);
     // rocky rim + dark den
     ctx.fillStyle = '#1c1610';
-    ctx.beginPath(); ctx.ellipse(0, 0, n.r + 2, n.r * 0.8 + 1.5, 0, 0, TAU); ctx.fill();
+    pixEllipse(ctx, 0, 0, n.r + 2, n.r * 0.8 + 1.5);
     ctx.fillStyle = '#0a0805';
-    ctx.beginPath(); ctx.ellipse(0, 0, n.r, n.r * 0.75, 0, 0, TAU); ctx.fill();
+    pixEllipse(ctx, 0, 0, n.r, n.r * 0.75);
     const rrng = mulberry32(n.seed);
     ctx.fillStyle = '#4a4238';
     for (let i = 0; i < 7; i++) {
@@ -682,7 +689,7 @@ const DiveScene = {
       ctx.fillRect(-4, -2, 2, 2);
       ctx.fillRect(2, -2, 2, 2);
       ctx.fillStyle = 'rgba(60,80,50,0.8)';
-      ctx.beginPath(); ctx.ellipse(0, 2, n.r * 0.5, n.r * 0.3, 0, 0, TAU); ctx.fill();
+      pixEllipse(ctx, 0, 2, n.r * 0.5, n.r * 0.3);
     } else if (e.state === 'strike') {
       const prog = 1 - e.t / 0.5;
       const ext = Math.sin(prog * Math.PI) * 42;
@@ -713,9 +720,9 @@ const DiveScene = {
     const body = '#1c262e', belly = '#2a3742';
     // body
     ctx.fillStyle = body;
-    ctx.beginPath(); ctx.ellipse(0, 0, 62, 17, 0, 0, TAU); ctx.fill();
+    pixEllipse(ctx, 0, 0, 62, 17);
     ctx.fillStyle = belly;
-    ctx.beginPath(); ctx.ellipse(0, 5, 56, 10, 0, 0, TAU); ctx.fill();
+    pixEllipse(ctx, 0, 5, 56, 10);
     // tail
     ctx.fillStyle = body;
     ctx.beginPath();

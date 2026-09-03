@@ -1729,9 +1729,7 @@ const Forge = {
     var lift = 5;
     c.globalAlpha = 0.3;
     c.fillStyle = '#000';
-    c.beginPath();
-    c.ellipse(Math.round(p.x * DPX) / DPX, deckY - 1, t.w * 0.42, 2.2, 0, 0, TAU);
-    c.fill();
+    pixEllipse(c, Math.round(p.x * DPX) / DPX, deckY - 1, t.w * 0.42, 2.2);
     c.globalAlpha = 1;
     this._drawTable(c, t, p.x, deckY - lift, pulse);
 

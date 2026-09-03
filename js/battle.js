@@ -1103,9 +1103,7 @@ const Battle = {
     ctx.fillStyle = 'rgba(30,20,12,0.16)';
     for (let i = 0; i < 5; i++) {
       const sx = 60 + i * 82 + Math.sin(i * 2.7) * 14;
-      ctx.beginPath();
-      ctx.ellipse(sx, DECK_Y - 1, 7 + (i % 3) * 2, 1.6, 0, 0, TAU);
-      ctx.fill();
+      pixEllipse(ctx, sx, DECK_Y - 1, 7 + (i % 3) * 2, 1.6);
     }
   },
 
@@ -1121,13 +1119,13 @@ const Battle = {
       const rx = lerp(17, 9, f), ry = lerp(5, 2.6, f);
       const my = DECK_Y - 3;
       ctx.fillStyle = `rgba(232,67,76,${(0.16 + 0.24 * pulse).toFixed(3)})`;
-      ctx.beginPath(); ctx.ellipse(m.x, my, rx, ry, 0, 0, TAU); ctx.fill();
+      pixEllipse(ctx, m.x, my, rx, ry);
       ctx.strokeStyle = 'rgba(20,8,8,0.55)';
       ctx.lineWidth = PIX * 4;
-      ctx.beginPath(); ctx.ellipse(m.x, my, rx, ry, 0, 0, TAU); ctx.stroke();
+      pixEllipseRing(ctx, m.x, my, rx, ry, null, ctx.lineWidth);
       ctx.strokeStyle = `rgba(255,120,110,${(0.55 + 0.45 * pulse).toFixed(3)})`;
       ctx.lineWidth = PIX * 2;
-      ctx.beginPath(); ctx.ellipse(m.x, my, rx, ry, 0, 0, TAU); ctx.stroke();
+      pixEllipseRing(ctx, m.x, my, rx, ry, null, ctx.lineWidth);
       ctx.beginPath();
       ctx.moveTo(m.x - rx * 0.45, my); ctx.lineTo(m.x + rx * 0.45, my);
       ctx.moveTo(m.x, my - ry * 0.8); ctx.lineTo(m.x, my + ry * 0.8);
@@ -1169,9 +1167,7 @@ const Battle = {
 
     // contact shadow, tight when he is planted and wide mid-scuttle
     ctx.fillStyle = 'rgba(30,16,8,0.22)';
-    ctx.beginPath();
-    ctx.ellipse(c.x, DECK_Y + 1, 15, 2.2, 0, 0, TAU);
-    ctx.fill();
+    pixEllipse(ctx, c.x, DECK_Y + 1, 15, 2.2);
 
     if (!a) return;
     const bob = c.st === 'scuttle' ? Math.abs(Math.sin(c.walk * 0.9)) * 1.6 : 0;
@@ -1210,10 +1206,10 @@ const Battle = {
       const puls = 0.5 + 0.5 * Math.sin(this.time * 9);
       ctx.lineWidth = PIX * 5;
       ctx.strokeStyle = 'rgba(10,30,44,0.4)';
-      ctx.beginPath(); ctx.ellipse(c.x, DECK_Y - 17, 19, 21, 0, 0, TAU); ctx.stroke();
+      pixEllipseRing(ctx, c.x, DECK_Y - 17, 19, 21, null, ctx.lineWidth);
       ctx.lineWidth = PIX * 2.5;
       ctx.strokeStyle = `rgba(150,235,255,${(0.45 + 0.35 * puls).toFixed(3)})`;
-      ctx.beginPath(); ctx.ellipse(c.x, DECK_Y - 17, 19, 21, 0, 0, TAU); ctx.stroke();
+      pixEllipseRing(ctx, c.x, DECK_Y - 17, 19, 21, null, ctx.lineWidth);
     }
   },
 
@@ -1262,9 +1258,7 @@ const Battle = {
   _drawOtto(ctx) {
     const px = this.px;
     ctx.fillStyle = 'rgba(30,16,8,0.22)';
-    ctx.beginPath();
-    ctx.ellipse(px, DECK_Y + 1, 16, 2.2, 0, 0, TAU);
-    ctx.fill();
+    pixEllipse(ctx, px, DECK_Y + 1, 16, 2.2);
 
     // ---- Otto, one step behind the breech ---------------------------------------
     const walking = this.moveDir !== 0;

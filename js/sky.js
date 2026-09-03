@@ -683,7 +683,7 @@ const SKY = {
       ctx.fillStyle = cssRGB(refl);
       for (const p of cl.puffs) {
         const ry = HZ + (-p.dy) * 0.75 + 2 + Math.sin(time * 1.4 + cl.x * 0.05) * 0.6;
-        ctx.beginPath(); ctx.ellipse(cx + p.dx, ry, p.r * 0.85, p.r * 0.42, 0, 0, TAU); ctx.fill();
+        pixEllipse(ctx, cx + p.dx, ry, p.r * 0.85, p.r * 0.42);
       }
     }
     ctx.restore();

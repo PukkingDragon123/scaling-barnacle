@@ -242,7 +242,7 @@ const TouchUI = {
         c.fillRect(cx - 2, cy - 1, 3, 9);
       } else if (b.icon === 'act') {
         // paw print
-        c.beginPath(); c.ellipse(cx, cy + 3, 6, 4.5, 0, 0, TAU); c.fill();
+        pixEllipse(c, cx, cy + 3, 6, 4.5);
         for (let i = -1; i <= 1; i++) {
           pixDisc(c, cx + i * 5.5, cy - 4 + Math.abs(i) * 1.5, 2.2);
         }
@@ -437,9 +437,7 @@ const Game = {
       c.strokeStyle = `rgba(214,246,255,${s * 0.7})`;
       c.lineWidth = 1.5;
       for (let i = 1; i <= 3; i++) {
-        c.beginPath();
-        c.ellipse(W / 2, sy, 16 * i * (0.5 + s), 4 * i * (0.4 + s * 0.6), 0, 0, TAU);
-        c.stroke();
+        pixEllipseRing(c, W / 2, sy, 16 * i * (0.5 + s), 4 * i * (0.4 + s * 0.6), null, c.lineWidth);
       }
       c.fillStyle = `rgba(236,252,255,${s * 0.55})`;
       for (let i = 0; i < 10; i++) {
@@ -657,6 +655,69 @@ const Game = {
   // on top of the icon rail's bag button.
   _fsRect() { return { x: W - 104, y: 8, w: 17, h: 15 }; },
 
+  // ---- THE LOOP, ON SCREEN --------------------------------------------------
+  //
+  // The game has a core loop -- go down and scrape shells off the piling, crack
+  // them open at the bench, sell what is inside -- and absolutely nowhere did it
+  // say so. The quest tracker names the current CHAPTER, which is a different
+  // thing: it tells you the story's next beat, not what the game is for. A new
+  // player could dive, surface with a bag of shells, and have no idea that the
+  // shells are not the product.
+  //
+  // So: three rows, in order, with a tick against the ones you have done today.
+  // No new state to keep -- G.stats already counts scrapes, cracks and sales for
+  // the save, so the board takes a snapshot at the start of each day and compares.
+  // It is self-healing: if the day changes, the mark re-arms itself.
+  loopMark() {
+    if (!G) return null;
+    if (!G.dayMark || G.dayMark.day !== G.day) {
+      G.dayMark = {
+        day: G.day,
+        scraped: (G.stats && G.stats.scraped) || 0,
+        cracked: (G.stats && G.stats.cracked) || 0,
+        sold: (G.stats && G.stats.sold) || 0,
+      };
+    }
+    return G.dayMark;
+  },
+
+  LOOP_STEPS: [
+    { k: 'scraped', icon: 'shell', label: 'SCRAPE' },
+    { k: 'cracked', icon: 'hammer', label: 'CRACK' },
+    { k: 'sold', icon: 'coin', label: 'SELL' },
+  ],
+
+  drawLoopBoard(c) {
+    const m = this.loopMark();
+    if (!m) return;
+    const st = G.stats || {};
+    const w = 74, rh = 11, h = 14 + this.LOOP_STEPS.length * rh;
+    const x = 6, y = H - h - 6;
+    uiNote(c, x, y, w, h, { alpha: 0.9 });
+    text(c, 'TODAY', x + 7, y + 4, { size: 7, color: '#914007', shadow: false });
+    let next = -1;
+    for (let i = 0; i < this.LOOP_STEPS.length; i++) {
+      const sp = this.LOOP_STEPS[i];
+      const done = ((st[sp.k] || 0) > (m[sp.k] || 0));
+      if (!done && next < 0) next = i;
+      const ry = y + 13 + i * rh;
+      PixIcons.draw(c, sp.icon, x + 10, ry + 4, 10, { t: this.time, alpha: done ? 0.55 : 1 });
+      text(c, sp.label, x + 18, ry + 1, {
+        size: 7, shadow: false, color: done ? '#b08a5a' : '#30150a',
+      });
+      if (done) {
+        PixIcons.draw(c, 'check', x + w - 9, ry + 4, 10, { t: this.time });
+      } else if (i === next) {
+        // the drawn arrow, nudging sideways, against the thing to do next
+        PixIcons.draw(c, 'arrowR', x + w - 9, ry + 4, 10, { t: this.time, fx: 'shake' });
+      }
+    }
+    // and when all three are done, say so instead of leaving three ticks
+    if (next < 0) {
+      text(c, 'a good day. sleep?', x + 7, y + h - 9, { size: 6.5, color: '#3f9a58', shadow: false });
+    }
+  },
+
   drawHUD(c) {
     // left: hearts + purse
     const pw = Math.max(G.maxHearts * 10 + 14, 62);
@@ -685,6 +746,7 @@ const Game = {
       for (let i = 0; i < lines.length; i++)
         text(c, lines[i], bx + 9, by + 24 + i * 9, { size: 7, color: UIPAL.ink2, shadow: false });
     }
+    if (this.scene === WorldScene) this.drawLoopBoard(c);
     PixIcons.draw(c, 'coin', 15, 27, 13, { t: Game.time, fx: 'tick' });
     text(c, `${G.money}`, 24, 22.5, { size: 9, color: '#662907', shadow: false });
 
